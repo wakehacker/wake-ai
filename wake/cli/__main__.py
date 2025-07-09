@@ -11,6 +11,7 @@ from click.core import Context
 from rich.logging import RichHandler
 
 from .accounts import run_accounts
+from .ai import run_ai
 from .compile import run_compile
 from .console import console
 from .detect import run_detect
@@ -217,6 +218,7 @@ def main(
 
 
 main.add_command(run_accounts)
+main.add_command(run_ai)
 main.add_command(run_compile)
 main.add_command(run_detect)
 main.add_command(run_init)
