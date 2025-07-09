@@ -53,7 +53,7 @@ wake ai --flow documentation --scope src/                # Future: auto-docs
 ### 1. **Prompts as Data, Not Code**
 Your markdown files become the source of truth:
 ```
-wake/ai/commands/
+wake/ai/prompts/
 ├── security-audit/
 │   ├── 1-analyze.md
 │   ├── 2-static.md
