@@ -13,33 +13,33 @@ from .claude import ClaudeCodeSession, ClaudeCodeResponse
 @dataclass
 class WorkflowStep:
     """Definition of a single workflow step."""
-    
+
     name: str
     prompt_template: str
     tools: Optional[List[str]] = None
     validator: Optional[Callable[[ClaudeCodeResponse], bool]] = None
     context_keys: List[str] = field(default_factory=list)
-    
+
     def format_prompt(self, context: Dict[str, Any]) -> str:
         """Format the prompt template with context."""
         prompt_context = {k: v for k, v in context.items() if k in self.context_keys}
         return self.prompt_template.format(**prompt_context)
-    
+
     def validate_response(self, response: ClaudeCodeResponse) -> bool:
         """Validate the response meets success criteria."""
         if not response.success:
             return False
-        
+
         if self.validator:
             return self.validator(response)
-        
+
         return bool(response.content)
 
 
 @dataclass
 class WorkflowState:
     """State tracking for workflow execution."""
-    
+
     current_step: int = 0
     completed_steps: List[str] = field(default_factory=list)
     context: Dict[str, Any] = field(default_factory=dict)
@@ -51,7 +51,7 @@ class WorkflowState:
 
 class AIWorkflow(ABC):
     """Base class for fixed AI workflows."""
-    
+
     def __init__(
         self,
         name: str,
@@ -60,18 +60,18 @@ class AIWorkflow(ABC):
     ):
         self.name = name
         self.session = session or ClaudeCodeSession()
-        self.state_dir = Path(state_dir) if state_dir else Path(".wake-ai/workflows")
+        self.state_dir = Path(state_dir)
         self.state_dir.mkdir(parents=True, exist_ok=True)
-        
+
         self.steps: List[WorkflowStep] = []
         self.state = WorkflowState()
         self._setup_steps()
-    
+
     @abstractmethod
     def _setup_steps(self):
         """Setup workflow steps. Must be implemented by subclasses."""
         pass
-    
+
     def add_step(self, name: str, prompt_template: str, tools: Optional[List[str]] = None, context_keys: Optional[List[str]] = None):
         """Add a step to the workflow."""
         step = WorkflowStep(
@@ -81,7 +81,7 @@ class AIWorkflow(ABC):
             context_keys=context_keys or []
         )
         self.steps.append(step)
-    
+
     def execute(self, context: Optional[Dict[str, Any]] = None, resume: bool = False) -> Dict[str, Any]:
         """Execute the workflow."""
         if resume and (self.state_dir / f"{self.name}_state.json").exists():
@@ -90,19 +90,19 @@ class AIWorkflow(ABC):
             self.state = WorkflowState()
             self.state.context = context or {}
             self.state.started_at = datetime.now()
-        
+
         # Execute steps
         while self.state.current_step < len(self.steps):
             step = self.steps[self.state.current_step]
-            
+
             try:
                 # Execute step
                 if step.tools:
                     self.session.allowed_tools = step.tools
-                
+
                 prompt = step.format_prompt(self.state.context)
-                response = self.session.query(prompt, non_interactive=True)
-                
+                response = self.session.query(prompt)
+
                 # Validate and update state
                 if step.validate_response(response):
                     self.state.completed_steps.append(step.name)
@@ -113,7 +113,7 @@ class AIWorkflow(ABC):
                     self._save_state()
                 else:
                     raise RuntimeError(f"Step '{step.name}' validation failed")
-                    
+
             except Exception as e:
                 self.state.errors.append({
                     "step": step.name,
@@ -121,14 +121,14 @@ class AIWorkflow(ABC):
                     "timestamp": datetime.now().isoformat()
                 })
                 raise
-        
+
         self.state.completed_at = datetime.now()
         return self._prepare_results()
-    
+
     def _custom_context_update(self, step_name: str, response: ClaudeCodeResponse):
         """Hook for subclasses to update context."""
         pass
-    
+
     def _prepare_results(self) -> Dict[str, Any]:
         """Prepare final workflow results."""
         return {
@@ -141,7 +141,7 @@ class AIWorkflow(ABC):
                 else None
             )
         }
-    
+
     def _save_state(self):
         """Save workflow state."""
         state_data = {
@@ -152,7 +152,7 @@ class AIWorkflow(ABC):
         }
         state_file = self.state_dir / f"{self.name}_state.json"
         state_file.write_text(json.dumps(state_data, indent=2))
-    
+
     def _load_state(self):
         """Load workflow state."""
         state_file = self.state_dir / f"{self.name}_state.json"
