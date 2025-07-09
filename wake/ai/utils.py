@@ -10,7 +10,7 @@ try:
 except ImportError:
     HAS_YAML = False
 
-from .flow import AIWorkflow, WorkflowStep
+from .flow import AIWorkflow
 
 
 def load_workflow_from_file(workflow_file: Union[str, Path]) -> AIWorkflow:
