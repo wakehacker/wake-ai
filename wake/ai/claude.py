@@ -125,11 +125,11 @@ class ClaudeCodeSession:
         self.disallowed_tools = disallowed_tools or []
         self.working_dir = Path(working_dir) if working_dir else Path.cwd()
         self.verbose = verbose
-        
+
         logger.info(f"Initializing ClaudeCodeSession: model={model}, working_dir={self.working_dir}")
         logger.debug(f"Allowed tools: {self.allowed_tools}")
         logger.debug(f"Disallowed tools: {self.disallowed_tools}")
-        
+
         self._check_claude_available()
 
     def _check_claude_available(self):
@@ -209,9 +209,9 @@ class ClaudeCodeSession:
         Returns:
             ClaudeCodeResponse with the result
         """
-        logger.info(f"Executing query (format={output_format}, max_turns={max_turns})")
+        logger.info(f"Executing query (format={output_format}, max_turns={max_turns}, prompt={prompt[:100]}...)")
         logger.debug(f"Prompt: {prompt[:100]}..." if len(prompt) > 100 else f"Prompt: {prompt}")
-        
+
         cmd = self._build_command(
             prompt=prompt,
             output_format=output_format,
@@ -281,7 +281,7 @@ class ClaudeCodeSession:
             ClaudeCodeResponse with the result
         """
         logger.info(f"Starting cost-limited query (limit=${cost_limit:.2f}, turn_step={turn_step})")
-        
+
         total_cost = 0.0
         session_id = None
         last_response = None
@@ -314,7 +314,7 @@ class ClaudeCodeSession:
         while total_cost < cost_limit and session_id:
             iteration += 1
             logger.info(f"Iteration {iteration}: Continuing session (current_cost=${total_cost:.4f}, limit=${cost_limit:.2f})")
-            
+
             # Build command to resume the session
             cmd = self._build_command(
                 prompt="continue",
@@ -371,12 +371,12 @@ class ClaudeCodeSession:
         # If the task is not finished, we need to prompt the AI to finish it
         if not last_response.is_finished:
             logger.warning("Task not finished after reaching cost limit. Attempting to finish...")
-            
+
         finish_tries = 0
         max_finish_tries = 3
         while finish_tries < max_finish_tries and not last_response.is_finished:
             logger.info(f"Finish attempt {finish_tries + 1}/{max_finish_tries}")
-            
+
             # Build command to resume the session
             cmd = self._build_command(
                 prompt=f"you are running out of time, please finish the task as quickly as possible. this is the {finish_tries}/{max_finish_tries} try (after {max_finish_tries}th warning, the task will be aborted)",
@@ -428,7 +428,7 @@ class ClaudeCodeSession:
 
         if not last_response.is_finished:
             logger.warning(f"Task still not finished after {max_finish_tries} attempts. Returning last response.")
-        
+
         logger.info(f"Returning final response. Total cost: ${total_cost:.4f}")
         return last_response
 
@@ -464,10 +464,10 @@ class ClaudeCodeSession:
         """
         state_path = Path(state_file)
         logger.info(f"Loading session state from {state_path}")
-        
+
         state = json.loads(state_path.read_text())
         session_id = state["session_id"]
-        
+
         logger.debug(f"Loaded state: model={state['model']}, session_id={session_id}")
 
         session = cls(

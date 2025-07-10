@@ -24,13 +24,15 @@ class AuditWorkflow(AIWorkflow):
             focus_areas: Specific vulnerabilities or ERCs to focus on
             session: Claude session to use
         """
-        super().__init__("security_audit", session=session)
         self.scope_files = scope_files or []
         self.context_docs = context_docs or []
         self.focus_areas = focus_areas or []
 
-        # Load prompts from markdown files
+        # Load prompts from markdown files before parent init
         self._load_prompts()
+
+        # Now call parent init which will call _setup_steps
+        super().__init__("audit", session=session)
 
     def _load_prompts(self):
         """Load audit prompts from markdown files."""
@@ -112,10 +114,6 @@ class AuditWorkflow(AIWorkflow):
             focus_section = f"\n\nFOCUS AREAS:\n" + "\n".join(f"- {area}" for area in self.focus_areas)
         else:
             focus_section = ""
-
-        # For steps that need previous outputs, add placeholders
-        if step_name != "analyze_and_plan":
-            base_prompt = base_prompt + "\n\nPREVIOUS STEP OUTPUTS:\n{previous_outputs}"
 
         return base_prompt + scope_section + context_section + focus_section
 
