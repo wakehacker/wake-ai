@@ -2,5 +2,13 @@
 
 from .claude import ClaudeCodeResponse, ClaudeCodeSession
 from .flow import AIWorkflow, WorkflowStep
-from .templates import TEMPLATES
-from .workflows import AVAILABLE_WORKFLOWS, SecurityAuditWorkflow
+from .workflows import AVAILABLE_WORKFLOWS, AuditWorkflow
+
+__all__ = [
+    "ClaudeCodeResponse",
+    "ClaudeCodeSession",
+    "AIWorkflow",
+    "WorkflowStep",
+    "AVAILABLE_WORKFLOWS",
+    "AuditWorkflow",
+]
