@@ -1,6 +1,7 @@
 """Claude Code CLI wrapper for Python integration."""
 
 import json
+import logging
 import subprocess
 import shlex
 from pathlib import Path
@@ -8,6 +9,9 @@ from typing import Dict, List, Optional, Any, Union
 from dataclasses import dataclass
 import tempfile
 import os
+
+# Set up logging
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -56,6 +60,7 @@ class ClaudeCodeResponse:
         """
         try:
             data = json.loads(json_str)
+            logger.debug(f"Parsed JSON response: type={data.get('type')}, subtype={data.get('subtype')}, cost=${data.get('total_cost_usd', 0):.4f}")
 
             return cls(
                 content=data.get("result", ""),
@@ -70,6 +75,7 @@ class ClaudeCodeResponse:
                 is_finished=data.get("subtype", "success") == "success"
             )
         except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse JSON response: {e}")
             return cls(
                 content="",
                 raw_output=json_str,
@@ -119,6 +125,11 @@ class ClaudeCodeSession:
         self.disallowed_tools = disallowed_tools or []
         self.working_dir = Path(working_dir) if working_dir else Path.cwd()
         self.verbose = verbose
+        
+        logger.info(f"Initializing ClaudeCodeSession: model={model}, working_dir={self.working_dir}")
+        logger.debug(f"Allowed tools: {self.allowed_tools}")
+        logger.debug(f"Disallowed tools: {self.disallowed_tools}")
+        
         self._check_claude_available()
 
     def _check_claude_available(self):
@@ -131,8 +142,11 @@ class ClaudeCodeSession:
                 check=False
             )
             if result.returncode != 0:
+                logger.error("Claude Code CLI check failed")
                 raise RuntimeError("Claude Code CLI not found. Please install it first.")
+            logger.debug(f"Claude Code CLI version: {result.stdout.strip()}")
         except FileNotFoundError:
+            logger.error("Claude Code CLI not found in PATH")
             raise RuntimeError("Claude Code CLI not found. Please install it first.")
 
     def _build_command(
@@ -173,6 +187,7 @@ class ClaudeCodeSession:
 
         cmd.append(prompt)
 
+        logger.debug(f"Built command: {' '.join(cmd[:10])}..." if len(' '.join(cmd)) > 100 else f"Built command: {' '.join(cmd)}")
         return cmd
 
     def query(
@@ -194,6 +209,9 @@ class ClaudeCodeSession:
         Returns:
             ClaudeCodeResponse with the result
         """
+        logger.info(f"Executing query (format={output_format}, max_turns={max_turns})")
+        logger.debug(f"Prompt: {prompt[:100]}..." if len(prompt) > 100 else f"Prompt: {prompt}")
+        
         cmd = self._build_command(
             prompt=prompt,
             output_format=output_format,
@@ -205,6 +223,7 @@ class ClaudeCodeSession:
             stdin_input = input_data.encode() if input_data else None
 
             # Execute command
+            logger.debug("Executing subprocess...")
             result = subprocess.run(
                 cmd,
                 capture_output=True,
@@ -215,6 +234,8 @@ class ClaudeCodeSession:
             )
 
             if result.returncode != 0:
+                logger.error(f"Command failed with return code {result.returncode}")
+                logger.error(f"stderr: {result.stderr}")
                 return ClaudeCodeResponse(
                     content="",
                     raw_output=result.stderr,
@@ -225,11 +246,15 @@ class ClaudeCodeSession:
 
             # Parse response based on format
             if output_format == "json":
-                return ClaudeCodeResponse.from_json(result.stdout)
+                response = ClaudeCodeResponse.from_json(result.stdout)
+                logger.info(f"Query completed: cost=${response.cost:.4f}, turns={response.num_turns}, finished={response.is_finished}")
+                return response
             else:
+                logger.info("Query completed (text format)")
                 return ClaudeCodeResponse.from_text(result.stdout)
 
         except Exception as e:
+            logger.error(f"Exception during query execution: {e}")
             return ClaudeCodeResponse(
                 content="",
                 raw_output=str(e),
@@ -255,11 +280,15 @@ class ClaudeCodeSession:
         Returns:
             ClaudeCodeResponse with the result
         """
+        logger.info(f"Starting cost-limited query (limit=${cost_limit:.2f}, turn_step={turn_step})")
+        
         total_cost = 0.0
         session_id = None
         last_response = None
+        iteration = 0
 
         # First query with the initial prompt
+        logger.info(f"Iteration {iteration}: Initial query")
         response = self.query(
             prompt=prompt,
             output_format="json",
@@ -274,13 +303,18 @@ class ClaudeCodeSession:
         # Update total cost and session info from response
         total_cost = response.cost
         session_id = response.session_id
+        logger.info(f"Iteration {iteration} complete: total_cost=${total_cost:.4f}, session_id={session_id}")
 
         # Check if task is already finished
         if response.is_finished:
+            logger.info(f"Task finished in initial query. Total cost: ${total_cost:.4f}")
             return response
 
         # Continue querying while under cost limit
         while total_cost < cost_limit and session_id:
+            iteration += 1
+            logger.info(f"Iteration {iteration}: Continuing session (current_cost=${total_cost:.4f}, limit=${cost_limit:.2f})")
+            
             # Build command to resume the session
             cmd = self._build_command(
                 prompt="continue",
@@ -299,6 +333,7 @@ class ClaudeCodeSession:
                 )
 
                 if result.returncode != 0:
+                    logger.error(f"Iteration {iteration} failed: {result.stderr}")
                     return ClaudeCodeResponse(
                         content="",
                         raw_output=result.stderr,
@@ -311,16 +346,20 @@ class ClaudeCodeSession:
                 last_response = response
 
                 total_cost += response.cost
+                logger.info(f"Iteration {iteration} complete: iteration_cost=${response.cost:.4f}, total_cost=${total_cost:.4f}")
 
                 # Check if task is finished
                 if response.is_finished:
+                    logger.info(f"Task finished after {iteration} iterations. Total cost: ${total_cost:.4f}")
                     return response
 
                 # If we've exceeded the cost limit and task isn't finished
                 if total_cost >= cost_limit:
+                    logger.warning(f"Cost limit reached: ${total_cost:.4f} >= ${cost_limit:.2f}")
                     break
 
             except Exception as e:
+                logger.error(f"Exception in iteration {iteration}: {e}")
                 return ClaudeCodeResponse(
                     content="",
                     raw_output=str(e),
@@ -330,9 +369,14 @@ class ClaudeCodeSession:
                 )
 
         # If the task is not finished, we need to prompt the AI to finish it
+        if not last_response.is_finished:
+            logger.warning("Task not finished after reaching cost limit. Attempting to finish...")
+            
         finish_tries = 0
         max_finish_tries = 3
-        while finish_tries < max_finish_tries:
+        while finish_tries < max_finish_tries and not last_response.is_finished:
+            logger.info(f"Finish attempt {finish_tries + 1}/{max_finish_tries}")
+            
             # Build command to resume the session
             cmd = self._build_command(
                 prompt=f"you are running out of time, please finish the task as quickly as possible. this is the {finish_tries}/{max_finish_tries} try (after {max_finish_tries}th warning, the task will be aborted)",
@@ -351,6 +395,7 @@ class ClaudeCodeSession:
                 )
 
                 if result.returncode != 0:
+                    logger.error(f"Finish attempt {finish_tries + 1} failed: {result.stderr}")
                     return ClaudeCodeResponse(
                         content="",
                         raw_output=result.stderr,
@@ -363,13 +408,16 @@ class ClaudeCodeSession:
                 last_response = response
 
                 total_cost += response.cost
+                logger.info(f"Finish attempt {finish_tries + 1} complete: cost=${response.cost:.4f}, total=${total_cost:.4f}")
 
                 # Check if task is finished
                 if response.is_finished:
+                    logger.info(f"Task finished after {finish_tries + 1} finish attempts. Total cost: ${total_cost:.4f}")
                     return response
 
                 finish_tries += 1
             except Exception as e:
+                logger.error(f"Exception in finish attempt {finish_tries + 1}: {e}")
                 return ClaudeCodeResponse(
                     content="",
                     raw_output=str(e),
@@ -378,6 +426,10 @@ class ClaudeCodeSession:
                     error=str(e)
                 )
 
+        if not last_response.is_finished:
+            logger.warning(f"Task still not finished after {max_finish_tries} attempts. Returning last response.")
+        
+        logger.info(f"Returning final response. Total cost: ${total_cost:.4f}")
         return last_response
 
     def save_session_state(self, session_id: str, state_file: Union[str, Path]):
@@ -398,6 +450,7 @@ class ClaudeCodeSession:
         state_path = Path(state_file)
         state_path.parent.mkdir(parents=True, exist_ok=True)
         state_path.write_text(json.dumps(state, indent=2))
+        logger.info(f"Saved session state to {state_path} (session_id={session_id})")
 
     @classmethod
     def load_session_state(cls, state_file: Union[str, Path]) -> tuple["ClaudeCodeSession", str]:
@@ -410,7 +463,12 @@ class ClaudeCodeSession:
             Tuple of (ClaudeCodeSession, session_id)
         """
         state_path = Path(state_file)
+        logger.info(f"Loading session state from {state_path}")
+        
         state = json.loads(state_path.read_text())
+        session_id = state["session_id"]
+        
+        logger.debug(f"Loaded state: model={state['model']}, session_id={session_id}")
 
         session = cls(
             model=state["model"],
@@ -419,4 +477,4 @@ class ClaudeCodeSession:
             working_dir=state.get("working_dir")
         )
 
-        return session, state["session_id"]
+        return session, session_id

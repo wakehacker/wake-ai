@@ -33,7 +33,7 @@ from wake.ai.utils import validate_claude_cli, format_workflow_results
 @click.option(
     "--flow",
     type=click.Choice(list(AVAILABLE_WORKFLOWS.keys())),
-    default="security-audit",
+    default="audit",
     help="Workflow to run (future feature)"
 )
 @click.option(
@@ -66,17 +66,17 @@ def run_ai(
     resume: bool
 ):
     """AI-powered smart contract security audit.
-    
+
     This command runs a comprehensive security audit on your smart contracts
     using Claude to identify potential vulnerabilities.
-    
+
     Examples:
         # Audit entire codebase
         wake ai
-        
+
         # Audit specific files
         wake ai -s contracts/Token.sol -s contracts/Vault.sol
-        
+
         # Add context and focus areas
         wake ai -c docs/spec.md -f reentrancy -f "access control"
     """
@@ -85,59 +85,59 @@ def run_ai(
     except RuntimeError as e:
         console.print(f"[red]Error:[/red] {e}")
         ctx.exit(1)
-    
+
     # Show what we're doing
     console.print(f"[blue]Starting {flow} workflow[/blue]")
     if scope:
         console.print(f"[blue]Scope:[/blue] {', '.join(scope)}")
     else:
         console.print("[blue]Scope:[/blue] Entire codebase")
-    
+
     if context:
         console.print(f"[blue]Context files:[/blue] {', '.join(context)}")
-    
+
     if focus:
         console.print(f"[blue]Focus areas:[/blue] {', '.join(focus)}")
-    
+
     # Create output directory
     output_path = Path(output)
     output_path.mkdir(exist_ok=True)
-    
+
     # Get workflow class
     workflow_class = AVAILABLE_WORKFLOWS.get(flow)
     if not workflow_class:
         console.print(f"[red]Unknown workflow:[/red] {flow}")
         ctx.exit(1)
-    
+
     # Initialize workflow with parameters
     from wake.ai import ClaudeCodeSession
     session = ClaudeCodeSession(model=model, working_dir=Path.cwd())
-    
+
     workflow = workflow_class(
         scope_files=list(scope),
         context_docs=list(context),
         focus_areas=list(focus),
         session=session
     )
-    
+
     try:
         # Execute workflow
         results = workflow.execute(resume=resume)
-        
+
         # Display results
         console.print("\n[green]Audit complete![/green]")
         console.print(f"[green]Results saved to:[/green] {output}/")
-        
+
         if results.get("issues_found", 0) > 0:
             console.print(f"\n[yellow]Found {results['issues_found']} potential issues[/yellow]")
             console.print(f"Review the detailed findings in {output}/issues/")
         else:
             console.print("\n[green]No significant issues found![/green]")
-        
+
         # Show summary
         console.print("\n[bold]Summary:[/bold]")
         console.print(format_workflow_results(results, "text"))
-        
+
     except KeyboardInterrupt:
         console.print("\n[yellow]Audit interrupted. Use --resume to continue.[/yellow]")
         ctx.exit(0)
