@@ -1,6 +1,7 @@
 """Base workflow infrastructure for AI workflows."""
 
 import json
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -8,6 +9,9 @@ from typing import Dict, List, Optional, Any, Callable
 from datetime import datetime
 
 from .claude import ClaudeCodeSession, ClaudeCodeResponse
+
+# Set up logging
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -24,15 +28,19 @@ class WorkflowStep:
     def format_prompt(self, context: Dict[str, Any]) -> str:
         """Format the prompt template with context."""
         prompt_context = {k: v for k, v in context.items() if k in self.context_keys}
+        logger.debug(f"Formatting prompt for step '{self.name}' with context keys: {list(prompt_context.keys())}")
         return self.prompt_template.format(**prompt_context)
 
     def validate_response(self, response: ClaudeCodeResponse) -> bool:
         """Validate the response meets success criteria."""
         if not response.success:
+            logger.warning(f"Step '{self.name}' response failed: {response.error}")
             return False
 
         if self.validator:
-            return self.validator(response)
+            result = self.validator(response)
+            logger.debug(f"Step '{self.name}' custom validator returned: {result}")
+            return result
 
         return bool(response.content)
 
@@ -61,12 +69,15 @@ class AIWorkflow(ABC):
     ):
         self.name = name
         self.session = session or ClaudeCodeSession()
-        self.state_dir = Path(state_dir)
+        self.state_dir = Path(state_dir) if state_dir else Path.cwd() / ".ai_workflows"
         self.state_dir.mkdir(parents=True, exist_ok=True)
+        
+        logger.info(f"Initializing workflow '{name}' with state directory: {self.state_dir}")
 
         self.steps: List[WorkflowStep] = []
         self.state = WorkflowState()
         self._setup_steps()
+        logger.info(f"Workflow '{name}' initialized with {len(self.steps)} steps")
 
     @abstractmethod
     def _setup_steps(self):
@@ -82,30 +93,43 @@ class AIWorkflow(ABC):
             context_keys=context_keys or []
         )
         self.steps.append(step)
+        logger.debug(f"Added step '{name}' to workflow (tools: {tools})")
 
     def execute(self, context: Optional[Dict[str, Any]] = None, resume: bool = False) -> Dict[str, Any]:
         """Execute the workflow."""
+        logger.info(f"Starting workflow '{self.name}' execution (resume={resume})")
+        
         if resume and (self.state_dir / f"{self.name}_state.json").exists():
+            logger.info(f"Resuming workflow from saved state")
             self._load_state()
         else:
             self.state = WorkflowState()
             self.state.context = context or {}
             self.state.started_at = datetime.now()
+            logger.info(f"Starting fresh workflow execution")
 
         # Execute steps
         while self.state.current_step < len(self.steps):
             step = self.steps[self.state.current_step]
+            logger.info(f"Executing step {self.state.current_step + 1}/{len(self.steps)}: '{step.name}'")
 
             try:
                 # Execute step
                 if step.tools:
                     self.session.allowed_tools = step.tools
+                    logger.debug(f"Set allowed tools for step '{step.name}': {step.tools}")
 
                 prompt = step.format_prompt(self.state.context)
+                logger.debug(f"Executing query for step '{step.name}'")
+                
                 if step.max_cost:
+                    logger.info(f"Querying with cost limit ${step.max_cost} for step '{step.name}'")
                     response = self.session.query_with_cost(prompt, step.max_cost)
                 else:
                     response = self.session.query(prompt)
+
+                # Log response details
+                logger.info(f"Step '{step.name}' completed with cost ${response.cost:.4f}, {response.num_turns} turns")
 
                 # Validate and update state
                 if step.validate_response(response):
@@ -115,10 +139,12 @@ class AIWorkflow(ABC):
                     self._custom_context_update(step.name, response)
                     self.state.current_step += 1
                     self._save_state()
+                    logger.info(f"Step '{step.name}' completed successfully")
                 else:
                     raise RuntimeError(f"Step '{step.name}' validation failed")
 
             except Exception as e:
+                logger.error(f"Error in step '{step.name}': {str(e)}")
                 self.state.errors.append({
                     "step": step.name,
                     "error": str(e),
@@ -127,7 +153,9 @@ class AIWorkflow(ABC):
                 raise
 
         self.state.completed_at = datetime.now()
-        return self._prepare_results()
+        results = self._prepare_results()
+        logger.info(f"Workflow '{self.name}' completed successfully in {results.get('duration', 0):.2f} seconds")
+        return results
 
     def _custom_context_update(self, step_name: str, response: ClaudeCodeResponse):
         """Hook for subclasses to update context."""
@@ -156,12 +184,15 @@ class AIWorkflow(ABC):
         }
         state_file = self.state_dir / f"{self.name}_state.json"
         state_file.write_text(json.dumps(state_data, indent=2))
+        logger.debug(f"Saved workflow state to {state_file}")
 
     def _load_state(self):
         """Load workflow state."""
         state_file = self.state_dir / f"{self.name}_state.json"
+        logger.debug(f"Loading workflow state from {state_file}")
         data = json.loads(state_file.read_text())
         self.state.current_step = data["current_step"]
         self.state.completed_steps = data["completed_steps"]
         self.state.context = data["context"]
         self.state.errors = data["errors"]
+        logger.info(f"Loaded state: step {self.state.current_step}/{len(self.steps)}, completed: {len(self.state.completed_steps)}")
