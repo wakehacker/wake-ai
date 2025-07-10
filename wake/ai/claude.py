@@ -19,24 +19,60 @@ class ClaudeCodeResponse:
     tool_calls: List[Dict[str, Any]]
     success: bool
     error: Optional[str] = None
+    cost: float = 0.0
+    duration: float = 0.0
+    num_turns: int = 0
+    session_id: str = ""
+    is_finished: bool = True
 
     @classmethod
     def from_json(cls, json_str: str) -> "ClaudeCodeResponse":
-        """Parse JSON output from Claude Code."""
+        """Parse JSON output from Claude Code.
+
+        Emitted as the last message
+        {
+            type: "result";
+            subtype: "success";
+            duration_ms: float;
+            duration_api_ms: float;
+            is_error: boolean;
+            num_turns: int;
+            result: string;
+            session_id: string;
+            total_cost_usd: float;
+        }
+
+        Emitted as the last message, when we've reached the maximum number of turns
+        {
+            type: "result";
+            subtype: "error_max_turns" | "error_during_execution";
+            duration_ms: float;
+            duration_api_ms: float;
+            is_error: boolean;
+            num_turns: int;
+            session_id: string;
+            total_cost_usd: float;
+        }
+        """
         try:
             data = json.loads(json_str)
+
             return cls(
-                content=data.get("content", ""),
+                content=data.get("result", ""),
                 raw_output=json_str,
-                tool_calls=data.get("tool_calls", []),
-                success=True,
-                error=None
+                tool_calls=[],
+                success=not data.get("is_error", False),
+                error=None if not data.get("is_error", False) else "Error occurred",
+                cost=data.get("total_cost_usd", 0.0),
+                duration=data.get("duration_ms", 0),
+                num_turns=data.get("num_turns", 0),
+                session_id=data.get("session_id", ""),
+                is_finished=data.get("subtype", "success") == "success"
             )
         except json.JSONDecodeError as e:
             return cls(
                 content="",
                 raw_output=json_str,
-                tool_calls=[],
                 success=False,
                 error=f"Failed to parse JSON: {e}"
             )
@@ -49,7 +85,12 @@ class ClaudeCodeResponse:
             raw_output=text,
             tool_calls=[],
             success=True,
-            error=None
+            error=None,
+            cost=0.0,
+            duration=0.0,
+            num_turns=0,
+            session_id="",
+            is_finished=True
         )
 
 
@@ -97,7 +138,6 @@ class ClaudeCodeSession:
     def _build_command(
         self,
         prompt: Optional[str] = None,
-        non_interactive: bool = True,
         output_format: str = "json",
         max_turns: Optional[int] = None,
         resume_session: Optional[str] = None,
@@ -130,6 +170,8 @@ class ClaudeCodeSession:
         # Verbose mode
         if self.verbose:
             cmd.append("--verbose")
+
+        cmd.append(prompt)
 
         return cmd
 
@@ -196,46 +238,147 @@ class ClaudeCodeSession:
                 error=str(e)
             )
 
-    def query_with_context(
-        self,
-        prompt: str,
-        context_files: Optional[List[Union[str, Path]]] = None,
-        context_content: Optional[Dict[str, str]] = None,
-        **kwargs
-    ) -> ClaudeCodeResponse:
-        """Query with additional context files or content.
+    def query_with_cost(self, prompt: str, cost_limit: float, turn_step: int = 50) -> ClaudeCodeResponse:
+        """Query with cost tracking.
 
         Args:
-            prompt: The main prompt
-            context_files: List of files to include as context
-            context_content: Dictionary of filename -> content to include
-            **kwargs: Additional arguments for query()
+            prompt: The prompt to send
+            cost_limit: The cost limit in USD
+            turn_step: Maximum turns per query iteration
+
+        Note:
+            The cost limit is not strictly enforced.
+            Instead, the querying runs in a loop, each time querying with `turn_step` turns.
+            After each query, the cost is checked and the loop continues until the cost limit is reached.
+            After that, if the task has still not been finished, the AI is prompted to promptly finish the task.
 
         Returns:
-            ClaudeCodeResponse
+            ClaudeCodeResponse with the result
         """
-        # Build context prompt
-        context_parts = []
+        total_cost = 0.0
+        session_id = None
+        last_response = None
 
-        # Add file contents
-        if context_files:
-            for file_path in context_files:
-                path = Path(file_path)
-                if path.exists():
-                    context_parts.append(f"File: {path.name}\n```\n{path.read_text()}\n```")
+        # First query with the initial prompt
+        response = self.query(
+            prompt=prompt,
+            output_format="json",
+            max_turns=turn_step
+        )
 
-        # Add provided content
-        if context_content:
-            for filename, content in context_content.items():
-                context_parts.append(f"File: {filename}\n```\n{content}\n```")
+        if not response.success:
+            return response
 
-        # Combine with main prompt
-        if context_parts:
-            full_prompt = "\n\n".join(context_parts) + "\n\n" + prompt
-        else:
-            full_prompt = prompt
+        last_response = response
 
-        return self.query(full_prompt, **kwargs)
+        # Update total cost and session info from response
+        total_cost = response.cost
+        session_id = response.session_id
+
+        # Check if task is already finished
+        if response.is_finished:
+            return response
+
+        # Continue querying while under cost limit
+        while total_cost < cost_limit and session_id:
+            # Build command to resume the session
+            cmd = self._build_command(
+                prompt="continue",
+                output_format="json",
+                max_turns=turn_step,
+                resume_session=session_id
+            )
+
+            try:
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    cwd=self.working_dir,
+                    check=False
+                )
+
+                if result.returncode != 0:
+                    return ClaudeCodeResponse(
+                        content="",
+                        raw_output=result.stderr,
+                        tool_calls=[],
+                        success=False,
+                        error=f"Command failed: {result.stderr}"
+                    )
+
+                response = ClaudeCodeResponse.from_json(result.stdout)
+                last_response = response
+
+                total_cost += response.cost
+
+                # Check if task is finished
+                if response.is_finished:
+                    return response
+
+                # If we've exceeded the cost limit and task isn't finished
+                if total_cost >= cost_limit:
+                    break
+
+            except Exception as e:
+                return ClaudeCodeResponse(
+                    content="",
+                    raw_output=str(e),
+                    tool_calls=[],
+                    success=False,
+                    error=str(e)
+                )
+
+        # If the task is not finished, we need to prompt the AI to finish it
+        finish_tries = 0
+        max_finish_tries = 3
+        while finish_tries < max_finish_tries:
+            # Build command to resume the session
+            cmd = self._build_command(
+                prompt=f"you are running out of time, please finish the task as quickly as possible. this is the {finish_tries}/{max_finish_tries} try (after {max_finish_tries}th warning, the task will be aborted)",
+                output_format="json",
+                max_turns=turn_step,
+                resume_session=session_id
+            )
+
+            try:
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    cwd=self.working_dir,
+                    check=False
+                )
+
+                if result.returncode != 0:
+                    return ClaudeCodeResponse(
+                        content="",
+                        raw_output=result.stderr,
+                        tool_calls=[],
+                        success=False,
+                        error=f"Command failed: {result.stderr}"
+                    )
+
+                response = ClaudeCodeResponse.from_json(result.stdout)
+                last_response = response
+
+                total_cost += response.cost
+
+                # Check if task is finished
+                if response.is_finished:
+                    return response
+
+                finish_tries += 1
+            except Exception as e:
+                return ClaudeCodeResponse(
+                    content="",
+                    raw_output=str(e),
+                    tool_calls=[],
+                    success=False,
+                    error=str(e)
+                )
+
+        return last_response
 
     def save_session_state(self, session_id: str, state_file: Union[str, Path]):
         """Save session state for later resumption.

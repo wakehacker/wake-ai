@@ -1,0 +1,75 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# High-Performance Prompt Design Guidelines
+
+## Core Structural Principles
+
+**Context-First Architecture**: The prompt establishes the AI's role and operational environment immediately. Rather than burying context in examples, it frontloads the AI's identity ("You are an AI coding assistant, powered by Claude Sonnet 4") and operational constraints ("You operate in Cursor").
+
+**Hierarchical Information Flow**: Information is organized from general to specific, with each section building upon previous context. The prompt moves from role definition → communication standards → tool usage → specific behavioral instructions → edge cases.
+
+**Explicit Goal Declaration**: The main objective is stated clearly and early ("Your main goal is to follow the USER's instructions"), avoiding ambiguity about primary vs secondary objectives.
+
+## Formatting and Organization Techniques
+
+**XML-Style Section Headers**: Uses descriptive tags like `<communication>`, `<tool_calling>`, `<maximize_parallel_tool_calls>` to create clear cognitive boundaries. These act as both organizational tools and semantic anchors for different behavioral modes.
+
+**Graduated Emphasis Patterns**: Employs multiple levels of emphasis strategically:
+- **Bold for critical concepts** that must not be missed
+- *Italics for strong emphasis* on important but secondary points
+- CAPS for absolute imperatives that override other instructions
+- Numbered lists only for sequential processes
+- Bullet points sparingly, primarily for enumeration rather than instruction flow
+
+**Contextual Density Management**: Dense technical sections are broken up with concrete examples and practical applications, preventing cognitive overload while maintaining precision.
+
+## Instruction Clarity Methods
+
+**Imperative Language Dominance**: Uses direct commands ("ALWAYS follow", "NEVER refer to", "DEFAULT TO PARALLEL") rather than suggestions or preferences. This removes interpretation ambiguity.
+
+**Negative Space Definition**: Explicitly states what NOT to do alongside positive instructions. The prompt doesn't just say "use tools efficiently" but specifically prohibits "slow sequential tool calls when not necessary."
+
+**Conditional Logic Structures**: Employs if-then patterns extensively ("If you create any temporary files... clean up these files", "IF there are no relevant tools... ask the user"). This creates decision trees for complex scenarios.
+
+**Behavioral Boundary Setting**: Establishes clear operational limits and exception handling before they become issues, reducing the need for course correction during execution.
+
+## Context Integration Strategies
+
+**Multi-Modal Context Awareness**: Acknowledges that context may come from multiple sources ("files they have open, where their cursor is, recently viewed files") and provides frameworks for relevance assessment.
+
+**Dynamic Context Adaptation**: Instructions scale based on available information rather than assuming fixed input patterns. The AI is taught to assess context quality and act accordingly.
+
+**Feedback Loop Integration**: Builds in self-correction mechanisms ("After receiving tool results, carefully reflect on their quality") that allow for adaptive behavior based on intermediate outcomes.
+
+## Advanced Behavioral Programming
+
+**Parallel Processing Optimization**: Dedicates an entire section to efficiency patterns, treating performance as a first-class concern rather than an afterthought. This section demonstrates how to embed optimization thinking directly into behavioral instructions.
+
+**Error Prevention Through Constraint Design**: Rather than handling errors reactively, the prompt prevents them by constraining possible actions ("DO NOT loop more than 3 times on fixing linter errors").
+
+**Meta-Cognitive Instructions**: Includes thinking-about-thinking directives ("briefly consider: What information do I need") that program higher-order reasoning patterns.
+
+**Progressive Disclosure Management**: Balances thoroughness with cognitive load by revealing complexity gradually and contextually.
+
+## Quality Assurance Mechanisms
+
+**Redundant Critical Instructions**: Important directives appear in multiple forms and contexts, ensuring they're not overlooked during complex operations.
+
+**Validation Checkpoints**: Built-in verification steps ("Check that all the required parameters for each tool call are provided") that enforce quality gates.
+
+**Scope Limitation Techniques**: Uses precise boundary language ("Do what has been asked; nothing more, nothing less") to prevent scope creep while maintaining helpfulness.
+
+**Citation and Reference Standards**: Establishes specific formatting requirements for technical precision, showing how to embed quality standards directly into operational instructions.
+
+## Scalability and Maintenance Features
+
+**Modular Section Design**: Each major section could be updated independently without affecting others, suggesting a component-based approach to prompt architecture.
+
+**Override Mechanisms**: Includes clear priority hierarchies ("If you see a section called '<most_important_user_query>', you should treat that query as the one to answer") for handling conflicting instructions.
+
+**Future-Proofing Language**: Uses extensible patterns that can accommodate new tools or requirements without structural rewrites.
+
+The overall effect is a prompt that functions more like a comprehensive operating system for AI behavior than a simple instruction set. It anticipates edge cases, optimizes for performance, and maintains consistency across complex multi-step operations while remaining adaptable to context variations.

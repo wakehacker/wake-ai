@@ -18,6 +18,7 @@ class WorkflowStep:
     prompt_template: str
     tools: Optional[List[str]] = None
     validator: Optional[Callable[[ClaudeCodeResponse], bool]] = None
+    max_cost: Optional[float] = None
     context_keys: List[str] = field(default_factory=list)
 
     def format_prompt(self, context: Dict[str, Any]) -> str:
@@ -101,7 +102,10 @@ class AIWorkflow(ABC):
                     self.session.allowed_tools = step.tools
 
                 prompt = step.format_prompt(self.state.context)
-                response = self.session.query(prompt)
+                if step.max_cost:
+                    response = self.session.query_with_cost(prompt, step.max_cost)
+                else:
+                    response = self.session.query(prompt)
 
                 # Validate and update state
                 if step.validate_response(response):
