@@ -84,16 +84,20 @@ class AIWorkflow(ABC):
         """Setup workflow steps. Must be implemented by subclasses."""
         pass
 
-    def add_step(self, name: str, prompt_template: str, tools: Optional[List[str]] = None, context_keys: Optional[List[str]] = None):
+    def add_step(self, name: str, prompt_template: str, tools: Optional[List[str]] = None, 
+                 context_keys: Optional[List[str]] = None, max_cost: Optional[float] = None,
+                 validator: Optional[Callable[[ClaudeCodeResponse], bool]] = None):
         """Add a step to the workflow."""
         step = WorkflowStep(
             name=name,
             prompt_template=prompt_template,
             tools=tools,
-            context_keys=context_keys or []
+            context_keys=context_keys or [],
+            max_cost=max_cost,
+            validator=validator
         )
         self.steps.append(step)
-        logger.debug(f"Added step '{name}' to workflow (tools: {tools})")
+        logger.debug(f"Added step '{name}' to workflow (tools: {tools}, max_cost: {max_cost})")
 
     def execute(self, context: Optional[Dict[str, Any]] = None, resume: bool = False) -> Dict[str, Any]:
         """Execute the workflow."""
