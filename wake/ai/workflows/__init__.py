@@ -1,10 +1,10 @@
 """Pre-defined audit workflows."""
 
-from .security_audit import SecurityAuditWorkflow
+from .audit import AuditWorkflow
 
 AVAILABLE_WORKFLOWS = {
-    "security-audit": SecurityAuditWorkflow,
+    "audit": AuditWorkflow,
     # Future: "gas-optimization", "access-control", etc.
 }
 
-__all__ = ["SecurityAuditWorkflow", "AVAILABLE_WORKFLOWS"]
+__all__ = ["AuditWorkflow", "AVAILABLE_WORKFLOWS"]

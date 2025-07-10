@@ -67,3 +67,9 @@ Focus on data validation, code quality, logic errors, standards violations, gas 
 - Unused code
 - Storage clashes
 - Denial of service
+-
+Do NOT include generic items like "Check for reentrancy" without specific locations and context.
+
+Do not focus on issues such as:
+- Role centralization
+-

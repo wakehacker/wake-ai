@@ -6,7 +6,7 @@ from typing import List, Optional, Dict, Any
 from ..flow import AIWorkflow, WorkflowStep, ClaudeCodeResponse
 
 
-class SecurityAuditWorkflow(AIWorkflow):
+class AuditWorkflow(AIWorkflow):
     """Fixed security audit workflow following industry best practices."""
 
     def __init__(
@@ -60,7 +60,8 @@ class SecurityAuditWorkflow(AIWorkflow):
             name="analyze_and_plan",
             prompt_template=self._build_prompt("analyze_and_plan"),
             tools=["read", "search", "write", "grep", "bash"],
-            context_keys=["scope_context", "additional_context"]
+            context_keys=["scope", "additional_context"],
+            max_cost=10.0
         )
 
         # Step 2: Static Analysis
@@ -68,7 +69,8 @@ class SecurityAuditWorkflow(AIWorkflow):
             name="static_analysis",
             prompt_template=self._build_prompt("static_analysis"),
             tools=["read", "write", "bash", "edit"],
-            context_keys=["analyze_and_plan_output"]
+            context_keys=["analyze_and_plan_output"],
+            max_cost=10.0
         )
 
         # Step 3: Manual Review
@@ -76,7 +78,8 @@ class SecurityAuditWorkflow(AIWorkflow):
             name="manual_review",
             prompt_template=self._build_prompt("manual_review"),
             tools=["read", "write", "search", "grep", "edit"],
-            context_keys=["static_analysis_output", "analyze_and_plan_output"]
+            context_keys=["static_analysis_output", "analyze_and_plan_output"],
+            max_cost=10.0
         )
 
         # Step 4: Executive Summary
@@ -84,7 +87,8 @@ class SecurityAuditWorkflow(AIWorkflow):
             name="executive_summary",
             prompt_template=self._build_prompt("executive_summary"),
             tools=["read", "write"],
-            context_keys=["manual_review_output", "analyze_and_plan_output"]
+            context_keys=["manual_review_output", "analyze_and_plan_output"],
+            max_cost=10.0
         )
 
     def _build_prompt(self, step_name: str) -> str:
@@ -119,9 +123,9 @@ class SecurityAuditWorkflow(AIWorkflow):
         """Execute the audit workflow with proper context setup."""
         # Initialize context with audit-specific information
         audit_context = {
-            "scope_context": f"Files in scope: {', '.join(self.scope_files) if self.scope_files else 'entire codebase'}",
-            "additional_context": f"Context docs: {', '.join(self.context_docs) if self.context_docs else 'none'}",
-            "focus_areas": ", ".join(self.focus_areas) if self.focus_areas else "general security audit"
+            "scope": ', '.join(self.scope_files) if self.scope_files else 'entire codebase',
+            "additional_context": ', '.join(self.context_docs) if self.context_docs else 'none',
+            "focus_areas": ', '.join(self.focus_areas) if self.focus_areas else "general security audit"
         }
 
         if context:
@@ -131,7 +135,7 @@ class SecurityAuditWorkflow(AIWorkflow):
         results = super().execute(context=audit_context, **kwargs)
 
         # Add audit-specific results
-        results["audit_report_path"] = "audit/"
+        results["audit_report_path"] = ".audit/"
         results["issues_found"] = len(self.state.context.get("confirmed_issues", []))
 
         return results
