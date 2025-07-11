@@ -1,0 +1,13 @@
+{
+  "current_step": 2,
+  "completed_steps": [
+    "say_hi",
+    "ask_how_are_you"
+  ],
+  "context": {
+    "working_dir": "/Users/lukasrajnoha/Data/Work/ABCH/tools/wake/.wake/ai/20250711_114354_nvnwe9",
+    "say_hi_output": "Hi!",
+    "ask_how_are_you_output": "How are you?"
+  },
+  "errors": []
+}

@@ -6,13 +6,16 @@ from ..flow import AIWorkflow
 class TestWorkflow(AIWorkflow):
     """Simple test workflow with two greeting steps."""
 
-    def __init__(self, session=None):
+    def __init__(self, session=None, model=None, state_dir=None, working_dir=None):
         """Initialize test workflow.
 
         Args:
-            session: Claude session to use
+            session: Claude session to use (optional)
+            model: Model name to create session with (ignored if session provided)
+            state_dir: Directory to store workflow state
+            working_dir: Directory for AI to work in
         """
-        super().__init__("test", session=session)
+        super().__init__("test", session=session, model=model, state_dir=state_dir, working_dir=working_dir)
 
     def _setup_steps(self):
         """Setup the test workflow steps."""
@@ -22,7 +25,6 @@ class TestWorkflow(AIWorkflow):
             name="say_hi",
             prompt_template="Please respond with exactly 'Hi!' and nothing else.",
             tools=[],  # No tools needed
-            context_keys=[],
             max_cost=0.1  # Very low cost since it's simple
         )
 
@@ -31,6 +33,5 @@ class TestWorkflow(AIWorkflow):
             name="ask_how_are_you",
             prompt_template="Please respond with exactly 'How are you?' and nothing else.",
             tools=[],  # No tools needed
-            context_keys=["say_hi_output"],  # Can access previous output if needed
             max_cost=0.1
         )

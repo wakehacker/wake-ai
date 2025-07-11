@@ -23,13 +23,11 @@ class WorkflowStep:
     tools: Optional[List[str]] = None
     validator: Optional[Callable[[ClaudeCodeResponse], bool]] = None
     max_cost: Optional[float] = None
-    context_keys: List[str] = field(default_factory=list)
 
     def format_prompt(self, context: Dict[str, Any]) -> str:
         """Format the prompt template with context."""
-        prompt_context = {k: v for k, v in context.items() if k in self.context_keys}
-        logger.debug(f"Formatting prompt for step '{self.name}' with context keys: {list(prompt_context.keys())}")
-        return self.prompt_template.format(**prompt_context)
+        logger.debug(f"Formatting prompt for step '{self.name}' with context keys: {list(context.keys())}")
+        return self.prompt_template.format(**context)
 
     def validate_response(self, response: ClaudeCodeResponse) -> bool:
         """Validate the response meets success criteria."""
@@ -106,15 +104,18 @@ class AIWorkflow(ABC):
             # Default to creating a session with default model
             self.session = ClaudeCodeSession(working_dir=self.working_dir)
 
-        self.state_dir = Path(state_dir) if state_dir else Path.cwd() / ".ai_workflows"
+        self.state_dir = Path(state_dir) if state_dir else Path.cwd() / ".wake" / "ai" / "state"
         self.state_dir.mkdir(parents=True, exist_ok=True)
 
-        logger.info(f"Initializing workflow '{name}' with state directory: {self.state_dir}")
+        logger.debug(f"Initializing workflow '{name}' with state directory: {self.state_dir}")
 
         self.steps: List[WorkflowStep] = []
         self.state = WorkflowState()
         self._setup_steps()
         logger.info(f"Workflow '{name}' initialized with {len(self.steps)} steps")
+
+        # Add working directory to context
+        self.state.context["working_dir"] = str(self.working_dir)
 
     @abstractmethod
     def _setup_steps(self):
@@ -122,14 +123,13 @@ class AIWorkflow(ABC):
         pass
 
     def add_step(self, name: str, prompt_template: str, tools: Optional[List[str]] = None,
-                 context_keys: Optional[List[str]] = None, max_cost: Optional[float] = None,
+                 max_cost: Optional[float] = None,
                  validator: Optional[Callable[[ClaudeCodeResponse], bool]] = None):
         """Add a step to the workflow."""
         step = WorkflowStep(
             name=name,
             prompt_template=prompt_template,
             tools=tools,
-            context_keys=context_keys or [],
             max_cost=max_cost,
             validator=validator
         )
@@ -141,7 +141,7 @@ class AIWorkflow(ABC):
         logger.info(f"Starting workflow '{self.name}' execution (resume={resume})")
 
         if resume and (self.state_dir / f"{self.name}_state.json").exists():
-            logger.info(f"Resuming workflow from saved state")
+            logger.debug(f"Resuming workflow from saved state")
             self._load_state()
         else:
             self.state = WorkflowState()
@@ -238,4 +238,4 @@ class AIWorkflow(ABC):
         self.state.completed_steps = data["completed_steps"]
         self.state.context = data["context"]
         self.state.errors = data["errors"]
-        logger.info(f"Loaded state: step {self.state.current_step}/{len(self.steps)}, completed: {len(self.state.completed_steps)}")
+        logger.debug(f"Loaded state: step {self.state.current_step}/{len(self.steps)}, completed: {len(self.state.completed_steps)}")

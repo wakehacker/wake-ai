@@ -36,7 +36,7 @@ Each AI workflow session now has a dedicated working directory:
 - **Default Path**: `.wake/ai/<session-id>/`
 - **Session ID Format**: `YYYYMMDD_HHMMSS_random` (e.g., `20250111_152030_abc123`)
 - **Purpose**: Provides isolated workspace for AI to create files, store analysis results, etc.
-- **Context Variable**: Available in prompts as `{working_dir}`
+- **Context Variable**: Available in prompts as `{working_dir}`. Results from previous steps are saved into `{step_name}_output` variables.
 - **Directory Structure**:
   ```
   .wake/ai/<session-id>/
@@ -65,3 +65,15 @@ The workflow execution order is:
 4. Execute first query → Claude returns its session ID (too late)
 
 This design ensures the AI has a consistent workspace from the very first prompt.
+
+## State Management
+**state_dir**: Internal directory for workflow persistence and resumption
+  - Used by the workflow runner to save/restore workflow state between steps
+  - Allows workflows to be paused and resumed if interrupted
+  - Contains serialized workflow progress, step results, and execution metadata
+
+**working_dir**: User-facing workspace for AI-generated files
+  - Path: .wake/ai/<session-id>/
+  - Available to AI via {working_dir} context variable in prompts
+  - Where AI creates analysis results, reports, or temporary files
+  - Provides isolated workspace for each workflow session

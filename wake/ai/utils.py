@@ -44,8 +44,7 @@ def load_workflow_from_file(workflow_file: Union[str, Path]) -> AIWorkflow:
                 self.add_step(
                     name=step_config['name'],
                     prompt_template=step_config['prompt'],
-                    tools=step_config.get('tools'),
-                    context_keys=step_config.get('context_keys', [])
+                    tools=step_config.get('tools')
                 )
     
     # Create and return workflow instance
@@ -69,14 +68,12 @@ def create_workflow_template(output_file: Union[str, Path]):
             {
                 "name": "analyze",
                 "prompt": "Analyze the codebase in {directory}",
-                "tools": ["read", "grep"],
-                "context_keys": ["directory"]
+                "tools": ["read", "grep"]
             },
             {
                 "name": "report",
                 "prompt": "Generate a report based on: {analyze_output}",
-                "tools": [],
-                "context_keys": ["analyze_output"]
+                "tools": []
             }
         ]
     }
