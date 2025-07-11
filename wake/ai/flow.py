@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Callable, Union
 from datetime import datetime
+import re
 
 from .claude import ClaudeCodeSession, ClaudeCodeResponse
 
@@ -27,6 +28,13 @@ class WorkflowStep:
     def format_prompt(self, context: Dict[str, Any]) -> str:
         """Format the prompt template with context."""
         logger.debug(f"Formatting prompt for step '{self.name}' with context keys: {list(context.keys())}")
+
+        # Warn if there are context keys that are not in the context
+        prompt_context_keys = re.findall(r"\{([^}]+)\}", self.prompt_template)
+        for key in prompt_context_keys:
+            if key not in context:
+                logger.warning(f"Context key '{key}' used in step '{self.name}' not provided")
+
         return self.prompt_template.format(**context)
 
     def validate_response(self, response: ClaudeCodeResponse) -> bool:

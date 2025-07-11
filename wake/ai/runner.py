@@ -1,4 +1,4 @@
-"""Runner functions for AI workflows."""
+"""Runner functions for AI workflows. Used by CLI."""
 
 import logging
 from pathlib import Path
@@ -40,7 +40,7 @@ def run_ai_workflow(
     Example:
         >>> # Run a simple test workflow
         >>> results = run_ai_workflow("test")
-        
+
         >>> # Run an audit workflow with specific parameters
         >>> results = run_ai_workflow(
         ...     "audit",
@@ -49,7 +49,7 @@ def run_ai_workflow(
         ...     context_docs=["docs/spec.md"],
         ...     focus_areas=["reentrancy", "access-control"]
         ... )
-        
+
         >>> # Run a custom workflow with its own parameters
         >>> results = run_ai_workflow(
         ...     "custom_workflow",
@@ -62,29 +62,29 @@ def run_ai_workflow(
     if not workflow_class:
         available = ", ".join(AVAILABLE_WORKFLOWS.keys())
         raise ValueError(f"Unknown workflow: {workflow_name}. Available workflows: {available}")
-    
+
     # Set up working directory
     if working_dir is None:
         working_dir = Path.cwd()
     else:
         working_dir = Path(working_dir)
-    
+
     logger.info(f"Running {workflow_name} workflow with model {model}")
-    
+
     # Extract session-specific kwargs
     verbose = kwargs.pop("verbose", False)
-    
+
     # Initialize Claude session
     session = ClaudeCodeSession(
         model=model,
         working_dir=working_dir,
         verbose=verbose
     )
-    
+
     # All remaining kwargs go to the workflow
     init_args = {"session": session}
     init_args.update(kwargs)
-    
+
     # Initialize workflow with all provided arguments
     try:
         workflow = workflow_class(**init_args)
@@ -93,12 +93,12 @@ def run_ai_workflow(
         logger.warning(f"Workflow initialization with full args failed: {e}")
         logger.warning(f"Attempting with session only. Unused args: {list(kwargs.keys())}")
         workflow = workflow_class(session=session)
-    
+
     # Override state directory if provided
     if state_dir:
         workflow.state_dir = Path(state_dir)
         workflow.state_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Execute workflow
     logger.info(f"Executing {workflow_name} workflow (resume={resume})")
     try:
@@ -111,51 +111,3 @@ def run_ai_workflow(
     except Exception as e:
         logger.error(f"Workflow {workflow_name} failed: {e}")
         raise WorkflowExecutionError(workflow_name, str(e), e)
-
-
-def run_simple_audit(
-    model: str = "sonnet",
-    **kwargs
-) -> Dict[str, Any]:
-    """Convenience function to run a security audit.
-
-    Args:
-        model: Claude model to use
-        **kwargs: Audit-specific arguments (scope_files, context_docs, focus_areas, etc.)
-
-    Returns:
-        Dict containing audit results
-
-    Example:
-        >>> # Audit entire codebase
-        >>> results = run_simple_audit()
-        
-        >>> # Audit specific files
-        >>> results = run_simple_audit(
-        ...     scope_files=["contracts/Token.sol"],
-        ...     context_docs=["docs/spec.md"],
-        ...     focus_areas=["reentrancy"]
-        ... )
-    """
-    return run_ai_workflow(
-        "audit",
-        model=model,
-        **kwargs
-    )
-
-
-def run_test_workflow(model: str = "sonnet") -> Dict[str, Any]:
-    """Run the simple test workflow.
-
-    Args:
-        model: Claude model to use
-
-    Returns:
-        Dict containing test results
-
-    Example:
-        >>> results = run_test_workflow()
-        >>> print(results["completed_steps"])
-        ['say_hi', 'ask_how_are_you']
-    """
-    return run_ai_workflow("test", model=model)

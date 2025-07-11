@@ -80,12 +80,6 @@ def run_ai(
         # Add context and focus areas
         wake ai -c docs/spec.md -f reentrancy -f "access control"
     """
-    try:
-        validate_claude_cli()
-    except RuntimeError as e:
-        console.print(f"[red]Error:[/red] {e}")
-        ctx.exit(1)
-
     # Show what we're doing
     console.print(f"[blue]Starting {flow} workflow[/blue]")
     if scope:
