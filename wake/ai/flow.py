@@ -5,7 +5,7 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Callable, Union
+from typing import Dict, List, Optional, Any, Callable, Union, Tuple
 from datetime import datetime
 import re
 
@@ -224,6 +224,38 @@ class AIWorkflow(ABC):
                 else None
             )
         }
+
+    @classmethod
+    def get_cli_options(cls) -> Dict[str, Any]:
+        """Return workflow-specific CLI options.
+        
+        Returns:
+            Dictionary mapping argument names to their click option configuration.
+            Each entry contains the parameters needed for click.option()
+        
+        Example:
+            {
+                "scope": {
+                    "param_decls": ["-s", "--scope"],
+                    "multiple": True,
+                    "type": click.Path(exists=True),
+                    "help": "Files to audit"
+                }
+            }
+        """
+        return {}
+    
+    @classmethod
+    def process_cli_args(cls, **kwargs) -> Dict[str, Any]:
+        """Process CLI arguments into workflow initialization arguments.
+        
+        Args:
+            **kwargs: All CLI arguments
+            
+        Returns:
+            Dictionary of arguments to pass to workflow __init__
+        """
+        return {}
 
     def _save_state(self):
         """Save workflow state."""

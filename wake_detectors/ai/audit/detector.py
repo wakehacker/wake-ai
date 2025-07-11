@@ -22,6 +22,19 @@ logger = logging.getLogger(__name__)
 console = Console()
 
 
+def workflow_options_decorator(workflow_class):
+    """Decorator to add workflow-specific options to a detector command."""
+    def decorator(f):
+        # Get workflow options and add them in reverse order
+        options = workflow_class.get_cli_options()
+        for opt_name, opt_config in reversed(list(options.items())):
+            # Extract param_decls and create option
+            param_decls = opt_config.pop("param_decls", [f"--{opt_name}"])
+            click.option(*param_decls, **opt_config)(f)
+        return f
+    return decorator
+
+
 class AIAuditDetector(Detector):
     """AI-powered security audit detector using Claude Code."""
 
@@ -123,26 +136,6 @@ class AIAuditDetector(Detector):
 
     @detector.command(name="ai-audit")
     @click.option(
-        "--scope",
-        "-s",
-        multiple=True,
-        type=click.Path(exists=True),
-        help="Files/directories in audit scope (default: entire codebase)"
-    )
-    @click.option(
-        "--context",
-        "-c",
-        multiple=True,
-        type=click.Path(exists=True),
-        help="Additional context files (docs, specs, etc.)"
-    )
-    @click.option(
-        "--focus",
-        "-f",
-        multiple=True,
-        help="Focus areas (e.g., 'reentrancy', 'ERC20', 'access-control')"
-    )
-    @click.option(
         "--model",
         "-m",
         default="sonnet",
@@ -160,15 +153,8 @@ class AIAuditDetector(Detector):
         is_flag=True,
         help="Resume from previous session"
     )
-    def cli(
-        self,
-        scope: Tuple[str, ...],
-        context: Tuple[str, ...],
-        focus: Tuple[str, ...],
-        model: str,
-        output: str,
-        resume: bool
-    ) -> None:
+    @workflow_options_decorator(None)  # Will be fixed below
+    def cli(self, **kwargs) -> None:
         """
         AI-powered security audit using Claude.
 
@@ -192,10 +178,16 @@ class AIAuditDetector(Detector):
             # Resume a previous audit
             wake detect ai-audit --resume
         """
+        # Import workflow class
+        from .workflow import DetectorAuditWorkflow
+        
+        # Process workflow arguments
+        workflow_args = DetectorAuditWorkflow.process_cli_args(**kwargs)
+        
         # Store configuration
-        self.scope_files = list(scope)
-        self.context_docs = list(context)
-        self.focus_areas = list(focus)
-        self.model = model
-        self.output_dir = Path(output)
-        self.resume = resume
+        self.scope_files = workflow_args.get("scope_files", [])
+        self.context_docs = workflow_args.get("context_docs", [])
+        self.focus_areas = workflow_args.get("focus_areas", [])
+        self.model = kwargs.get("model", "sonnet")
+        self.output_dir = Path(kwargs.get("output", ".audit"))
+        self.resume = kwargs.get("resume", False)
