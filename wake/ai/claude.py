@@ -130,24 +130,10 @@ class ClaudeCodeSession:
         logger.debug(f"Allowed tools: {self.allowed_tools}")
         logger.debug(f"Disallowed tools: {self.disallowed_tools}")
 
-        self._check_claude_available()
+        # Validate Claude CLI is available
+        from .utils import validate_claude_cli
+        validate_claude_cli()
 
-    def _check_claude_available(self):
-        """Check if Claude Code CLI is available."""
-        try:
-            result = subprocess.run(
-                ["claude", "--version"],
-                capture_output=True,
-                text=True,
-                check=False
-            )
-            if result.returncode != 0:
-                logger.error("Claude Code CLI check failed")
-                raise RuntimeError("Claude Code CLI not found. Please install it first.")
-            logger.debug(f"Claude Code CLI version: {result.stdout.strip()}")
-        except FileNotFoundError:
-            logger.error("Claude Code CLI not found in PATH")
-            raise RuntimeError("Claude Code CLI not found. Please install it first.")
 
     def _build_command(
         self,
