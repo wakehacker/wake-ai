@@ -113,12 +113,19 @@ def run_ai(
     from wake.ai import ClaudeCodeSession
     session = ClaudeCodeSession(model=model, working_dir=Path.cwd())
 
-    workflow = workflow_class(
-        scope_files=list(scope),
-        context_docs=list(context),
-        focus_areas=list(focus),
-        session=session
-    )
+    # Build workflow initialization arguments based on the workflow type
+    init_args = {"session": session}
+    
+    # Add workflow-specific arguments
+    if flow == "audit":
+        init_args.update({
+            "scope_files": list(scope),
+            "context_docs": list(context),
+            "focus_areas": list(focus)
+        })
+    # Future workflows can add their own argument handling here
+    
+    workflow = workflow_class(**init_args)
 
     try:
         # Execute workflow
