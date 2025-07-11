@@ -43,6 +43,17 @@ class AIAuditDetector(Detector):
             
             console.print("[blue]Starting AI security audit...[/blue]")
             
+            # Initialize workflow with model - let it handle session creation
+            workflow = DetectorAuditWorkflow(
+                scope_files=self.scope_files,
+                context_docs=self.context_docs,
+                focus_areas=self.focus_areas,
+                model=self.model  # Pass model instead of session
+            )
+            
+            # Display working directory
+            console.print(f"[blue]Working directory:[/blue] {workflow.working_dir}")
+            
             # Display configuration
             if self.scope_files:
                 console.print(f"[blue]Scope:[/blue] {', '.join(self.scope_files)}")
@@ -57,16 +68,12 @@ class AIAuditDetector(Detector):
             
             console.print(f"[blue]Model:[/blue] {self.model}")
             
-            # Initialize workflow with model - let it handle session creation
-            workflow = DetectorAuditWorkflow(
-                scope_files=self.scope_files,
-                context_docs=self.context_docs,
-                focus_areas=self.focus_areas,
-                model=self.model  # Pass model instead of session
-            )
+            # Use working directory for output
+            self.output_dir = workflow.working_dir / "results"
+            self.output_dir.mkdir(parents=True, exist_ok=True)
             
-            # Override state directory
-            workflow.state_dir = self.output_dir
+            # Override state directory to use working directory
+            workflow.state_dir = workflow.working_dir / "state"
             workflow.state_dir.mkdir(parents=True, exist_ok=True)
             
             # Execute workflow

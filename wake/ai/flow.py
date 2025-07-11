@@ -5,7 +5,7 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Callable
+from typing import Dict, List, Optional, Any, Callable, Union
 from datetime import datetime
 
 from .claude import ClaudeCodeSession, ClaudeCodeResponse
@@ -66,30 +66,49 @@ class AIWorkflow(ABC):
         name: str,
         session: Optional[ClaudeCodeSession] = None,
         model: Optional[str] = None,
-        state_dir: Optional[Path] = None
+        state_dir: Optional[Path] = None,
+        working_dir: Optional[Union[str, Path]] = None
     ):
         """Initialize workflow.
-        
+
         Args:
             name: Workflow name
             session: Claude session to use (optional)
             model: Model name to create session with (ignored if session provided)
             state_dir: Directory to store workflow state
+            working_dir: Directory for AI to work in (default: .wake/ai/<session-id>/)
         """
         self.name = name
-        
+
+        # Set up working directory
+        if working_dir is not None:
+            self.working_dir = Path(working_dir)
+        else:
+            # Generate session ID for working directory
+            from datetime import datetime
+            import random
+            import string
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
+            session_id = f"{timestamp}_{suffix}"
+            self.working_dir = Path.cwd() / ".wake" / "ai" / session_id
+
+        # Create working directory
+        self.working_dir.mkdir(parents=True, exist_ok=True)
+        logger.info(f"Created working directory: {self.working_dir}")
+
         # Handle session creation
         if session is not None:
             self.session = session
         elif model is not None:
-            self.session = ClaudeCodeSession(model=model)
+            self.session = ClaudeCodeSession(model=model, working_dir=self.working_dir)
         else:
             # Default to creating a session with default model
-            self.session = ClaudeCodeSession()
-            
+            self.session = ClaudeCodeSession(working_dir=self.working_dir)
+
         self.state_dir = Path(state_dir) if state_dir else Path.cwd() / ".ai_workflows"
         self.state_dir.mkdir(parents=True, exist_ok=True)
-        
+
         logger.info(f"Initializing workflow '{name}' with state directory: {self.state_dir}")
 
         self.steps: List[WorkflowStep] = []
@@ -102,7 +121,7 @@ class AIWorkflow(ABC):
         """Setup workflow steps. Must be implemented by subclasses."""
         pass
 
-    def add_step(self, name: str, prompt_template: str, tools: Optional[List[str]] = None, 
+    def add_step(self, name: str, prompt_template: str, tools: Optional[List[str]] = None,
                  context_keys: Optional[List[str]] = None, max_cost: Optional[float] = None,
                  validator: Optional[Callable[[ClaudeCodeResponse], bool]] = None):
         """Add a step to the workflow."""
@@ -120,15 +139,17 @@ class AIWorkflow(ABC):
     def execute(self, context: Optional[Dict[str, Any]] = None, resume: bool = False) -> Dict[str, Any]:
         """Execute the workflow."""
         logger.info(f"Starting workflow '{self.name}' execution (resume={resume})")
-        
+
         if resume and (self.state_dir / f"{self.name}_state.json").exists():
             logger.info(f"Resuming workflow from saved state")
             self._load_state()
         else:
             self.state = WorkflowState()
             self.state.context = context or {}
+            # Add working directory to context
+            self.state.context["working_dir"] = str(self.working_dir)
             self.state.started_at = datetime.now()
-            logger.info(f"Starting fresh workflow execution")
+            logger.info(f"Starting fresh workflow execution with working_dir: {self.working_dir}")
 
         # Execute steps
         while self.state.current_step < len(self.steps):
@@ -143,7 +164,7 @@ class AIWorkflow(ABC):
 
                 prompt = step.format_prompt(self.state.context)
                 logger.debug(f"Executing query for step '{step.name}'")
-                
+
                 if step.max_cost:
                     logger.info(f"Querying with cost limit ${step.max_cost} for step '{step.name}'")
                     response = self.session.query_with_cost(prompt, step.max_cost)
