@@ -109,12 +109,8 @@ def run_ai(
         console.print(f"[red]Unknown workflow:[/red] {flow}")
         ctx.exit(1)
 
-    # Initialize workflow with parameters
-    from wake.ai import ClaudeCodeSession
-    session = ClaudeCodeSession(model=model, working_dir=Path.cwd())
-
     # Build workflow initialization arguments based on the workflow type
-    init_args = {"session": session}
+    init_args = {"model": model}
     
     # Add workflow-specific arguments
     if flow == "audit":
@@ -126,6 +122,13 @@ def run_ai(
     # Future workflows can add their own argument handling here
     
     workflow = workflow_class(**init_args)
+    
+    # Display working directory
+    console.print(f"[blue]Working directory:[/blue] {workflow.working_dir}")
+    
+    # Update output directory to use working directory
+    output = workflow.working_dir / "results"
+    output.mkdir(parents=True, exist_ok=True)
 
     try:
         # Execute workflow

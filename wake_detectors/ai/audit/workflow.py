@@ -15,7 +15,8 @@ class DetectorAuditWorkflow(AIWorkflow):
         context_docs: Optional[List[str]] = None,
         focus_areas: Optional[List[str]] = None,
         session=None,
-        model: Optional[str] = None
+        model: Optional[str] = None,
+        working_dir: Optional[str] = None
     ):
         """Initialize security audit workflow.
 
@@ -25,6 +26,7 @@ class DetectorAuditWorkflow(AIWorkflow):
             focus_areas: Specific vulnerabilities or ERCs to focus on
             session: Claude session to use (optional)
             model: Model name to create session with (ignored if session provided)
+            working_dir: Working directory for the workflow
         """
         self.scope_files = scope_files or []
         self.context_docs = context_docs or []
@@ -34,7 +36,7 @@ class DetectorAuditWorkflow(AIWorkflow):
         self._load_prompts()
 
         # Now call parent init which will call _setup_steps
-        super().__init__("detector_audit", session=session, model=model)
+        super().__init__("detector_audit", session=session, model=model, working_dir=working_dir)
 
     def _load_prompts(self):
         """Load audit prompts from detector's prompts directory."""
@@ -64,7 +66,7 @@ class DetectorAuditWorkflow(AIWorkflow):
             name="analyze_and_plan",
             prompt_template=self._build_prompt("analyze_and_plan"),
             tools=["read", "search", "write", "grep", "bash"],
-            context_keys=["scope", "additional_context"],
+            context_keys=["scope", "additional_context", "working_dir"],
             max_cost=10.0
         )
 
@@ -73,7 +75,7 @@ class DetectorAuditWorkflow(AIWorkflow):
             name="static_analysis",
             prompt_template=self._build_prompt("static_analysis"),
             tools=["read", "write", "bash", "edit"],
-            context_keys=["analyze_and_plan_output"],
+            context_keys=["analyze_and_plan_output", "working_dir"],
             max_cost=10.0
         )
 
@@ -82,7 +84,7 @@ class DetectorAuditWorkflow(AIWorkflow):
             name="manual_review",
             prompt_template=self._build_prompt("manual_review"),
             tools=["read", "write", "search", "grep", "edit"],
-            context_keys=["static_analysis_output", "analyze_and_plan_output"],
+            context_keys=["static_analysis_output", "analyze_and_plan_output", "working_dir"],
             max_cost=10.0
         )
 
@@ -91,7 +93,7 @@ class DetectorAuditWorkflow(AIWorkflow):
             name="executive_summary",
             prompt_template=self._build_prompt("executive_summary"),
             tools=["read", "write"],
-            context_keys=["manual_review_output", "analyze_and_plan_output"],
+            context_keys=["manual_review_output", "analyze_and_plan_output", "working_dir"],
             max_cost=10.0
         )
 

@@ -12,11 +12,11 @@ class TestWorkflow(AIWorkflow):
         Args:
             session: Claude session to use
         """
-        super().__init__("test_workflow", session=session)
+        super().__init__("test", session=session)
 
     def _setup_steps(self):
         """Setup the test workflow steps."""
-        
+
         # Step 1: Say hi
         self.add_step(
             name="say_hi",
