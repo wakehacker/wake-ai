@@ -11,7 +11,7 @@ from wake.ai.utils import validate_claude_cli, format_workflow_results
 
 def all_workflow_options():
     """Decorator to add all workflow-specific options to a Click command.
-    
+
     Since we can't know which workflow will be selected at decoration time,
     we add all possible options from all workflows.
     """
@@ -24,7 +24,7 @@ def all_workflow_options():
                 if opt_name not in all_options:
                     # Make a copy to avoid modifying the original
                     all_options[opt_name] = opt_config.copy()
-        
+
         # Add options in reverse order (Click requirement)
         for opt_name, opt_config in reversed(list(all_options.items())):
             # Extract param_decls and create option
@@ -51,7 +51,6 @@ def all_workflow_options():
 @click.option(
     "--model",
     "-m",
-    default="sonnet",
     help="Claude model to use"
 )
 @click.option(
@@ -81,9 +80,9 @@ def run_ai(ctx: click.Context, **kwargs):
         flow = kwargs["flow"]
         output = kwargs["output"]
         resume = kwargs["resume"]
-        
+
         console.print(f"[blue]Starting {flow} workflow[/blue]")
-        
+
         # Display workflow-specific options
         if "scope" in kwargs and kwargs["scope"]:
             console.print(f"[blue]Scope:[/blue] {', '.join(kwargs['scope'])}")
@@ -108,10 +107,10 @@ def run_ai(ctx: click.Context, **kwargs):
 
         # Process arguments using workflow's processor
         init_args = workflow_class.process_cli_args(**kwargs)
-        
+
         # Add model parameter (common to all workflows)
         init_args["model"] = kwargs["model"]
-        
+
         # Create workflow instance
         workflow = workflow_class(**init_args)
 
@@ -124,13 +123,7 @@ def run_ai(ctx: click.Context, **kwargs):
 
             # Display results
             console.print("\n[green]Audit complete![/green]")
-            console.print(f"[green]Results saved to:[/green] {output}/")
-
-            if results.get("issues_found", 0) > 0:
-                console.print(f"\n[yellow]Found {results['issues_found']} potential issues[/yellow]")
-                console.print(f"Review the detailed findings in {output}/issues/")
-            else:
-                console.print("\n[green]No significant issues found![/green]")
+            console.print(f"[green]See workflow directory for results:[/green] {workflow.working_dir}")
 
             # Show summary
             console.print("\n[bold]Summary:[/bold]")
@@ -144,4 +137,4 @@ def run_ai(ctx: click.Context, **kwargs):
             if resume:
                 console.print("[yellow]Try running without --resume flag[/yellow]")
             ctx.exit(1)
-    
+

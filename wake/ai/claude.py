@@ -105,7 +105,7 @@ class ClaudeCodeSession:
 
     def __init__(
         self,
-        model: str = "sonnet",
+        model: str = "opus",
         allowed_tools: Optional[List[str]] = None,
         disallowed_tools: Optional[List[str]] = None,
         working_dir: Optional[Union[str, Path]] = None,
@@ -195,8 +195,7 @@ class ClaudeCodeSession:
         Returns:
             ClaudeCodeResponse with the result
         """
-        logger.info(f"Executing query (format={output_format}, max_turns={max_turns}, prompt={prompt[:100]}...)")
-        logger.debug(f"Prompt: {prompt[:100]}..." if len(prompt) > 100 else f"Prompt: {prompt}")
+        logger.debug(f"Executing query (format={output_format}, max_turns={max_turns}, prompt={prompt[:100]}...)")
 
         cmd = self._build_command(
             prompt=prompt,
@@ -233,7 +232,7 @@ class ClaudeCodeSession:
             # Parse response based on format
             if output_format == "json":
                 response = ClaudeCodeResponse.from_json(result.stdout)
-                logger.info(f"Query completed: cost=${response.cost:.4f}, turns={response.num_turns}, finished={response.is_finished}")
+                logger.debug(f"Query completed: cost=${response.cost:.4f}, turns={response.num_turns}, finished={response.is_finished}")
                 return response
             else:
                 logger.debug("Query completed (text format)")
@@ -274,7 +273,7 @@ class ClaudeCodeSession:
         iteration = 0
 
         # First query with the initial prompt
-        logger.info(f"Iteration {iteration}: Initial query")
+        logger.debug(f"Iteration {iteration}: Initial query")
         response = self.query(
             prompt=prompt,
             output_format="json",
@@ -293,7 +292,7 @@ class ClaudeCodeSession:
 
         # Check if task is already finished
         if response.is_finished:
-            logger.info(f"Task finished in initial query. Total cost: ${total_cost:.4f}")
+            logger.debug(f"Task finished in initial query. Total cost: ${total_cost:.4f}")
             return response
 
         # Continue querying while under cost limit
@@ -336,7 +335,7 @@ class ClaudeCodeSession:
 
                 # Check if task is finished
                 if response.is_finished:
-                    logger.info(f"Task finished after {iteration} iterations. Total cost: ${total_cost:.4f}")
+                    logger.debug(f"Task finished after {iteration} iterations. Total cost: ${total_cost:.4f}")
                     return response
 
                 # If we've exceeded the cost limit and task isn't finished
@@ -398,7 +397,7 @@ class ClaudeCodeSession:
 
                 # Check if task is finished
                 if response.is_finished:
-                    logger.info(f"Task finished after {finish_tries + 1} finish attempts. Total cost: ${total_cost:.4f}")
+                    logger.debug(f"Task finished after {finish_tries + 1} finish attempts. Total cost: ${total_cost:.4f}")
                     return response
 
                 finish_tries += 1
@@ -415,7 +414,7 @@ class ClaudeCodeSession:
         if not last_response.is_finished:
             logger.warning(f"Task still not finished after {max_finish_tries} attempts. Returning last response.")
 
-        logger.info(f"Returning final response. Total cost: ${total_cost:.4f}")
+        logger.debug(f"Returning final response. Total cost: ${total_cost:.4f}")
         return last_response
 
     def save_session_state(self, session_id: str, state_file: Union[str, Path]):

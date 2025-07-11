@@ -15,7 +15,6 @@ def run_ai_workflow(
     workflow_name: str,
     model: str = "sonnet",
     working_dir: Optional[Union[str, Path]] = None,
-    state_dir: Optional[Union[str, Path]] = None,
     resume: bool = False,
     **kwargs
 ) -> Dict[str, Any]:
@@ -25,7 +24,6 @@ def run_ai_workflow(
         workflow_name: Name of the workflow to run (e.g., "audit", "test")
         model: Claude model to use (default: "sonnet")
         working_dir: Working directory for Claude session
-        state_dir: Directory to store workflow state
         resume: Whether to resume from previous state
         **kwargs: Workflow-specific arguments passed to workflow constructor
 
@@ -95,9 +93,9 @@ def run_ai_workflow(
         workflow = workflow_class(session=session)
 
     # Override state directory if provided
-    if state_dir:
-        workflow.state_dir = Path(state_dir)
-        workflow.state_dir.mkdir(parents=True, exist_ok=True)
+    if working_dir:
+        workflow.working_dir = Path(working_dir)
+        workflow.working_dir.mkdir(parents=True, exist_ok=True)
 
     # Execute workflow
     logger.info(f"Executing {workflow_name} workflow (resume={resume})")

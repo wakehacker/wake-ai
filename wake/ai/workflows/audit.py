@@ -131,12 +131,8 @@ class AuditWorkflow(AIWorkflow):
         # Execute the workflow
         results = super().execute(context=audit_context, **kwargs)
 
-        # Add audit-specific results
-        results["audit_report_path"] = ".audit/"
-        results["issues_found"] = len(self.state.context.get("confirmed_issues", []))
-
         return results
-    
+
     @classmethod
     def get_cli_options(cls) -> Dict[str, Any]:
         """Return audit workflow CLI options."""
@@ -160,7 +156,7 @@ class AuditWorkflow(AIWorkflow):
                 "help": "Focus areas (e.g., 'reentrancy', 'ERC20', 'access-control')"
             }
         }
-    
+
     @classmethod
     def process_cli_args(cls, **kwargs) -> Dict[str, Any]:
         """Process CLI arguments for audit workflow."""
