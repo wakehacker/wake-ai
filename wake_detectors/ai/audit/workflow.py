@@ -66,7 +66,6 @@ class DetectorAuditWorkflow(AIWorkflow):
             name="analyze_and_plan",
             prompt_template=self._build_prompt("analyze_and_plan"),
             tools=["read", "search", "write", "grep", "bash"],
-            context_keys=["scope", "additional_context", "working_dir"],
             max_cost=10.0
         )
 
@@ -75,7 +74,6 @@ class DetectorAuditWorkflow(AIWorkflow):
             name="static_analysis",
             prompt_template=self._build_prompt("static_analysis"),
             tools=["read", "write", "bash", "edit"],
-            context_keys=["analyze_and_plan_output", "working_dir"],
             max_cost=10.0
         )
 
@@ -84,7 +82,6 @@ class DetectorAuditWorkflow(AIWorkflow):
             name="manual_review",
             prompt_template=self._build_prompt("manual_review"),
             tools=["read", "write", "search", "grep", "edit"],
-            context_keys=["static_analysis_output", "analyze_and_plan_output", "working_dir"],
             max_cost=10.0
         )
 
@@ -93,7 +90,6 @@ class DetectorAuditWorkflow(AIWorkflow):
             name="executive_summary",
             prompt_template=self._build_prompt("executive_summary"),
             tools=["read", "write"],
-            context_keys=["manual_review_output", "analyze_and_plan_output", "working_dir"],
             max_cost=10.0
         )
 
@@ -141,3 +137,36 @@ class DetectorAuditWorkflow(AIWorkflow):
         results["issues_found"] = len(self.state.context.get("confirmed_issues", []))
 
         return results
+    
+    @classmethod
+    def get_cli_options(cls) -> Dict[str, Any]:
+        """Return audit workflow CLI options."""
+        import click
+        return {
+            "scope": {
+                "param_decls": ["-s", "--scope"],
+                "multiple": True,
+                "type": click.Path(exists=True),
+                "help": "Files/directories in audit scope (default: entire codebase)"
+            },
+            "context": {
+                "param_decls": ["-c", "--context"],
+                "multiple": True,
+                "type": click.Path(exists=True),
+                "help": "Additional context files (docs, specs, etc.)"
+            },
+            "focus": {
+                "param_decls": ["-f", "--focus"],
+                "multiple": True,
+                "help": "Focus areas (e.g., 'reentrancy', 'ERC20', 'access-control')"
+            }
+        }
+    
+    @classmethod
+    def process_cli_args(cls, **kwargs) -> Dict[str, Any]:
+        """Process CLI arguments for audit workflow."""
+        return {
+            "scope_files": list(kwargs.get("scope", [])),
+            "context_docs": list(kwargs.get("context", [])),
+            "focus_areas": list(kwargs.get("focus", []))
+        }

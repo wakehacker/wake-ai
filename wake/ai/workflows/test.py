@@ -1,5 +1,6 @@
 """Simple test workflow implementation."""
 
+from typing import Dict, Any
 from ..flow import AIWorkflow
 
 
@@ -35,3 +36,13 @@ class TestWorkflow(AIWorkflow):
             tools=[],  # No tools needed
             max_cost=0.1
         )
+    
+    @classmethod
+    def get_cli_options(cls) -> Dict[str, Any]:
+        """Return test workflow CLI options."""
+        return {}  # Test workflow doesn't need special options
+    
+    @classmethod
+    def process_cli_args(cls, **kwargs) -> Dict[str, Any]:
+        """Process CLI arguments for test workflow."""
+        return {}  # No special processing needed

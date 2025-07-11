@@ -1,7 +1,7 @@
 """Security audit workflow implementation."""
 
 from pathlib import Path
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 
 from wake.ai.claude import ClaudeCodeSession
 
@@ -136,3 +136,36 @@ class AuditWorkflow(AIWorkflow):
         results["issues_found"] = len(self.state.context.get("confirmed_issues", []))
 
         return results
+    
+    @classmethod
+    def get_cli_options(cls) -> Dict[str, Any]:
+        """Return audit workflow CLI options."""
+        import click
+        return {
+            "scope": {
+                "param_decls": ["-s", "--scope"],
+                "multiple": True,
+                "type": click.Path(exists=True),
+                "help": "Files/directories in audit scope (default: entire codebase)"
+            },
+            "context": {
+                "param_decls": ["-c", "--context"],
+                "multiple": True,
+                "type": click.Path(exists=True),
+                "help": "Additional context files (docs, specs, etc.)"
+            },
+            "focus": {
+                "param_decls": ["-f", "--focus"],
+                "multiple": True,
+                "help": "Focus areas (e.g., 'reentrancy', 'ERC20', 'access-control')"
+            }
+        }
+    
+    @classmethod
+    def process_cli_args(cls, **kwargs) -> Dict[str, Any]:
+        """Process CLI arguments for audit workflow."""
+        return {
+            "scope_files": list(kwargs.get("scope", [])),
+            "context_docs": list(kwargs.get("context", [])),
+            "focus_areas": list(kwargs.get("focus", []))
+        }
