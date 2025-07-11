@@ -65,10 +65,28 @@ class AIWorkflow(ABC):
         self,
         name: str,
         session: Optional[ClaudeCodeSession] = None,
+        model: Optional[str] = None,
         state_dir: Optional[Path] = None
     ):
+        """Initialize workflow.
+        
+        Args:
+            name: Workflow name
+            session: Claude session to use (optional)
+            model: Model name to create session with (ignored if session provided)
+            state_dir: Directory to store workflow state
+        """
         self.name = name
-        self.session = session or ClaudeCodeSession()
+        
+        # Handle session creation
+        if session is not None:
+            self.session = session
+        elif model is not None:
+            self.session = ClaudeCodeSession(model=model)
+        else:
+            # Default to creating a session with default model
+            self.session = ClaudeCodeSession()
+            
         self.state_dir = Path(state_dir) if state_dir else Path.cwd() / ".ai_workflows"
         self.state_dir.mkdir(parents=True, exist_ok=True)
         

@@ -167,9 +167,10 @@ def validate_claude_cli():
     """Check if Claude Code CLI is available and properly configured.
     
     Raises:
-        RuntimeError: If Claude CLI is not available
+        ClaudeNotAvailableError: If Claude CLI is not available
     """
     import subprocess
+    from .exceptions import ClaudeNotAvailableError
     
     try:
         result = subprocess.run(
@@ -180,13 +181,7 @@ def validate_claude_cli():
         )
         
         if result.returncode != 0:
-            raise RuntimeError(
-                "Claude Code CLI is not available. "
-                "Please install it first: https://github.com/anthropics/claude-code"
-            )
+            raise ClaudeNotAvailableError()
             
     except FileNotFoundError:
-        raise RuntimeError(
-            "Claude Code CLI is not installed. "
-            "Please install it first: https://github.com/anthropics/claude-code"
-        )
+        raise ClaudeNotAvailableError()

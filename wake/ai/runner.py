@@ -6,7 +6,7 @@ from typing import Dict, Any, Optional, List, Union
 
 from .claude import ClaudeCodeSession
 from .workflows import AVAILABLE_WORKFLOWS
-from .utils import validate_claude_cli
+from .exceptions import ClaudeNotAvailableError, WorkflowExecutionError
 
 logger = logging.getLogger(__name__)
 
@@ -57,9 +57,6 @@ def run_ai_workflow(
         ...     custom_param2=["list", "of", "values"]
         ... )
     """
-    # Validate Claude CLI is available
-    validate_claude_cli()
-    
     # Get workflow class
     workflow_class = AVAILABLE_WORKFLOWS.get(workflow_name)
     if not workflow_class:
@@ -108,9 +105,12 @@ def run_ai_workflow(
         results = workflow.execute(resume=resume)
         logger.info(f"Workflow {workflow_name} completed successfully")
         return results
+    except ClaudeNotAvailableError:
+        # Re-raise as is for clear error message
+        raise
     except Exception as e:
         logger.error(f"Workflow {workflow_name} failed: {e}")
-        raise
+        raise WorkflowExecutionError(workflow_name, str(e), e)
 
 
 def run_simple_audit(

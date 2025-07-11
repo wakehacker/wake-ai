@@ -1,4 +1,5 @@
 from .abi_encode_with_signature import AbiEncodeWithSignatureDetector
+from .ai.audit.detector import AIAuditDetector
 from .axelar_proxy_contract_id import AxelarProxyContractIdDetector
 from .balance_relied_on import BalanceReliedOnDetector
 from .call_options_not_called import CallOptionsNotCalledDetector
