@@ -24,7 +24,7 @@ console = Console()
 
 class AIAuditDetector(Detector):
     """AI-powered security audit detector using Claude Code."""
-    
+
     def __init__(self):
         self.detections = []
         self.scope_files: List[str] = []
@@ -40,9 +40,9 @@ class AIAuditDetector(Detector):
             # Import here to avoid circular imports
             from wake.ai import ClaudeNotAvailableError
             from .workflow import DetectorAuditWorkflow
-            
+
             console.print("[blue]Starting AI security audit...[/blue]")
-            
+
             # Initialize workflow with model - let it handle session creation
             workflow = DetectorAuditWorkflow(
                 scope_files=self.scope_files,
@@ -50,42 +50,42 @@ class AIAuditDetector(Detector):
                 focus_areas=self.focus_areas,
                 model=self.model  # Pass model instead of session
             )
-            
+
             # Display working directory
             console.print(f"[blue]Working directory:[/blue] {workflow.working_dir}")
-            
+
             # Display configuration
             if self.scope_files:
                 console.print(f"[blue]Scope:[/blue] {', '.join(self.scope_files)}")
             else:
                 console.print("[blue]Scope:[/blue] Entire codebase")
-            
+
             if self.context_docs:
                 console.print(f"[blue]Context docs:[/blue] {', '.join(self.context_docs)}")
-            
+
             if self.focus_areas:
                 console.print(f"[blue]Focus areas:[/blue] {', '.join(self.focus_areas)}")
-            
+
             console.print(f"[blue]Model:[/blue] {self.model}")
-            
+
             # Use working directory for output
             self.output_dir = workflow.working_dir / "results"
             self.output_dir.mkdir(parents=True, exist_ok=True)
-            
+
             # Override state directory to use working directory
             workflow.state_dir = workflow.working_dir / "state"
             workflow.state_dir.mkdir(parents=True, exist_ok=True)
-            
+
             # Execute workflow
             results = workflow.execute(resume=self.resume)
-            
+
             # Convert workflow results to detector results
             issues_found = results.get("issues_found", 0)
-            
+
             if issues_found > 0:
                 console.print(f"\n[yellow]Found {issues_found} potential issues[/yellow]")
                 console.print(f"Review the detailed findings in {self.output_dir}/")
-                
+
                 # Create a summary detection
                 self.detections.append(
                     DetectorResult(
@@ -101,15 +101,15 @@ class AIAuditDetector(Detector):
                 )
             else:
                 console.print("\n[green]No significant issues found![/green]")
-            
+
             console.print(f"\n[green]Audit complete! Results saved to:[/green] {self.output_dir}/")
-            
+
             # Show completed steps
             if "completed_steps" in results:
                 console.print("\n[bold]Completed workflow steps:[/bold]")
                 for step in results["completed_steps"]:
                     console.print(f"  ✓ {step}")
-            
+
         except ClaudeNotAvailableError as e:
             console.print(f"[red]Error:[/red] {e}")
             return []
@@ -118,7 +118,7 @@ class AIAuditDetector(Detector):
             console.print(f"[red]AI audit failed:[/red] {e}")
             if self.resume:
                 console.print("[yellow]Try running without --resume flag[/yellow]")
-        
+
         return self.detections
 
     @detector.command(name="ai-audit")
@@ -171,24 +171,24 @@ class AIAuditDetector(Detector):
     ) -> None:
         """
         AI-powered security audit using Claude.
-        
+
         This detector runs a comprehensive security audit on your smart contracts
         using Claude to identify potential vulnerabilities. It follows industry
         best practices with multiple analysis steps.
-        
+
         Examples:
             # Audit entire codebase
             wake detect ai-audit
-            
+
             # Audit specific files
             wake detect ai-audit -s contracts/Token.sol -s contracts/Vault.sol
-            
+
             # Add context and focus areas
             wake detect ai-audit -c docs/spec.md -f reentrancy -f "access control"
-            
+
             # Use a more powerful model
             wake detect ai-audit --model opus
-            
+
             # Resume a previous audit
             wake detect ai-audit --resume
         """
@@ -199,6 +199,3 @@ class AIAuditDetector(Detector):
         self.model = model
         self.output_dir = Path(output)
         self.resume = resume
-        
-        # Create output directory
-        self.output_dir.mkdir(exist_ok=True)

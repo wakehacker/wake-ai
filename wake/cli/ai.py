@@ -111,7 +111,7 @@ def run_ai(
 
     # Build workflow initialization arguments based on the workflow type
     init_args = {"model": model}
-    
+
     # Add workflow-specific arguments
     if flow == "audit":
         init_args.update({
@@ -120,15 +120,11 @@ def run_ai(
             "focus_areas": list(focus)
         })
     # Future workflows can add their own argument handling here
-    
+
     workflow = workflow_class(**init_args)
-    
+
     # Display working directory
     console.print(f"[blue]Working directory:[/blue] {workflow.working_dir}")
-    
-    # Update output directory to use working directory
-    output = workflow.working_dir / "results"
-    output.mkdir(parents=True, exist_ok=True)
 
     try:
         # Execute workflow

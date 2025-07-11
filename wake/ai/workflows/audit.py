@@ -65,7 +65,6 @@ class AuditWorkflow(AIWorkflow):
             name="analyze_and_plan",
             prompt_template=self._build_prompt("analyze_and_plan"),
             tools=["read", "search", "write", "grep", "bash"],
-            context_keys=["scope", "additional_context"],
             max_cost=10.0
         )
 
@@ -74,7 +73,6 @@ class AuditWorkflow(AIWorkflow):
             name="static_analysis",
             prompt_template=self._build_prompt("static_analysis"),
             tools=["read", "write", "bash", "edit"],
-            context_keys=["analyze_and_plan_output"],
             max_cost=10.0
         )
 
@@ -83,7 +81,6 @@ class AuditWorkflow(AIWorkflow):
             name="manual_review",
             prompt_template=self._build_prompt("manual_review"),
             tools=["read", "write", "search", "grep", "edit"],
-            context_keys=["static_analysis_output", "analyze_and_plan_output"],
             max_cost=10.0
         )
 
@@ -92,7 +89,6 @@ class AuditWorkflow(AIWorkflow):
             name="executive_summary",
             prompt_template=self._build_prompt("executive_summary"),
             tools=["read", "write"],
-            context_keys=["manual_review_output", "analyze_and_plan_output"],
             max_cost=10.0
         )
 

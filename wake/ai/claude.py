@@ -236,7 +236,7 @@ class ClaudeCodeSession:
                 logger.info(f"Query completed: cost=${response.cost:.4f}, turns={response.num_turns}, finished={response.is_finished}")
                 return response
             else:
-                logger.info("Query completed (text format)")
+                logger.debug("Query completed (text format)")
                 return ClaudeCodeResponse.from_text(result.stdout)
 
         except Exception as e:
@@ -289,7 +289,7 @@ class ClaudeCodeSession:
         # Update total cost and session info from response
         total_cost = response.cost
         session_id = response.session_id
-        logger.info(f"Iteration {iteration} complete: total_cost=${total_cost:.4f}, session_id={session_id}")
+        logger.debug(f"Iteration {iteration} complete: total_cost=${total_cost:.4f}, session_id={session_id}")
 
         # Check if task is already finished
         if response.is_finished:
@@ -299,7 +299,7 @@ class ClaudeCodeSession:
         # Continue querying while under cost limit
         while total_cost < cost_limit and session_id:
             iteration += 1
-            logger.info(f"Iteration {iteration}: Continuing session (current_cost=${total_cost:.4f}, limit=${cost_limit:.2f})")
+            logger.debug(f"Iteration {iteration}: Continuing session (current_cost=${total_cost:.4f}, limit=${cost_limit:.2f})")
 
             # Build command to resume the session
             cmd = self._build_command(
@@ -332,7 +332,7 @@ class ClaudeCodeSession:
                 last_response = response
 
                 total_cost += response.cost
-                logger.info(f"Iteration {iteration} complete: iteration_cost=${response.cost:.4f}, total_cost=${total_cost:.4f}")
+                logger.debug(f"Iteration {iteration} complete: iteration_cost=${response.cost:.4f}, total_cost=${total_cost:.4f}")
 
                 # Check if task is finished
                 if response.is_finished:
@@ -361,7 +361,7 @@ class ClaudeCodeSession:
         finish_tries = 0
         max_finish_tries = 3
         while finish_tries < max_finish_tries and not last_response.is_finished:
-            logger.info(f"Finish attempt {finish_tries + 1}/{max_finish_tries}")
+            logger.debug(f"Finish attempt {finish_tries + 1}/{max_finish_tries}")
 
             # Build command to resume the session
             cmd = self._build_command(
@@ -394,7 +394,7 @@ class ClaudeCodeSession:
                 last_response = response
 
                 total_cost += response.cost
-                logger.info(f"Finish attempt {finish_tries + 1} complete: cost=${response.cost:.4f}, total=${total_cost:.4f}")
+                logger.debug(f"Finish attempt {finish_tries + 1} complete: cost=${response.cost:.4f}, total=${total_cost:.4f}")
 
                 # Check if task is finished
                 if response.is_finished:
@@ -436,7 +436,7 @@ class ClaudeCodeSession:
         state_path = Path(state_file)
         state_path.parent.mkdir(parents=True, exist_ok=True)
         state_path.write_text(json.dumps(state, indent=2))
-        logger.info(f"Saved session state to {state_path} (session_id={session_id})")
+        logger.debug(f"Saved session state to {state_path} (session_id={session_id})")
 
     @classmethod
     def load_session_state(cls, state_file: Union[str, Path]) -> tuple["ClaudeCodeSession", str]:
@@ -449,7 +449,7 @@ class ClaudeCodeSession:
             Tuple of (ClaudeCodeSession, session_id)
         """
         state_path = Path(state_file)
-        logger.info(f"Loading session state from {state_path}")
+        logger.debug(f"Loading session state from {state_path}")
 
         state = json.loads(state_path.read_text())
         session_id = state["session_id"]
