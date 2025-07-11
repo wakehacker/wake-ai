@@ -7,16 +7,16 @@ from ..flow import AIWorkflow
 class TestWorkflow(AIWorkflow):
     """Simple test workflow with two greeting steps."""
 
-    def __init__(self, session=None, model=None, state_dir=None, working_dir=None):
+    def __init__(self, session=None, model=None, working_dir=None):
         """Initialize test workflow.
 
         Args:
             session: Claude session to use (optional)
             model: Model name to create session with (ignored if session provided)
-            state_dir: Directory to store workflow state
+            working_dir: Directory to store workflow state
             working_dir: Directory for AI to work in
         """
-        super().__init__("test", session=session, model=model, state_dir=state_dir, working_dir=working_dir)
+        super().__init__("test", session=session, model=model, working_dir=working_dir)
 
     def _setup_steps(self):
         """Setup the test workflow steps."""
@@ -36,12 +36,12 @@ class TestWorkflow(AIWorkflow):
             tools=[],  # No tools needed
             max_cost=0.1
         )
-    
+
     @classmethod
     def get_cli_options(cls) -> Dict[str, Any]:
         """Return test workflow CLI options."""
         return {}  # Test workflow doesn't need special options
-    
+
     @classmethod
     def process_cli_args(cls, **kwargs) -> Dict[str, Any]:
         """Process CLI arguments for test workflow."""

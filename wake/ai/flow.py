@@ -72,7 +72,6 @@ class AIWorkflow(ABC):
         name: str,
         session: Optional[ClaudeCodeSession] = None,
         model: Optional[str] = None,
-        state_dir: Optional[Path] = None,
         working_dir: Optional[Union[str, Path]] = None
     ):
         """Initialize workflow.
@@ -81,7 +80,6 @@ class AIWorkflow(ABC):
             name: Workflow name
             session: Claude session to use (optional)
             model: Model name to create session with (ignored if session provided)
-            state_dir: Directory to store workflow state
             working_dir: Directory for AI to work in (default: .wake/ai/<session-id>/)
         """
         self.name = name
@@ -111,11 +109,6 @@ class AIWorkflow(ABC):
         else:
             # Default to creating a session with default model
             self.session = ClaudeCodeSession(working_dir=self.working_dir)
-
-        self.state_dir = Path(state_dir) if state_dir else Path.cwd() / ".wake" / "ai" / "state"
-        self.state_dir.mkdir(parents=True, exist_ok=True)
-
-        logger.debug(f"Initializing workflow '{name}' with state directory: {self.state_dir}")
 
         self.steps: List[WorkflowStep] = []
         self.state = WorkflowState()
@@ -148,7 +141,7 @@ class AIWorkflow(ABC):
         """Execute the workflow."""
         logger.info(f"Starting workflow '{self.name}' execution (resume={resume})")
 
-        if resume and (self.state_dir / f"{self.name}_state.json").exists():
+        if resume and (self.working_dir / f"{self.name}_state.json").exists():
             logger.debug(f"Resuming workflow from saved state")
             self._load_state()
         else:
@@ -181,6 +174,7 @@ class AIWorkflow(ABC):
 
                 # Log response details
                 logger.info(f"Step '{step.name}' completed with cost ${response.cost:.4f}, {response.num_turns} turns")
+                logger.debug(f"Response: {response.content}")
 
                 # Validate and update state
                 if step.validate_response(response):
@@ -216,23 +210,25 @@ class AIWorkflow(ABC):
         """Prepare final workflow results."""
         return {
             "workflow": self.name,
+            "responses": {step_name: response.content for step_name, response in self.state.responses.items()},
             "completed_steps": self.state.completed_steps,
             "errors": self.state.errors,
             "duration": (
                 (self.state.completed_at - self.state.started_at).total_seconds()
                 if self.state.started_at and self.state.completed_at
                 else None
-            )
+            ),
+            "total_cost": sum(response.cost for response in self.state.responses.values())
         }
 
     @classmethod
     def get_cli_options(cls) -> Dict[str, Any]:
         """Return workflow-specific CLI options.
-        
+
         Returns:
             Dictionary mapping argument names to their click option configuration.
             Each entry contains the parameters needed for click.option()
-        
+
         Example:
             {
                 "scope": {
@@ -244,14 +240,14 @@ class AIWorkflow(ABC):
             }
         """
         return {}
-    
+
     @classmethod
     def process_cli_args(cls, **kwargs) -> Dict[str, Any]:
         """Process CLI arguments into workflow initialization arguments.
-        
+
         Args:
             **kwargs: All CLI arguments
-            
+
         Returns:
             Dictionary of arguments to pass to workflow __init__
         """
@@ -265,13 +261,13 @@ class AIWorkflow(ABC):
             "context": self.state.context,
             "errors": self.state.errors
         }
-        state_file = self.state_dir / f"{self.name}_state.json"
+        state_file = self.working_dir / f"{self.name}_state.json"
         state_file.write_text(json.dumps(state_data, indent=2))
         logger.debug(f"Saved workflow state to {state_file}")
 
     def _load_state(self):
         """Load workflow state."""
-        state_file = self.state_dir / f"{self.name}_state.json"
+        state_file = self.working_dir / f"{self.name}_state.json"
         logger.debug(f"Loading workflow state from {state_file}")
         data = json.loads(state_file.read_text())
         self.state.current_step = data["current_step"]

@@ -67,11 +67,6 @@ The workflow execution order is:
 This design ensures the AI has a consistent workspace from the very first prompt.
 
 ## State Management
-**state_dir**: Internal directory for workflow persistence and resumption
-  - Used by the workflow runner to save/restore workflow state between steps
-  - Allows workflows to be paused and resumed if interrupted
-  - Contains serialized workflow progress, step results, and execution metadata
-
 **working_dir**: User-facing workspace for AI-generated files
   - Path: .wake/ai/<session-id>/
   - Available to AI via {working_dir} context variable in prompts

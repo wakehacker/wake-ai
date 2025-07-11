@@ -9,11 +9,9 @@ from typing import List, Tuple
 import rich_click as click
 from rich.console import Console
 
+from wake.ai.utils import format_workflow_results
 from wake.detectors import (
-    Detection,
     Detector,
-    DetectorConfidence,
-    DetectorImpact,
     DetectorResult,
     detector,
 )
@@ -39,11 +37,10 @@ class AIAuditDetector(Detector):
     """AI-powered security audit detector using Claude Code."""
 
     def __init__(self):
-        self.detections = []
         self.scope_files: List[str] = []
         self.context_docs: List[str] = []
         self.focus_areas: List[str] = []
-        self.model: str = "sonnet"
+        self.model: str = "opus"
         self.output_dir: Path = Path(".audit")
         self.resume: bool = False
 
@@ -52,6 +49,7 @@ class AIAuditDetector(Detector):
         try:
             # Import here to avoid circular imports
             from wake.ai import ClaudeNotAvailableError
+
             from .workflow import DetectorAuditWorkflow
 
             console.print("[blue]Starting AI security audit...[/blue]")
@@ -81,47 +79,12 @@ class AIAuditDetector(Detector):
 
             console.print(f"[blue]Model:[/blue] {self.model}")
 
-            # Use working directory for output
-            self.output_dir = workflow.working_dir / "results"
-            self.output_dir.mkdir(parents=True, exist_ok=True)
-
-            # Override state directory to use working directory
-            workflow.state_dir = workflow.working_dir / "state"
-            workflow.state_dir.mkdir(parents=True, exist_ok=True)
-
             # Execute workflow
             results = workflow.execute(resume=self.resume)
 
-            # Convert workflow results to detector results
-            issues_found = results.get("issues_found", 0)
+            console.print(format_workflow_results(results, "text"))
 
-            if issues_found > 0:
-                console.print(f"\n[yellow]Found {issues_found} potential issues[/yellow]")
-                console.print(f"Review the detailed findings in {self.output_dir}/")
-
-                # Create a summary detection
-                self.detections.append(
-                    DetectorResult(
-                        detection=Detection(
-                            detector_name="ai-audit",
-                            impact=DetectorImpact.HIGH,
-                            confidence=DetectorConfidence.HIGH,
-                            description=f"AI audit found {issues_found} potential security issues",
-                            source_units=[]  # AI audit covers multiple files
-                        ),
-                        uri=f"file://{self.output_dir.absolute()}"
-                    )
-                )
-            else:
-                console.print("\n[green]No significant issues found![/green]")
-
-            console.print(f"\n[green]Audit complete! Results saved to:[/green] {self.output_dir}/")
-
-            # Show completed steps
-            if "completed_steps" in results:
-                console.print("\n[bold]Completed workflow steps:[/bold]")
-                for step in results["completed_steps"]:
-                    console.print(f"  ✓ {step}")
+            console.print(f"\n[green]Audit complete! Review results in:[/green] {workflow.working_dir}/")
 
         except ClaudeNotAvailableError as e:
             console.print(f"[red]Error:[/red] {e}")
@@ -132,7 +95,7 @@ class AIAuditDetector(Detector):
             if self.resume:
                 console.print("[yellow]Try running without --resume flag[/yellow]")
 
-        return self.detections
+        return []
 
     @detector.command(name="ai-audit")
     @click.option(
@@ -180,10 +143,10 @@ class AIAuditDetector(Detector):
         """
         # Import workflow class
         from .workflow import DetectorAuditWorkflow
-        
+
         # Process workflow arguments
         workflow_args = DetectorAuditWorkflow.process_cli_args(**kwargs)
-        
+
         # Store configuration
         self.scope_files = workflow_args.get("scope_files", [])
         self.context_docs = workflow_args.get("context_docs", [])

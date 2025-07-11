@@ -15,7 +15,7 @@ class DetectorAuditWorkflow(AIWorkflow):
         context_docs: Optional[List[str]] = None,
         focus_areas: Optional[List[str]] = None,
         session=None,
-        model: Optional[str] = None,
+        model: Optional[str] = "opus",
         working_dir: Optional[str] = None
     ):
         """Initialize security audit workflow.
@@ -64,7 +64,7 @@ class DetectorAuditWorkflow(AIWorkflow):
         # Step 1: Analyze and Plan
         self.add_step(
             name="analyze_and_plan",
-            prompt_template=self._build_prompt("analyze_and_plan"),
+            prompt_template=self.prompts("analyze_and_plan"),
             tools=["read", "search", "write", "grep", "bash"],
             max_cost=10.0
         )
@@ -72,7 +72,7 @@ class DetectorAuditWorkflow(AIWorkflow):
         # Step 2: Static Analysis
         self.add_step(
             name="static_analysis",
-            prompt_template=self._build_prompt("static_analysis"),
+            prompt_template=self.prompts["static_analysis"],
             tools=["read", "write", "bash", "edit"],
             max_cost=10.0
         )
@@ -80,7 +80,7 @@ class DetectorAuditWorkflow(AIWorkflow):
         # Step 3: Manual Review
         self.add_step(
             name="manual_review",
-            prompt_template=self._build_prompt("manual_review"),
+            prompt_template=self.prompts["manual_review"],
             tools=["read", "write", "search", "grep", "edit"],
             max_cost=10.0
         )
@@ -88,34 +88,10 @@ class DetectorAuditWorkflow(AIWorkflow):
         # Step 4: Executive Summary
         self.add_step(
             name="executive_summary",
-            prompt_template=self._build_prompt("executive_summary"),
+            prompt_template=self.prompts["executive_summary"],
             tools=["read", "write"],
             max_cost=10.0
         )
-
-    def _build_prompt(self, step_name: str) -> str:
-        """Build prompt with context injection points."""
-        base_prompt = self.prompts[step_name]
-
-        # Add scope information
-        if self.scope_files:
-            scope_section = f"\n\nFILES IN SCOPE:\n" + "\n".join(f"- {f}" for f in self.scope_files)
-        else:
-            scope_section = "\n\nSCOPE: Entire codebase"
-
-        # Add context documents
-        if self.context_docs:
-            context_section = f"\n\nADDITIONAL CONTEXT:\n" + "\n".join(f"- {doc}" for doc in self.context_docs)
-        else:
-            context_section = ""
-
-        # Add focus areas
-        if self.focus_areas:
-            focus_section = f"\n\nFOCUS AREAS:\n" + "\n".join(f"- {area}" for area in self.focus_areas)
-        else:
-            focus_section = ""
-
-        return base_prompt + scope_section + context_section + focus_section
 
     def execute(self, context: Optional[Dict[str, Any]] = None, **kwargs) -> Dict[str, Any]:
         """Execute the audit workflow with proper context setup."""
@@ -132,12 +108,8 @@ class DetectorAuditWorkflow(AIWorkflow):
         # Execute the workflow
         results = super().execute(context=audit_context, **kwargs)
 
-        # Add audit-specific results
-        results["audit_report_path"] = ".audit/"
-        results["issues_found"] = len(self.state.context.get("confirmed_issues", []))
-
         return results
-    
+
     @classmethod
     def get_cli_options(cls) -> Dict[str, Any]:
         """Return audit workflow CLI options."""
@@ -161,7 +133,7 @@ class DetectorAuditWorkflow(AIWorkflow):
                 "help": "Focus areas (e.g., 'reentrancy', 'ERC20', 'access-control')"
             }
         }
-    
+
     @classmethod
     def process_cli_args(cls, **kwargs) -> Dict[str, Any]:
         """Process CLI arguments for audit workflow."""
