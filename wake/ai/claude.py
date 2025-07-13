@@ -132,7 +132,7 @@ class ClaudeCodeSession:
         self.verbose = verbose
         self.last_session_id = session_id
         self.session_history: List[str] = []  # Track all session IDs
-        
+
         if session_id:
             self.session_history.append(session_id)
 
@@ -163,9 +163,9 @@ class ClaudeCodeSession:
 
         # Tool configuration
         if self.allowed_tools:
-            cmd.extend(["--allowedTools", ",".join(self.allowed_tools)])
+            cmd.extend(["--allowedTools", " ".join(self.allowed_tools)])
         if self.disallowed_tools:
-            cmd.extend(["--disallowedTools", ",".join(self.disallowed_tools)])
+            cmd.extend(["--disallowedTools", " ".join(self.disallowed_tools)])
 
         # Output configuration
         cmd.extend(["-p", prompt])
@@ -223,6 +223,8 @@ class ClaudeCodeSession:
             max_turns=max_turns,
             resume_session=resume_session_id
         )
+
+        logger.info(f"Executing query with cmd: {cmd}")
 
         try:
             # Prepare input
@@ -459,7 +461,7 @@ class ClaudeCodeSession:
         # Add the session_id to history if provided
         if session_id and session_id not in self.session_history:
             self.session_history.append(session_id)
-            
+
         state = {
             "sessions": self.session_history,  # Save all session IDs
             "last_session_id": self.last_session_id,  # Track the most recent
@@ -483,23 +485,54 @@ class ClaudeCodeSession:
             state_file: Path to the state file
 
         Returns:
-            Tuple of (ClaudeCodeSession, session_id)
+            Tuple of (ClaudeCodeSession, last_session_id)
         """
         state_path = Path(state_file)
         logger.debug(f"Loading session state from {state_path}")
 
-        state = json.loads(state_path.read_text())
-        session_id = state["session_id"]
+        try:
+            state = json.loads(state_path.read_text())
 
-        logger.debug(f"Loaded state: model={state['model']}, session_id={session_id}")
+            sessions = state["sessions"]
+            last_session_id = state.get("last_session_id")
 
-        session = cls(
-            model=state["model"],
-            allowed_tools=state.get("allowed_tools", []),
-            disallowed_tools=state.get("disallowed_tools", []),
-            working_dir=state.get("working_dir"),
-            execution_dir=state.get("execution_dir"),
-            session_id=session_id
-        )
+            logger.debug(f"Loaded state: model={state['model']}, sessions={len(sessions)}, last_session_id={last_session_id}")
 
-        return last_session_id, session_id
+            session = cls(
+                model=state["model"],
+                allowed_tools=state.get("allowed_tools", []),
+                disallowed_tools=state.get("disallowed_tools", []),
+                working_dir=state.get("working_dir"),
+                execution_dir=state.get("execution_dir"),
+                session_id=last_session_id
+            )
+
+            # Restore the full session history
+            session.session_history = sessions
+
+            return session, last_session_id
+
+        except (KeyError, json.JSONDecodeError) as e:
+            logger.error(f"Failed to load session state: {e}")
+            raise ValueError(f"Invalid or outdated session state file: {e}")
+
+    def get_session_id(self) -> Optional[str]:
+        """Get the current session ID.
+
+        Returns:
+            The current session ID, or None if no session has been started.
+        """
+        return self.last_session_id
+
+    def reset_session(self):
+        """Reset the session ID, forcing a new conversation on the next query."""
+        self.last_session_id = None
+        logger.debug("Session ID reset")
+
+    def get_session_history(self) -> List[str]:
+        """Get the full history of session IDs.
+
+        Returns:
+            List of all session IDs used in this instance.
+        """
+        return self.session_history.copy()
