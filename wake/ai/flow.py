@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class WorkflowStep:
     """Definition of a single workflow step.
-    
+
     Args:
         name: Step name
         prompt_template: Prompt template with {context_var} placeholders
@@ -109,7 +109,7 @@ class WorkflowState:
 
 class AIWorkflow(ABC):
     """Base class for fixed AI workflows."""
-    
+
     # Default tools for the workflow (can be overridden by subclasses)
     allowed_tools: List[str] = []
     disallowed_tools: List[str] = []
@@ -157,16 +157,16 @@ class AIWorkflow(ABC):
         # Use provided tools or class defaults
         tools_allowed = allowed_tools if allowed_tools is not None else self.allowed_tools
         tools_disallowed = disallowed_tools if disallowed_tools is not None else self.disallowed_tools
-        
+
         # Set execution directory
         exec_dir = Path(execution_dir) if execution_dir else Path.cwd()
-        
+
         # Handle session creation
         if session is not None:
             self.session = session
         elif model is not None:
             self.session = ClaudeCodeSession(
-                model=model, 
+                model=model,
                 working_dir=self.working_dir,
                 execution_dir=exec_dir,
                 allowed_tools=tools_allowed,
@@ -243,13 +243,13 @@ class AIWorkflow(ABC):
                 # Save original tools
                 original_allowed = self.session.allowed_tools
                 original_disallowed = self.session.disallowed_tools
-                
+
                 while retry_count <= step.max_retries:
                     # Set tools if specified (step overrides workflow defaults)
                     if step.tools is not None:
                         self.session.allowed_tools = step.tools
                         logger.debug(f"Set allowed tools for step '{step.name}': {step.tools}")
-                    
+
                     if step.disallowed_tools is not None:
                         self.session.disallowed_tools = step.disallowed_tools
                         logger.debug(f"Set disallowed tools for step '{step.name}': {step.disallowed_tools}")
@@ -266,28 +266,27 @@ class AIWorkflow(ABC):
                             error_prompt += f"- {error}\n"
                         prompt = error_prompt
                         logger.info(f"Retrying step '{step.name}' (attempt {retry_count}/{step.max_retries}) with error correction")
-                    
+
                     # Execute query
                     if retry_count == 0:
                         # First attempt - use max_cost
                         if step.max_cost:
                             logger.info(f"Querying with cost limit ${step.max_cost} for step '{step.name}'")
-                            response = self.session.query_with_cost(prompt, step.max_cost)
+                            response = self.session.query_with_cost(prompt, step.max_cost, continue_session=True)
                         else:
                             response = self.session.query(prompt)
                     else:
                         # Retry attempt - use max_retry_cost if available, otherwise max_cost
-                        cost_limit = step.max_retry_cost if step.max_retry_cost is not None else step.max_cost
-                        if cost_limit:
-                            logger.info(f"Querying retry with cost limit ${cost_limit} for step '{step.name}'")
-                            response = self.session.query_with_cost(prompt, cost_limit)
+                        if step.max_retry_cost:
+                            logger.info(f"Querying retry with cost limit ${step.max_retry_cost} for step '{step.name}'")
+                            response = self.session.query_with_cost(prompt, step.max_retry_cost, continue_session=True)
                         else:
                             response = self.session.query(prompt)
 
                     # Log response details
                     logger.info(f"Step '{step.name}' completed with cost ${response.cost:.4f}, {response.num_turns} turns")
                     logger.debug(f"Response: {response.content}")
-                    
+
                     # Log session ID after first step's first query
                     if self.state.current_step == 0 and retry_count == 0 and response.session_id:
                         logger.info(f"Claude session ID: {response.session_id}")
@@ -315,7 +314,7 @@ class AIWorkflow(ABC):
                             raise RuntimeError(error_msg)
 
                         retry_count += 1
-                
+
                 # Restore original tools after step completes
                 self.session.allowed_tools = original_allowed
                 self.session.disallowed_tools = original_disallowed
@@ -324,7 +323,7 @@ class AIWorkflow(ABC):
                 # Restore original tools even on error
                 self.session.allowed_tools = original_allowed
                 self.session.disallowed_tools = original_disallowed
-                
+
                 logger.error(f"Error in step '{step.name}': {str(e)}")
                 self.state.errors.append({
                     "step": step.name,
