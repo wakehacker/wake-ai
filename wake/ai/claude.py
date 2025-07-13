@@ -109,6 +109,7 @@ class ClaudeCodeSession:
         allowed_tools: Optional[List[str]] = None,
         disallowed_tools: Optional[List[str]] = None,
         working_dir: Optional[Union[str, Path]] = None,
+        execution_dir: Optional[Union[str, Path]] = None,
         verbose: bool = False
     ):
         """Initialize Claude Code session.
@@ -117,16 +118,18 @@ class ClaudeCodeSession:
             model: Model to use (sonnet, opus, or full model name)
             allowed_tools: List of allowed tools
             disallowed_tools: List of disallowed tools
-            working_dir: Working directory for Claude Code
+            working_dir: Scratch space directory for AI to create files
+            execution_dir: Directory where Claude CLI is executed (cwd)
             verbose: Enable verbose output
         """
         self.model = model
         self.allowed_tools = allowed_tools or []
         self.disallowed_tools = disallowed_tools or []
         self.working_dir = Path(working_dir) if working_dir else Path.cwd()
+        self.execution_dir = Path(execution_dir) if execution_dir else Path.cwd()
         self.verbose = verbose
 
-        logger.info(f"Initializing ClaudeCodeSession: model={model}, working_dir={self.working_dir}")
+        logger.info(f"Initializing ClaudeCodeSession: model={model}, working_dir={self.working_dir}, execution_dir={self.execution_dir}")
         logger.debug(f"Allowed tools: {self.allowed_tools}")
         logger.debug(f"Disallowed tools: {self.disallowed_tools}")
 
@@ -214,7 +217,7 @@ class ClaudeCodeSession:
                 capture_output=True,
                 text=True,
                 input=stdin_input.decode() if stdin_input else None,
-                cwd=self.working_dir,
+                cwd=self.execution_dir,
                 check=False
             )
 
@@ -313,7 +316,7 @@ class ClaudeCodeSession:
                     cmd,
                     capture_output=True,
                     text=True,
-                    cwd=self.working_dir,
+                    cwd=self.execution_dir,
                     check=False
                 )
 
@@ -375,7 +378,7 @@ class ClaudeCodeSession:
                     cmd,
                     capture_output=True,
                     text=True,
-                    cwd=self.working_dir,
+                    cwd=self.execution_dir,
                     check=False
                 )
 
@@ -429,7 +432,8 @@ class ClaudeCodeSession:
             "model": self.model,
             "allowed_tools": self.allowed_tools,
             "disallowed_tools": self.disallowed_tools,
-            "working_dir": str(self.working_dir)
+            "working_dir": str(self.working_dir),
+            "execution_dir": str(self.execution_dir)
         }
 
         state_path = Path(state_file)
@@ -459,7 +463,8 @@ class ClaudeCodeSession:
             model=state["model"],
             allowed_tools=state.get("allowed_tools", []),
             disallowed_tools=state.get("disallowed_tools", []),
-            working_dir=state.get("working_dir")
+            working_dir=state.get("working_dir"),
+            execution_dir=state.get("execution_dir")
         )
 
         return session, session_id

@@ -1,7 +1,7 @@
 """Security audit workflow implementation."""
 
 from pathlib import Path
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional, Dict, Any, Tuple, Union
 
 from wake.ai.claude import ClaudeCodeSession
 
@@ -22,6 +22,9 @@ class AuditWorkflow(AIWorkflow):
         focus_areas: Optional[List[str]] = None,
         session: Optional[ClaudeCodeSession] = None,
         model: Optional[str] = None,
+        working_dir: Optional[Union[str, Path]] = None,
+        execution_dir: Optional[Union[str, Path]] = None,
+        **kwargs
     ):
         """Initialize security audit workflow.
 
@@ -39,7 +42,7 @@ class AuditWorkflow(AIWorkflow):
         self._load_prompts()
 
         # Now call parent init which will call _setup_steps
-        super().__init__(name=self.name, session=session, model=model)
+        super().__init__(name=self.name, session=session, model=model, working_dir=working_dir, execution_dir=execution_dir, **kwargs)
 
     def _load_prompts(self):
         """Load audit prompts from markdown files."""

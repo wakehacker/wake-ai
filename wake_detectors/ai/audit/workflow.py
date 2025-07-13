@@ -16,7 +16,9 @@ class DetectorAuditWorkflow(AIWorkflow):
         focus_areas: Optional[List[str]] = None,
         session=None,
         model: Optional[str] = "opus",
-        working_dir: Optional[str] = None
+        working_dir: Optional[str] = None,
+        execution_dir: Optional[str] = None,
+        **kwargs
     ):
         """Initialize security audit workflow.
 
@@ -36,7 +38,7 @@ class DetectorAuditWorkflow(AIWorkflow):
         self._load_prompts()
 
         # Now call parent init which will call _setup_steps
-        super().__init__("detector_audit", session=session, model=model, working_dir=working_dir)
+        super().__init__("detector_audit", session=session, model=model, working_dir=working_dir, execution_dir=execution_dir, **kwargs)
 
     def _load_prompts(self):
         """Load audit prompts from detector's prompts directory."""

@@ -120,6 +120,7 @@ class AIWorkflow(ABC):
         session: Optional[ClaudeCodeSession] = None,
         model: Optional[str] = None,
         working_dir: Optional[Union[str, Path]] = None,
+        execution_dir: Optional[Union[str, Path]] = None,
         allowed_tools: Optional[List[str]] = None,
         disallowed_tools: Optional[List[str]] = None
     ):
@@ -130,6 +131,7 @@ class AIWorkflow(ABC):
             session: Claude session to use (optional)
             model: Model name to create session with (ignored if session provided)
             working_dir: Directory for AI to work in (default: .wake/ai/<session-id>/)
+            execution_dir: Directory where Claude CLI is executed (default: current directory)
             allowed_tools: Override default allowed tools
             disallowed_tools: Override default disallowed tools
         """
@@ -156,6 +158,9 @@ class AIWorkflow(ABC):
         tools_allowed = allowed_tools if allowed_tools is not None else self.allowed_tools
         tools_disallowed = disallowed_tools if disallowed_tools is not None else self.disallowed_tools
         
+        # Set execution directory
+        exec_dir = Path(execution_dir) if execution_dir else Path.cwd()
+        
         # Handle session creation
         if session is not None:
             self.session = session
@@ -163,6 +168,7 @@ class AIWorkflow(ABC):
             self.session = ClaudeCodeSession(
                 model=model, 
                 working_dir=self.working_dir,
+                execution_dir=exec_dir,
                 allowed_tools=tools_allowed,
                 disallowed_tools=tools_disallowed
             )
@@ -170,6 +176,7 @@ class AIWorkflow(ABC):
             # Default to creating a session with default model
             self.session = ClaudeCodeSession(
                 working_dir=self.working_dir,
+                execution_dir=exec_dir,
                 allowed_tools=tools_allowed,
                 disallowed_tools=tools_disallowed
             )
@@ -280,6 +287,10 @@ class AIWorkflow(ABC):
                     # Log response details
                     logger.info(f"Step '{step.name}' completed with cost ${response.cost:.4f}, {response.num_turns} turns")
                     logger.debug(f"Response: {response.content}")
+                    
+                    # Log session ID after first step's first query
+                    if self.state.current_step == 0 and retry_count == 0 and response.session_id:
+                        logger.info(f"Claude session ID: {response.session_id}")
 
                     # Validate response
                     success, validation_errors = step.validate_response(response)
