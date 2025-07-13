@@ -259,12 +259,16 @@ class AIWorkflow(ABC):
                         # First attempt - use original prompt
                         prompt = step.format_prompt(self.state.context)
                         logger.debug(f"Executing query for step '{step.name}'")
+                        
+                        # Continue session only if this is not the first step
+                        should_continue = self.state.current_step > 0
 
                         if step.max_cost:
-                            logger.info(f"Querying with cost limit ${step.max_cost} for step '{step.name}'")
-                            response = self.session.query_with_cost(prompt, step.max_cost, continue_session=True)
+                            logger.info(f"Querying with cost limit ${step.max_cost} for step '{step.name}' (continue_session={should_continue})")
+                            response = self.session.query_with_cost(prompt, step.max_cost, continue_session=should_continue)
                         else:
-                            response = self.session.query(prompt)
+                            logger.info(f"Querying step '{step.name}' (continue_session={should_continue})")
+                            response = self.session.query(prompt, continue_session=should_continue)
                     else:
                          # Retry attempt - add error correction prompt
                         error_prompt = "The following errors occurred, please fix them:\n"
@@ -273,11 +277,13 @@ class AIWorkflow(ABC):
                         prompt = error_prompt
                         logger.info(f"Retrying step '{step.name}' (attempt {retry_count}/{step.max_retries}) with error correction")
 
+                        # Always continue session for retries
                         if step.max_retry_cost:
                             logger.info(f"Querying retry with cost limit ${step.max_retry_cost} for step '{step.name}'")
                             response = self.session.query_with_cost(prompt, step.max_retry_cost, continue_session=True)
                         else:
-                            response = self.session.query(prompt)
+                            logger.info(f"Querying retry for step '{step.name}'")
+                            response = self.session.query(prompt, continue_session=True)
 
                     # Log response details
                     logger.info(f"Step '{step.name}' completed with cost ${response.cost:.4f}, {response.num_turns} turns")

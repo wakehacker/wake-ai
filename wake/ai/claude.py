@@ -167,8 +167,6 @@ class ClaudeCodeSession:
         if self.disallowed_tools:
             cmd.extend(["--disallowedTools", " ".join(self.disallowed_tools)])
 
-        # Output configuration
-        cmd.extend(["-p", prompt])
         cmd.extend(["--output-format", output_format])
         if max_turns:
             cmd.extend(["--max-turns", str(max_turns)])
@@ -183,8 +181,10 @@ class ClaudeCodeSession:
         if self.verbose:
             cmd.append("--verbose")
 
-        cmd.append(prompt)
+        # Output configuration
+        cmd.extend(["-p", prompt])
 
+        logger.info(f"Executing query with cmd: {cmd}")
         logger.debug(f"Built command: {' '.join(cmd[:10])}..." if len(' '.join(cmd)) > 100 else f"Built command: {' '.join(cmd)}")
         return cmd
 
@@ -223,8 +223,6 @@ class ClaudeCodeSession:
             max_turns=max_turns,
             resume_session=resume_session_id
         )
-
-        logger.info(f"Executing query with cmd: {cmd}")
 
         try:
             # Prepare input
