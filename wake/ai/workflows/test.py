@@ -6,6 +6,8 @@ from ..flow import AIWorkflow
 
 class TestWorkflow(AIWorkflow):
     """Simple test workflow with two greeting steps."""
+    
+    name = "test"
 
     def __init__(self, session=None, model=None, working_dir=None):
         """Initialize test workflow.
@@ -16,7 +18,7 @@ class TestWorkflow(AIWorkflow):
             working_dir: Directory to store workflow state
             working_dir: Directory for AI to work in
         """
-        super().__init__("test", session=session, model=model, working_dir=working_dir)
+        super().__init__(self.name, session=session, model=model, working_dir=working_dir)
 
     def _setup_steps(self):
         """Setup the test workflow steps."""
