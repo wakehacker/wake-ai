@@ -8,6 +8,8 @@ class TestWorkflow(AIWorkflow):
     """Simple test workflow with two greeting steps."""
     
     name = "test"
+    # Test workflow doesn't need any tools
+    allowed_tools = []
 
     def __init__(self, session=None, model=None, working_dir=None):
         """Initialize test workflow.

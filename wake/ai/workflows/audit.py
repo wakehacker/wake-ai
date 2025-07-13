@@ -12,6 +12,8 @@ class AuditWorkflow(AIWorkflow):
     """Fixed security audit workflow following industry best practices."""
     
     name = "audit"
+    # Default tools for auditing - needs read and write capabilities
+    allowed_tools = ["Read", "Grep", "Glob", "LS", "Task", "TodoWrite", "Write", "Edit", "MultiEdit"]
 
     def __init__(
         self,

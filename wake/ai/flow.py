@@ -1,4 +1,25 @@
-"""Base workflow infrastructure for AI workflows."""
+"""Base workflow infrastructure for AI workflows.
+
+Available tools for Claude Code (from https://docs.anthropic.com/en/docs/claude-code/settings):
+
+Tools requiring permission (must be explicitly allowed):
+- Bash: Executes shell commands in your environment
+- Edit: Makes targeted edits to specific files
+- MultiEdit: Performs multiple edits on a single file atomically
+- NotebookEdit: Modifies Jupyter notebook cells
+- WebFetch: Fetches content from a specified URL
+- WebSearch: Performs web searches with domain filtering
+- Write: Creates or overwrites files
+
+Tools not requiring permission (always available):
+- Glob: Finds files based on pattern matching
+- Grep: Searches for patterns in file contents
+- LS: Lists files and directories
+- NotebookRead: Reads and displays Jupyter notebook contents
+- Read: Reads the contents of files
+- Task: Runs a sub-agent to handle complex, multi-step tasks
+- TodoWrite: Creates and manages structured task lists
+"""
 
 import json
 import logging
@@ -17,11 +38,23 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class WorkflowStep:
-    """Definition of a single workflow step."""
+    """Definition of a single workflow step.
+    
+    Args:
+        name: Step name
+        prompt_template: Prompt template with {context_var} placeholders
+        tools: List of allowed tools for this step (overrides session defaults)
+        disallowed_tools: List of disallowed tools for this step (overrides session defaults)
+        validator: Optional validation function returning (success, errors)
+        max_cost: Maximum cost allowed for initial attempt
+        max_retry_cost: Maximum cost for retry attempts (defaults to max_cost)
+        max_retries: Maximum number of retries if validation fails
+    """
 
     name: str
     prompt_template: str
     tools: Optional[List[str]] = None
+    disallowed_tools: Optional[List[str]] = None
     validator: Optional[Callable[[ClaudeCodeResponse], Tuple[bool, List[str]]]] = None
     max_cost: Optional[float] = None
     max_retry_cost: Optional[float] = None
@@ -76,13 +109,19 @@ class WorkflowState:
 
 class AIWorkflow(ABC):
     """Base class for fixed AI workflows."""
+    
+    # Default tools for the workflow (can be overridden by subclasses)
+    allowed_tools: List[str] = []
+    disallowed_tools: List[str] = []
 
     def __init__(
         self,
         name: str,
         session: Optional[ClaudeCodeSession] = None,
         model: Optional[str] = None,
-        working_dir: Optional[Union[str, Path]] = None
+        working_dir: Optional[Union[str, Path]] = None,
+        allowed_tools: Optional[List[str]] = None,
+        disallowed_tools: Optional[List[str]] = None
     ):
         """Initialize workflow.
 
@@ -91,6 +130,8 @@ class AIWorkflow(ABC):
             session: Claude session to use (optional)
             model: Model name to create session with (ignored if session provided)
             working_dir: Directory for AI to work in (default: .wake/ai/<session-id>/)
+            allowed_tools: Override default allowed tools
+            disallowed_tools: Override default disallowed tools
         """
         self.name = name
 
@@ -111,14 +152,27 @@ class AIWorkflow(ABC):
         self.working_dir.mkdir(parents=True, exist_ok=True)
         logger.info(f"Created working directory: {self.working_dir}")
 
+        # Use provided tools or class defaults
+        tools_allowed = allowed_tools if allowed_tools is not None else self.allowed_tools
+        tools_disallowed = disallowed_tools if disallowed_tools is not None else self.disallowed_tools
+        
         # Handle session creation
         if session is not None:
             self.session = session
         elif model is not None:
-            self.session = ClaudeCodeSession(model=model, working_dir=self.working_dir)
+            self.session = ClaudeCodeSession(
+                model=model, 
+                working_dir=self.working_dir,
+                allowed_tools=tools_allowed,
+                disallowed_tools=tools_disallowed
+            )
         else:
             # Default to creating a session with default model
-            self.session = ClaudeCodeSession(working_dir=self.working_dir)
+            self.session = ClaudeCodeSession(
+                working_dir=self.working_dir,
+                allowed_tools=tools_allowed,
+                disallowed_tools=tools_disallowed
+            )
 
         self.steps: List[WorkflowStep] = []
         self.state = WorkflowState()
@@ -134,6 +188,7 @@ class AIWorkflow(ABC):
         pass
 
     def add_step(self, name: str, prompt_template: str, tools: Optional[List[str]] = None,
+                 disallowed_tools: Optional[List[str]] = None,
                  max_cost: Optional[float] = None,
                  validator: Optional[Callable[[ClaudeCodeResponse], Tuple[bool, List[str]]]] = None,
                  max_retries: int = 3,
@@ -143,6 +198,7 @@ class AIWorkflow(ABC):
             name=name,
             prompt_template=prompt_template,
             tools=tools,
+            disallowed_tools=disallowed_tools,
             max_cost=max_cost,
             validator=validator,
             max_retries=max_retries,
@@ -177,11 +233,19 @@ class AIWorkflow(ABC):
                 validation_errors = []
                 response = None
 
+                # Save original tools
+                original_allowed = self.session.allowed_tools
+                original_disallowed = self.session.disallowed_tools
+                
                 while retry_count <= step.max_retries:
-                    # Set tools if specified
-                    if step.tools:
+                    # Set tools if specified (step overrides workflow defaults)
+                    if step.tools is not None:
                         self.session.allowed_tools = step.tools
                         logger.debug(f"Set allowed tools for step '{step.name}': {step.tools}")
+                    
+                    if step.disallowed_tools is not None:
+                        self.session.disallowed_tools = step.disallowed_tools
+                        logger.debug(f"Set disallowed tools for step '{step.name}': {step.disallowed_tools}")
 
                     # Format prompt
                     if retry_count == 0:
@@ -240,8 +304,16 @@ class AIWorkflow(ABC):
                             raise RuntimeError(error_msg)
 
                         retry_count += 1
+                
+                # Restore original tools after step completes
+                self.session.allowed_tools = original_allowed
+                self.session.disallowed_tools = original_disallowed
 
             except Exception as e:
+                # Restore original tools even on error
+                self.session.allowed_tools = original_allowed
+                self.session.disallowed_tools = original_disallowed
+                
                 logger.error(f"Error in step '{step.name}': {str(e)}")
                 self.state.errors.append({
                     "step": step.name,

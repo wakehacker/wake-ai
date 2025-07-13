@@ -4,7 +4,6 @@ import logging
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Union
 
-from .claude import ClaudeCodeSession
 from .workflows import AVAILABLE_WORKFLOWS
 from .exceptions import ClaudeNotAvailableError, WorkflowExecutionError
 
@@ -69,28 +68,27 @@ def run_ai_workflow(
 
     logger.info(f"Running {workflow_name} workflow with model {model}")
 
-    # Extract session-specific kwargs
-    verbose = kwargs.pop("verbose", False)
-
-    # Initialize Claude session
-    session = ClaudeCodeSession(
-        model=model,
-        working_dir=working_dir,
-        verbose=verbose
-    )
+    # Extract tool configuration
+    allowed_tools = kwargs.pop("allowed_tools", None)
+    disallowed_tools = kwargs.pop("disallowed_tools", None)
 
     # All remaining kwargs go to the workflow
-    init_args = {"session": session}
+    init_args = {
+        "model": model,
+        "working_dir": working_dir,
+        "allowed_tools": allowed_tools,
+        "disallowed_tools": disallowed_tools
+    }
     init_args.update(kwargs)
 
     # Initialize workflow with all provided arguments
     try:
         workflow = workflow_class(**init_args)
     except TypeError as e:
-        # If workflow doesn't accept some arguments, try with just session
+        # If workflow doesn't accept some arguments, try with minimal args
         logger.warning(f"Workflow initialization with full args failed: {e}")
-        logger.warning(f"Attempting with session only. Unused args: {list(kwargs.keys())}")
-        workflow = workflow_class(session=session)
+        logger.warning(f"Attempting with minimal args. Unused args: {list(kwargs.keys())}")
+        workflow = workflow_class(model=model, working_dir=working_dir)
 
     # Override state directory if provided
     if working_dir:
