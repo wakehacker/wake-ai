@@ -10,6 +10,8 @@ from ..flow import AIWorkflow, WorkflowStep, ClaudeCodeResponse
 
 class AuditWorkflow(AIWorkflow):
     """Fixed security audit workflow following industry best practices."""
+    
+    name = "audit"
 
     def __init__(
         self,
@@ -35,7 +37,7 @@ class AuditWorkflow(AIWorkflow):
         self._load_prompts()
 
         # Now call parent init which will call _setup_steps
-        super().__init__(name="audit", session=session, model=model)
+        super().__init__(name=self.name, session=session, model=model)
 
     def _load_prompts(self):
         """Load audit prompts from markdown files."""

@@ -22,8 +22,10 @@ class WorkflowStep:
     name: str
     prompt_template: str
     tools: Optional[List[str]] = None
-    validator: Optional[Callable[[ClaudeCodeResponse], bool]] = None
+    validator: Optional[Callable[[ClaudeCodeResponse], Tuple[bool, List[str]]]] = None
     max_cost: Optional[float] = None
+    max_retry_cost: Optional[float] = None
+    max_retries: int = 3
 
     def format_prompt(self, context: Dict[str, Any]) -> str:
         """Format the prompt template with context."""
@@ -37,18 +39,26 @@ class WorkflowStep:
 
         return self.prompt_template.format(**context)
 
-    def validate_response(self, response: ClaudeCodeResponse) -> bool:
-        """Validate the response meets success criteria."""
+    def validate_response(self, response: ClaudeCodeResponse) -> Tuple[bool, List[str]]:
+        """Validate the response meets success criteria.
+
+        Returns:
+            Tuple of (success: bool, errors: List[str])
+        """
         if not response.success:
             logger.warning(f"Step '{self.name}' response failed: {response.error}")
-            return False
+            return (False, [response.error or "Response failed"])
 
         if self.validator:
             result = self.validator(response)
             logger.debug(f"Step '{self.name}' custom validator returned: {result}")
             return result
 
-        return bool(response.content)
+        # Default validation - just check if content exists
+        if response.content:
+            return (True, [])
+        else:
+            return (False, ["Response has no content"])
 
 
 @dataclass
@@ -125,14 +135,18 @@ class AIWorkflow(ABC):
 
     def add_step(self, name: str, prompt_template: str, tools: Optional[List[str]] = None,
                  max_cost: Optional[float] = None,
-                 validator: Optional[Callable[[ClaudeCodeResponse], bool]] = None):
+                 validator: Optional[Callable[[ClaudeCodeResponse], Tuple[bool, List[str]]]] = None,
+                 max_retries: int = 3,
+                 max_retry_cost: Optional[float] = None):
         """Add a step to the workflow."""
         step = WorkflowStep(
             name=name,
             prompt_template=prompt_template,
             tools=tools,
             max_cost=max_cost,
-            validator=validator
+            validator=validator,
+            max_retries=max_retries,
+            max_retry_cost=max_retry_cost
         )
         self.steps.append(step)
         logger.debug(f"Added step '{name}' to workflow (tools: {tools}, max_cost: {max_cost})")
@@ -158,35 +172,74 @@ class AIWorkflow(ABC):
             logger.info(f"Executing step {self.state.current_step + 1}/{len(self.steps)}: '{step.name}'")
 
             try:
-                # Execute step
-                if step.tools:
-                    self.session.allowed_tools = step.tools
-                    logger.debug(f"Set allowed tools for step '{step.name}': {step.tools}")
+                # Execute step with retry logic
+                retry_count = 0
+                validation_errors = []
+                response = None
 
-                prompt = step.format_prompt(self.state.context)
-                logger.debug(f"Executing query for step '{step.name}'")
+                while retry_count <= step.max_retries:
+                    # Set tools if specified
+                    if step.tools:
+                        self.session.allowed_tools = step.tools
+                        logger.debug(f"Set allowed tools for step '{step.name}': {step.tools}")
 
-                if step.max_cost:
-                    logger.info(f"Querying with cost limit ${step.max_cost} for step '{step.name}'")
-                    response = self.session.query_with_cost(prompt, step.max_cost)
-                else:
-                    response = self.session.query(prompt)
+                    # Format prompt
+                    if retry_count == 0:
+                        # First attempt - use original prompt
+                        prompt = step.format_prompt(self.state.context)
+                        logger.debug(f"Executing query for step '{step.name}'")
+                    else:
+                        # Retry attempt - add error correction prompt
+                        error_prompt = "The following errors occurred, please fix them:\n"
+                        for error in validation_errors:
+                            error_prompt += f"- {error}\n"
+                        prompt = error_prompt
+                        logger.info(f"Retrying step '{step.name}' (attempt {retry_count}/{step.max_retries}) with error correction")
+                    
+                    # Execute query
+                    if retry_count == 0:
+                        # First attempt - use max_cost
+                        if step.max_cost:
+                            logger.info(f"Querying with cost limit ${step.max_cost} for step '{step.name}'")
+                            response = self.session.query_with_cost(prompt, step.max_cost)
+                        else:
+                            response = self.session.query(prompt)
+                    else:
+                        # Retry attempt - use max_retry_cost if available, otherwise max_cost
+                        cost_limit = step.max_retry_cost if step.max_retry_cost is not None else step.max_cost
+                        if cost_limit:
+                            logger.info(f"Querying retry with cost limit ${cost_limit} for step '{step.name}'")
+                            response = self.session.query_with_cost(prompt, cost_limit)
+                        else:
+                            response = self.session.query(prompt)
 
-                # Log response details
-                logger.info(f"Step '{step.name}' completed with cost ${response.cost:.4f}, {response.num_turns} turns")
-                logger.debug(f"Response: {response.content}")
+                    # Log response details
+                    logger.info(f"Step '{step.name}' completed with cost ${response.cost:.4f}, {response.num_turns} turns")
+                    logger.debug(f"Response: {response.content}")
 
-                # Validate and update state
-                if step.validate_response(response):
-                    self.state.completed_steps.append(step.name)
-                    self.state.responses[step.name] = response
-                    self.state.context[f"{step.name}_output"] = response.content
-                    self._custom_context_update(step.name, response)
-                    self.state.current_step += 1
-                    self._save_state()
-                    logger.info(f"Step '{step.name}' completed successfully")
-                else:
-                    raise RuntimeError(f"Step '{step.name}' validation failed")
+                    # Validate response
+                    success, validation_errors = step.validate_response(response)
+
+                    if success:
+                        # Validation passed
+                        self.state.completed_steps.append(step.name)
+                        self.state.responses[step.name] = response
+                        self.state.context[f"{step.name}_output"] = response.content
+                        self._custom_context_update(step.name, response)
+                        self.state.current_step += 1
+                        self._save_state()
+                        logger.info(f"Step '{step.name}' completed successfully after {retry_count} retries")
+                        break
+                    else:
+                        # Validation failed
+                        logger.warning(f"Step '{step.name}' validation failed: {validation_errors}")
+
+                        if retry_count >= step.max_retries:
+                            # Max retries reached
+                            error_msg = f"Step '{step.name}' validation failed after {step.max_retries} retries. Errors: {'; '.join(validation_errors)}"
+                            raise RuntimeError(error_msg)
+
+                        retry_count += 1
 
             except Exception as e:
                 logger.error(f"Error in step '{step.name}': {str(e)}")
