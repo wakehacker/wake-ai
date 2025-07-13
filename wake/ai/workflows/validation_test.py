@@ -27,9 +27,9 @@ class ValidationTestWorkflow(AIWorkflow):
     # Default tools for testing - needs write access to demonstrate validation
     allowed_tools = ["Read", "Write", "Grep", "TodoWrite"]
 
-    def __init__(self, session=None, model=None, working_dir=None):
+    def __init__(self, session=None, model=None, working_dir=None, execution_dir=None, **kwargs):
         """Initialize validation test workflow."""
-        super().__init__(self.name, session=session, model=model, working_dir=working_dir)
+        super().__init__(self.name, session=session, model=model, working_dir=working_dir, execution_dir=execution_dir, **kwargs)
 
     def _setup_steps(self):
         """Setup test steps with validators."""

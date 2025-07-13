@@ -58,6 +58,11 @@ def all_workflow_options():
     is_flag=True,
     help="Resume from previous session"
 )
+@click.option(
+    "--execution-dir",
+    type=click.Path(exists=True, file_okay=False, dir_okay=True, resolve_path=True),
+    help="Directory where Claude CLI is executed (defaults to current directory)"
+)
 @all_workflow_options()  # Add all workflow options
 @click.pass_context
 def run_ai(ctx: click.Context, **kwargs):
@@ -108,8 +113,10 @@ def run_ai(ctx: click.Context, **kwargs):
         # Process arguments using workflow's processor
         init_args = workflow_class.process_cli_args(**kwargs)
 
-        # Add model parameter (common to all workflows)
+        # Add common parameters
         init_args["model"] = kwargs["model"]
+        if kwargs.get("execution_dir"):
+            init_args["execution_dir"] = kwargs["execution_dir"]
 
         # Create workflow instance
         workflow = workflow_class(**init_args)

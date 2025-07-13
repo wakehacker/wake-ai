@@ -11,16 +11,17 @@ class TestWorkflow(AIWorkflow):
     # Test workflow doesn't need any tools
     allowed_tools = []
 
-    def __init__(self, session=None, model=None, working_dir=None):
+    def __init__(self, session=None, model=None, working_dir=None, execution_dir=None, **kwargs):
         """Initialize test workflow.
 
         Args:
             session: Claude session to use (optional)
             model: Model name to create session with (ignored if session provided)
-            working_dir: Directory to store workflow state
             working_dir: Directory for AI to work in
+            execution_dir: Directory where Claude CLI is executed
+            **kwargs: Additional arguments passed to parent
         """
-        super().__init__(self.name, session=session, model=model, working_dir=working_dir)
+        super().__init__(self.name, session=session, model=model, working_dir=working_dir, execution_dir=execution_dir, **kwargs)
 
     def _setup_steps(self):
         """Setup the test workflow steps."""

@@ -71,11 +71,13 @@ def run_ai_workflow(
     # Extract tool configuration
     allowed_tools = kwargs.pop("allowed_tools", None)
     disallowed_tools = kwargs.pop("disallowed_tools", None)
+    execution_dir = kwargs.pop("execution_dir", None)
 
     # All remaining kwargs go to the workflow
     init_args = {
         "model": model,
         "working_dir": working_dir,
+        "execution_dir": execution_dir,
         "allowed_tools": allowed_tools,
         "disallowed_tools": disallowed_tools
     }
