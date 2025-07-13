@@ -110,7 +110,8 @@ class ClaudeCodeSession:
         disallowed_tools: Optional[List[str]] = None,
         working_dir: Optional[Union[str, Path]] = None,
         execution_dir: Optional[Union[str, Path]] = None,
-        verbose: bool = False
+        verbose: bool = False,
+        session_id: Optional[str] = None
     ):
         """Initialize Claude Code session.
 
@@ -121,6 +122,7 @@ class ClaudeCodeSession:
             working_dir: Scratch space directory for AI to create files
             execution_dir: Directory where Claude CLI is executed (cwd)
             verbose: Enable verbose output
+            session_id: Optional session ID to continue a previous conversation
         """
         self.model = model
         self.allowed_tools = allowed_tools or []
@@ -128,8 +130,15 @@ class ClaudeCodeSession:
         self.working_dir = Path(working_dir) if working_dir else Path.cwd()
         self.execution_dir = Path(execution_dir) if execution_dir else Path.cwd()
         self.verbose = verbose
+        self.last_session_id = session_id
+        self.session_history: List[str] = []  # Track all session IDs
+        
+        if session_id:
+            self.session_history.append(session_id)
 
         logger.info(f"Initializing ClaudeCodeSession: model={model}, working_dir={self.working_dir}, execution_dir={self.execution_dir}")
+        if session_id:
+            logger.info(f"Session ID provided: {session_id}")
         logger.debug(f"Allowed tools: {self.allowed_tools}")
         logger.debug(f"Disallowed tools: {self.disallowed_tools}")
 
@@ -184,7 +193,8 @@ class ClaudeCodeSession:
         prompt: str,
         output_format: str = "json",
         max_turns: Optional[int] = None,
-        input_data: Optional[str] = None
+        input_data: Optional[str] = None,
+        continue_session: bool = False
     ) -> ClaudeCodeResponse:
         """Execute a query with Claude Code.
 
@@ -194,16 +204,24 @@ class ClaudeCodeSession:
             output_format: Output format (json, text, stream-json)
             max_turns: Maximum number of turns for agentic mode
             input_data: Optional input data to pipe to Claude
+            continue_session: Continue the stored session if available
 
         Returns:
             ClaudeCodeResponse with the result
         """
-        logger.debug(f"Executing query (format={output_format}, max_turns={max_turns}, prompt={prompt[:100]}...)")
+        logger.debug(f"Executing query (format={output_format}, max_turns={max_turns}, continue_session={continue_session}, prompt={prompt[:100]}...)")
+
+        # Determine if we should resume a session
+        resume_session_id = None
+        if continue_session and self.last_session_id:
+            resume_session_id = self.last_session_id
+            logger.debug(f"Continuing session: {resume_session_id}")
 
         cmd = self._build_command(
             prompt=prompt,
             output_format=output_format,
-            max_turns=max_turns
+            max_turns=max_turns,
+            resume_session=resume_session_id
         )
 
         try:
@@ -236,6 +254,13 @@ class ClaudeCodeSession:
             if output_format == "json":
                 response = ClaudeCodeResponse.from_json(result.stdout)
                 logger.debug(f"Query completed: cost=${response.cost:.4f}, turns={response.num_turns}, finished={response.is_finished}")
+
+                # Save session_id if this was the first query (not a continuation)
+                if response.session_id and not continue_session:
+                    self.last_session_id = response.session_id
+                    self.session_history.append(response.session_id)
+                    logger.debug(f"Saved session ID: {self.last_session_id}")
+
                 return response
             else:
                 logger.debug("Query completed (text format)")
@@ -251,13 +276,14 @@ class ClaudeCodeSession:
                 error=str(e)
             )
 
-    def query_with_cost(self, prompt: str, cost_limit: float, turn_step: int = 50) -> ClaudeCodeResponse:
+    def query_with_cost(self, prompt: str, cost_limit: float, turn_step: int = 50, continue_session: bool = False) -> ClaudeCodeResponse:
         """Query with cost tracking.
 
         Args:
             prompt: The prompt to send
             cost_limit: The cost limit in USD
             turn_step: Maximum turns per query iteration
+            continue_session: Continue the stored session if available
 
         Note:
             The cost limit is not strictly enforced.
@@ -268,10 +294,10 @@ class ClaudeCodeSession:
         Returns:
             ClaudeCodeResponse with the result
         """
-        logger.info(f"Starting cost-limited query (limit=${cost_limit:.2f}, turn_step={turn_step})")
+        logger.info(f"Starting cost-limited query (limit=${cost_limit:.2f}, turn_step={turn_step}, continue_session={continue_session})")
 
         total_cost = 0.0
-        session_id = None
+        session_id = self.last_session_id if continue_session else None
         last_response = None
         iteration = 0
 
@@ -280,7 +306,8 @@ class ClaudeCodeSession:
         response = self.query(
             prompt=prompt,
             output_format="json",
-            max_turns=turn_step
+            max_turns=turn_step,
+            continue_session=continue_session
         )
 
         if not response.success:
@@ -290,7 +317,9 @@ class ClaudeCodeSession:
 
         # Update total cost and session info from response
         total_cost = response.cost
-        session_id = response.session_id
+        # Use the response session_id if we didn't have one already
+        if response.session_id:
+            session_id = response.session_id
         logger.debug(f"Iteration {iteration} complete: total_cost=${total_cost:.4f}, session_id={session_id}")
 
         # Check if task is already finished
@@ -424,11 +453,16 @@ class ClaudeCodeSession:
         """Save session state for later resumption.
 
         Args:
-            session_id: The session ID to save
+            session_id: The session ID to save (optional, uses last_session_id if not provided)
             state_file: Path to save the state
         """
+        # Add the session_id to history if provided
+        if session_id and session_id not in self.session_history:
+            self.session_history.append(session_id)
+            
         state = {
-            "session_id": session_id,
+            "sessions": self.session_history,  # Save all session IDs
+            "last_session_id": self.last_session_id,  # Track the most recent
             "model": self.model,
             "allowed_tools": self.allowed_tools,
             "disallowed_tools": self.disallowed_tools,
@@ -439,7 +473,7 @@ class ClaudeCodeSession:
         state_path = Path(state_file)
         state_path.parent.mkdir(parents=True, exist_ok=True)
         state_path.write_text(json.dumps(state, indent=2))
-        logger.debug(f"Saved session state to {state_path} (session_id={session_id})")
+        logger.debug(f"Saved session state to {state_path} (sessions={len(self.session_history)}, last={self.last_session_id})")
 
     @classmethod
     def load_session_state(cls, state_file: Union[str, Path]) -> tuple["ClaudeCodeSession", str]:
@@ -464,7 +498,8 @@ class ClaudeCodeSession:
             allowed_tools=state.get("allowed_tools", []),
             disallowed_tools=state.get("disallowed_tools", []),
             working_dir=state.get("working_dir"),
-            execution_dir=state.get("execution_dir")
+            execution_dir=state.get("execution_dir"),
+            session_id=session_id
         )
 
-        return session, session_id
+        return last_session_id, session_id
