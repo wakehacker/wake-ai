@@ -254,29 +254,25 @@ class AIWorkflow(ABC):
                         self.session.disallowed_tools = step.disallowed_tools
                         logger.debug(f"Set disallowed tools for step '{step.name}': {step.disallowed_tools}")
 
-                    # Format prompt
+                    # Execute query
                     if retry_count == 0:
                         # First attempt - use original prompt
                         prompt = step.format_prompt(self.state.context)
                         logger.debug(f"Executing query for step '{step.name}'")
-                    else:
-                        # Retry attempt - add error correction prompt
-                        error_prompt = "The following errors occurred, please fix them:\n"
-                        for error in validation_errors:
-                            error_prompt += f"- {error}\n"
-                        prompt = error_prompt
-                        logger.info(f"Retrying step '{step.name}' (attempt {retry_count}/{step.max_retries}) with error correction")
 
-                    # Execute query
-                    if retry_count == 0:
-                        # First attempt - use max_cost
                         if step.max_cost:
                             logger.info(f"Querying with cost limit ${step.max_cost} for step '{step.name}'")
                             response = self.session.query_with_cost(prompt, step.max_cost, continue_session=True)
                         else:
                             response = self.session.query(prompt)
                     else:
-                        # Retry attempt - use max_retry_cost if available, otherwise max_cost
+                         # Retry attempt - add error correction prompt
+                        error_prompt = "The following errors occurred, please fix them:\n"
+                        for error in validation_errors:
+                            error_prompt += f"- {error}\n"
+                        prompt = error_prompt
+                        logger.info(f"Retrying step '{step.name}' (attempt {retry_count}/{step.max_retries}) with error correction")
+
                         if step.max_retry_cost:
                             logger.info(f"Querying retry with cost limit ${step.max_retry_cost} for step '{step.name}'")
                             response = self.session.query_with_cost(prompt, step.max_retry_cost, continue_session=True)
