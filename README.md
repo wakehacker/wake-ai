@@ -19,6 +19,7 @@ wake/
 │
 └── wake_detectors/ai/audit/    # Detector wrapper
     └── detector.py             # AIAuditDetector class
+    └── prompts/                # AIAuditDetector prompts
 ```
 
 ## Execution Paths
