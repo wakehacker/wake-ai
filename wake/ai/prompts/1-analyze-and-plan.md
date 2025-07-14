@@ -9,7 +9,7 @@ Analyze the project and create an initial audit plan: $ARGUMENTS
    - Otherwise, identify core contracts (main business logic, not libraries/interfaces)
    - Read key files to understand architecture and relationships
 
-2. **Generate codebase overview** (`audit/overview.md`)
+2. **Generate codebase overview** (`{working_dir}/audit/overview.md`)
    Structure:
    ```markdown
    # Codebase Overview
@@ -29,7 +29,7 @@ Analyze the project and create an initial audit plan: $ARGUMENTS
    - Actor Name: [permissions and interactions]
    ```
 
-3. **Create vulnerability checklist** (`audit/plan.md`)
+3. **Create vulnerability checklist** (`{working_dir}/audit/plan.md`)
    Structure:
    ```markdown
    # Vulnerability Checklist

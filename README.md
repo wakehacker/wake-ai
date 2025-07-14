@@ -1,179 +1,321 @@
-# Wake, a Python-based Solidity development and testing framework with built-in vulnerability detectors
+# Wake AI Architecture
 
-![Wake cover](https://github.com/Ackee-Blockchain/wake/blob/main/images/wake_cover.png?raw=true)
+The core component of Wake AI are workflows which consist of a set of steps. Each step has a prompt (with available tools) and a step validator. Options such as `max_cost_limit` or `max_retries` can be set for each step.
 
-Features:
+## Folder Structure
 
-- testing framework based on [pytest](https://docs.pytest.org/en)
-- property-based fuzzer
-- deployments & mainnet interactions
-- vulnerability and code quality detectors
-- printers for extracting useful information from Solidity code
-- static analysis framework for implementing custom detectors and printers
-- Github actions for [setting up Wake](https://github.com/marketplace/actions/wake-setup) and [running detectors](https://github.com/marketplace/actions/wake-detect)
-- language server ([LSP](https://microsoft.github.io/language-server-protocol/))
-- VS Code extension ([Tools for Solidity](https://marketplace.visualstudio.com/items?itemName=AckeeBlockchain.tools-for-solidity))
-- solc version manager
-
-## Dependencies
-
-- Python (version 3.8 or higher)
-- Rosetta must be enabled on Apple Silicon Macs
-
-## Installation
-
-via `pip`
-
-```shell
-pip3 install eth-wake
+```
+wake/
+├── wake/cli/ai.py              # `wake ai` command implementation
+├── wake/ai/                    # Core AI module
+│   ├── claude.py               # Claude Code wrapper
+│   ├── flow.py                 # Base workflow infrastructure
+│   ├── prompts/
+│       └── <prompt-name>.md    # Shared prompts files for workflows
+│   ├── utils.py                # Shared utility functions
+│   ├── runner.py               # Workflow execution helper
+│   └── workflows/              # Workflow implementations
+│       └── <workflow-name>.py  # Specific workflows implementations runnable from the CLI
+│
+└── wake_detectors/ai/audit/    # Detector wrapper
+    └── detector.py             # AIAuditDetector class
 ```
 
-## Documentation & Contribution
+## Execution Paths
 
-Wake documentation can be found [here](https://ackee.xyz/wake/docs/latest).
+Workflows can be implemented in 2 ways:
 
-There you can also find a section on [contributing](https://ackee.xyz/wake/docs/latest/contributing/).
+`wake ai --flow <name> <args>` - new CLI commands for running workflows
 
-## Discovered vulnerabilities
+or
 
-| Vulnerability                                   | Severity | Project | Method           | Discovered by    | Resources                                                                                                                                                                                                                       |
-|-------------------------------------------------|----------|---------|------------------|------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Profit & loss accounted twice                   | Critical | IPOR    | Fuzz test        | Ackee Blockchain | [Report](https://github.com/Ackee-Blockchain/public-audit-reports/blob/master/2023/ackee-blockchain-ipor-protocol-report.pdf), [Wake tests](https://github.com/Ackee-Blockchain/tests-ipor/blob/main/tests/test_fuzz.py)        |
-| Loan refinancing reentrancy                     | Critical | PWN     | Detector         | Ackee Blockchain | [Report](https://github.com/PWNDAO/pwn_audits/blob/main/protocol/pwn-v1.3-ackee.pdf)                                                                                                                                            |
-| Incorrect optimization in loan refinancing      | Critical | PWN     | Fuzz test        | Ackee Blockchain | [Report](https://github.com/PWNDAO/pwn_audits/blob/main/protocol/pwn-v1.3-ackee.pdf), [Wake tests](https://github.com/Ackee-Blockchain/tests-pwn-protocol/blob/main/tests/test_refinance_comm_transfer_missing_found_fuzz.py)   |
-| Console permanent denial of service             | High     | Brahma  | Fuzz test        | Ackee Blockchain | [Report](https://github.com/Ackee-Blockchain/public-audit-reports/blob/master/2023/ackee-blockchain-brahma-console-v2-report.pdf)                                                                                               |
-| Swap unwinding formula error                    | High     | IPOR    | Fuzz test        | Ackee Blockchain | [Report](https://github.com/Ackee-Blockchain/public-audit-reports/blob/master/2023/ackee-blockchain-ipor-protocol-report.pdf), [Wake tests](https://github.com/Ackee-Blockchain/tests-ipor/blob/main/tests/test_fuzz.py)        |
-| Swap unwinding fee accounted twice              | High     | IPOR    | Fuzz test        | Ackee Blockchain | [Report](https://github.com/Ackee-Blockchain/public-audit-reports/blob/master/2023/ackee-blockchain-ipor-protocol-report.pdf), [Wake tests](https://github.com/Ackee-Blockchain/tests-ipor/blob/main/tests/test_fuzz.py)        |
-| Incorrect event data                            | High     | Solady  | Integration test | Ackee Blockchain | [Report](https://github.com/Ackee-Blockchain/public-audit-reports/blob/master/2023/ackee-blockchain-solady-report.pdf), [Wake tests](https://github.com/Ackee-Blockchain/tests-solady/blob/main/tests/test_erc1155.py)          |
-| `INTEREST_FROM_STRATEGY_BELOW_ZERO` reverts DoS | Medium   | IPOR    | Fuzz test        | Ackee Blockchain | [Report](https://github.com/Ackee-Blockchain/public-audit-reports/blob/master/2023/ackee-blockchain-ipor-protocol-report.pdf), [Wake tests](https://github.com/Ackee-Blockchain/tests-ipor/blob/main/tests/test_fuzz.py)        |
-| Inaccurate hypothetical interest formula        | Medium   | IPOR    | Fuzz test        | Ackee Blockchain | [Report](https://github.com/Ackee-Blockchain/public-audit-reports/blob/master/2023/ackee-blockchain-ipor-protocol-report.pdf), [Wake tests](https://github.com/Ackee-Blockchain/tests-ipor/blob/main/tests/test_fuzz.py)        |
-| Swap unwinding fee normalization error          | Medium   | IPOR    | Fuzz test        | Ackee Blockchain | [Report](https://github.com/Ackee-Blockchain/public-audit-reports/blob/master/2023/ackee-blockchain-ipor-protocol-report.pdf), [Wake tests](https://github.com/Ackee-Blockchain/tests-ipor/blob/main/tests/test_fuzz.py)        |
-| Liquidation deposits accounted into LP balance  | Medium   | IPOR    | Fuzz test        | Ackee Blockchain | [Report](https://github.com/Ackee-Blockchain/public-audit-reports/blob/master/2023/ackee-blockchain-ipor-protocol-report.pdf), [Wake tests](https://github.com/Ackee-Blockchain/tests-ipor/blob/main/tests/test_st_eth_fuzz.py) |
-| Missing receive function                        | Medium   | Axelar  | Fuzz test        | Ackee Blockchain | [Wake tests](https://github.com/Ackee-Blockchain/tests-axelar-interchain-governance-executor/blob/main/tests/test_fuzz.py)                                                                                                      |
-| `SafeERC20` not used for `approve`              | Medium   | Lido    | Fuzz test        | Ackee Blockchain | [Wake tests](https://github.com/Ackee-Blockchain/tests-lido-stonks/blob/main/tests/test_fuzz.py)                                                                                                                                |
-| Non-optimistic vetting & unbonded keys bad accounting | Medium   | Lido    | Fuzz test        | Ackee Blockchain | [Report](https://github.com/lidofinance/audits/blob/main/Ackee%20Blockchain%20Lido%20Community%20Staking%20Module%20Report%2010-24.pdf), [Wake tests](https://github.com/Ackee-Blockchain/tests-lido-csm/blob/main/tests/test_csm_fuzz.py) |
-| Chainlink common denominator bad logic          | Medium   | PWN     | Fuzz test        | Ackee Blockchain | [Report](https://github.com/PWNDAO/pwn_audits/blob/main/protocol/pwn-v1.3-ackee.pdf), [Wake tests](https://github.com/Ackee-Blockchain/tests-pwn-protocol/blob/main/tests/test_fuzz.py)                                         |
-| Outdated/reverting Chainlink feed causes DoS    | Medium   | PWN     | Fuzz test        | Ackee Blockchain | [Report](https://github.com/PWNDAO/pwn_audits/blob/main/protocol/pwn-v1.3-ackee.pdf), [Wake tests](https://github.com/Ackee-Blockchain/tests-pwn-protocol/blob/main/tests/test_fuzz.py)                                         |
-| Incorrect EIP-712 typehash                      | Medium   | PWN     | Detector         | Ackee Blockchain | [Report](https://github.com/PWNDAO/pwn_audits/blob/main/protocol/pwn-v1.3-ackee.pdf)                                                                                                                                            |
-| Incorrect EIP-712 data encoding                 | Medium   | PWN     | Fuzz test        | Ackee Blockchain | [Report](https://github.com/PWNDAO/pwn_audits/blob/main/protocol/pwn-v1.3-ackee.pdf), [Wake tests](https://github.com/Ackee-Blockchain/tests-pwn-protocol/blob/revision-2.0/tests/test_fuzz.py)                                 |
+`wake detect <ai-detector-name> <args>` - standard detector wrapper for workflows
 
-## Features
+Both have their own advantages and disadvantages.
 
-### Testing framework
+### 1. CLI Command: `wake ai`
 
-See [examples](https://github.com/Ackee-Blockchain/wake/tree/main/examples) and [documentation](https://ackee.xyz/wake/docs/latest/testing-framework/overview) for more information.
-
-Writing tests is as simple as:
-
-```python
-from wake.testing import *
-from pytypes.contracts.Counter import Counter
-
-@chain.connect()
-def test_counter():
-    counter = Counter.deploy()
-    assert counter.count() == 0
-
-    counter.increment()
-    assert counter.count() == 1
+```bash
+wake ai --flow audit --scope contracts/Token.sol --model opus
 ```
 
-### Fuzzer
+This makes more (intuitive) sense, BUT:
+- Wake is opensource and thus the prompts will be open-sourced too (at least at this point)
 
-Fuzzer builds on top of the testing framework and allows efficient fuzz testing of Solidity smart contracts.
+### 2. Detector Command: `wake detect`
+AI workflow wrapped as a Wake detector.
+
+```bash
+wake detect ai-audit --scope contracts/Token.sol --model opus
+```
+
+Less intuitive for implementation, BUT:
+- Can be created as a private detector, distributed within `wake-private`
+
+## Workflow Core Concepts
+
+### Cladue Session and Workflow Management
+
+Wake AI contains inteligent wrappers for Claude Code API.
+This wrapper allows us to:
+- Continue `claude code` sessions inbetween steps
+- Set cost limits for each step, where the wrapper automatically loops through `claude code` execution in configurable increments of `n` turns, monitoring accumulated costs after each increment and prompting Claude to efficiently finish the task when the specified `max_cost_limit` threshold is approached
+- If a `validation` function is provided, the wrapper will automatically retry the step, prompting `claude code` to fix the errors returned by the `validation` function
+
+### Working Directory
+
+A key concept of Wake AI is the `working_dir` and `execution_dir`.
+The `execution_dir` is the directory where the workflow is executed.
+The `working_dir` is the directory where the `claude code` works in.
+
+One of the main problems which needed to be resolved is how to pass context and results in between steps.
+A straight forward solution is to simply use a working directory, serving as a shared scratchpad and results storage.
+All steps within the workflow will have access to the working directory, and can read and write to it.
+The working directory is also used to store the result of the workflow.
+
+```
+.wake/ai/<YYYYMMDD_HHMMSS_random>/
+├── state/                 # Workflow state metadata
+├── <ai-thoughts>.md       # Thoughts, or intermediate results can be stored in markdown files
+└── <ai-results>.json      # Results can be stored in json files for easy parsing after the workflow is finished
+```
+
+### Workflow Execution Flow
+
+This diagram shows how workflows execute with multiple steps, validation, and retry logic:
+
+```mermaid
+flowchart TD
+    Start([Start Workflow]) --> Init[Initialize Workflow]
+    Init --> NextStep
+
+    NextStep[Get Next Step] --> CheckComplete{All Steps<br/>Complete?}
+    CheckComplete -->|Yes| Complete([Workflow Complete])
+    CheckComplete -->|No| StepBox
+
+    subgraph StepBox["Claude Code Session"]
+        ExecuteStep[Execute Step:<br/>• Set step tools<br/>• Format prompt with context<br/>• Create Claude session<br/>• Query Claude] --> QueryAI
+
+        QueryAI[Claude Response] --> Validate{Has<br/>Validator?}
+        Validate -->|No| Success
+        Validate -->|Yes| RunValidator[Run Validation]
+
+        RunValidator --> Valid{Valid?}
+        Valid -->|Yes| Success
+        Valid -->|No| CheckRetries{Retries<br/>Left?}
+
+        CheckRetries -->|Yes| RetryPrompt[Add Error Correction<br/>to Prompt]
+        CheckRetries -->|No| Fail[Mark Step Failed]
+
+        RetryPrompt --> QueryAI
+    end
+
+    Success[Mark Step Complete] --> UpdateContext[Update Context]
+    UpdateContext --> NextStep
+
+    Fail --> Error([Workflow Error])
+
+    style Start fill:#90EE90,color:#000
+    style Complete fill:#90EE90,color:#000
+    style Error fill:#FFB6C1,color:#000
+    style Valid fill:#87CEEB,color:#000
+    style CheckRetries fill:#FFE4B5,color:#000
+    style StepBox fill:transparent,stroke:#333,stroke-width:2px
+```
+
+### Max Cost Handling Flow
+
+This diagram shows how `query_with_cost()` executes Claude in turns with cost monitoring:
+
+```mermaid
+flowchart TD
+    Start([query_with_cost<br/>max_cost = X]) --> Init[Initialize:<br/>accumulated_cost = 0]
+
+    Init --> ExecuteTurn[Execute Claude Turn]
+    ExecuteTurn --> Accumulate[accumulated_cost += turn_cost]
+    Accumulate --> CheckComplete{Task<br/>Complete?}
+
+    CheckComplete -->|Yes| Done([Return Response])
+    CheckComplete -->|No| CheckCost{accumulated_cost<br/>> threshold?}
+
+    CheckCost -->|No| NormalPath
+    CheckCost -->|Yes| InitRetry[Initialize: retry_turn = 0]
+
+    subgraph NormalPath["Normal Continuation"]
+        ContinuePrompt[Add prompt:<br/>Continue with the task] --> ExecuteTurn
+    end
+
+    subgraph FinalizePath["Quick Finalization"]
+        RetryTurn[retry_turn += 1] --> CheckRetryTurns{retry_turn < 3?}
+        CheckRetryTurns -->|Yes| FinalizePrompt[Add prompt:<br/>Finish efficiently]
+        CheckRetryTurns -->|No| Fail[Fail/Revert]
+        FinalizePrompt --> FinalTurnLoop[Execute retry turns]
+        FinalTurnLoop --> CheckComplete2{Task<br/>Complete?}
+        CheckComplete2 -->|Yes| ForceDone[Return Response]
+        CheckComplete2 -->|No| RetryTurn
+    end
+
+    InitRetry --> FinalizePrompt
+
+    ForceDone --> Done
+    Fail --> Error([Task Failed - Cost Exceeded])
+
+    style Start fill:#90EE90,color:#000
+    style Done fill:#90EE90,color:#000
+    style Error fill:#FFB6C1,color:#000
+    style CheckCost fill:#FFE4B5,color:#000
+    style FinalizePath fill:transparent,stroke:#ff6b6b,stroke-width:2px
+    style NormalPath fill:transparent,stroke:#339af0,stroke-width:2px
+```
+
+## Flow Example: AIAuditWorkflow
+
+The audit workflow demonstrates the full capabilities of the Wake AI framework:
+
+### Step Details
+
+1. **Analyze & Plan** (`max_cost: $10.0`)
+   - Tools: read, search, write, grep, bash
+   - Creates: `tracking.yaml`, `overview.md`
+   - Validates: YAML structure, required sections
+
+2. **Manual Review** (`max_cost: $50.0`)
+   - Tools: read, write, search, grep, edit
+   - Reviews: Each vulnerability in tracking
+   - Creates: Issue files for confirmed findings (i.e. `issues/m1-reentrancy.yaml`)
+   - Updates: Status (confirmed/false-positive)
+
+3. **Executive Summary** (`max_cost: $10.0`)
+   - Tools: read, write
+   - Creates: Professional audit report
+   - Includes: Statistics, findings, recommendations
+
+
+### Usage Example
+
+```bash
+# Run a new audit
+wake ai --flow audit -s contracts/Token.sol -s contracts/Vault.sol --model opus
+
+# Resume a previous audit if it was interrupted
+wake ai --flow audit --resume
+
+# With specific focus areas
+wake ai --flow audit -f reentrancy -f "access control" --model sonnet
+```
+
+### Implementation Example
+
+Here's a simplified example of how the audit workflow is implemented:
 
 ```python
-from wake.testing import *
-from wake.testing.fuzzing import *
-from pytypes.contracts.Counter import Counter
+from wake.ai.flow import AIWorkflow, ClaudeCodeResponse
+from typing import Tuple, List
 
-class CounterTest(FuzzTest):
-    def pre_sequence(self) -> None:
-        self.counter = Counter.deploy()
-        self.count = 0
+class AuditWorkflow(AIWorkflow):
+    """Security audit workflow following industry best practices."""
 
-    @flow()
-    def increment(self) -> None:
-        self.counter.increment()
-        self.count += 1
+    name = "audit"
+    allowed_tools = ["Read", "Grep", "Glob", "LS", "Task", "TodoWrite", "Write", "Edit", "MultiEdit"]
 
-    @flow()
-    def decrement(self) -> None:
-        with may_revert(PanicCodeEnum.UNDERFLOW_OVERFLOW) as e:
-            self.counter.decrement()
+    def __init__(self, scope_files=None, context_docs=None, focus_areas=None, **kwargs):
+        self.scope_files = scope_files or []
+        self.context_docs = context_docs or []
+        self.focus_areas = focus_areas or []
 
-        if e.value is not None:
-            assert self.count == 0
+        # Load prompts from markdown files
+        self._load_prompts()
+
+        # Initialize parent class - this calls _setup_steps()
+        super().__init__(name=self.name, **kwargs)
+
+    def _setup_steps(self):
+        """Define workflow steps with prompts, tools, and validators."""
+
+        # Step 1: Analyze and Plan
+        self.add_step(
+            name="analyze_and_plan",
+            prompt_template=self._build_prompt("analyze_and_plan"),
+            tools=["Read", "Search", "Write", "Grep", "Bash"],
+            max_cost=10.0,
+            validator=self._validate_analyze_and_plan,
+            max_retries=2
+        )
+
+        # Step 2: Manual Review
+        self.add_step(
+            name="manual_review",
+            prompt_template=self._build_prompt("manual_review"),
+            tools=["Read", "Write", "Search", "Grep", "Edit"],
+            max_cost=10.0,
+            validator=self._validate_manual_review,
+            max_retries=2
+        )
+
+
+        # ... more steps ...
+
+    def _validate_analyze_and_plan(self, response: ClaudeCodeResponse) -> Tuple[bool, List[str]]:
+        """Validate that required files were created with correct structure."""
+        errors = []
+        audit_dir = Path(self.working_dir) / "audit"
+
+        # Check for tracking.yaml
+        tracking_file = audit_dir / "tracking.yaml"
+        if not tracking_file.exists():
+            errors.append(f"Tracking file not created at {tracking_file}")
         else:
-            self.count -= 1
+            # Validate YAML structure
+            with open(tracking_file, 'r') as f:
+                data = yaml.safe_load(f)
+                # Check required fields...
 
-    @invariant(period=10)
-    def count(self) -> None:
-        assert self.counter.count() == self.count
+        return (len(errors) == 0, errors)
 
-@chain.connect()
-def test_counter():
-    CounterTest().run(sequences_count=30, flows_count=100)
+    # ... more validators ...
+
+
+    @classmethod
+    def get_cli_options(cls) -> Dict[str, Any]:
+        """Return audit workflow CLI options."""
+        import click
+        return {
+            "scope": {
+                "param_decls": ["-s", "--scope"],
+                "multiple": True,
+                "type": click.Path(exists=True),
+                "help": "Files/directories in audit scope (default: entire codebase)"
+            },
+            "context": {
+                "param_decls": ["-c", "--context"],
+                "multiple": True,
+                "type": click.Path(exists=True),
+                "help": "Additional context files (docs, specs, etc.)"
+            },
+            "focus": {
+                "param_decls": ["-f", "--focus"],
+                "multiple": True,
+                "help": "Focus areas (e.g., 'reentrancy', 'ERC20', 'access-control')"
+            }
+        }
+
+    @classmethod
+    def process_cli_args(cls, **kwargs) -> Dict[str, Any]:
+        """Process CLI arguments for audit workflow."""
+        return {
+            "scope_files": list(kwargs.get("scope", [])),
+            "context_docs": list(kwargs.get("context", [])),
+            "focus_areas": list(kwargs.get("focus", []))
+        }
 ```
 
-### Detectors
 
-All vulnerability & code quality detectors can be run using:
-```shell
-wake detect all
-```
+## Notes
 
-A specific detector can be run using:
-```shell
-wake detect <detector-name>
-```
-
-See the [documentation](https://ackee.xyz/wake/docs/latest/static-analysis/using-detectors/) for a list of all detectors.
-
-### Printers
-
-A specific printer can be run using:
-```shell
-wake print <printer-name>
-```
-
-See the [documentation](https://ackee.xyz/wake/docs/latest/static-analysis/using-printers/) for a list of all printers.
-
-### Custom detectors & printers
-
-Refer to the [getting started](https://ackee.xyz/wake/docs/latest/static-analysis/getting-started/) guide for more information.
-Also check out [wake_detectors](https://github.com/Ackee-Blockchain/wake/tree/main/wake_detectors) and [wake_printers](https://github.com/Ackee-Blockchain/wake/tree/main/wake_printers) for the implementation of built-in detectors and printers.
-
-### LSP server
-
-Wake implements an [LSP](https://microsoft.github.io/language-server-protocol/) server for Solidity. The only currently supported communication channel is TCP.
-
-Wake LSP server can be run using:
-
-```shell
-wake lsp
-```
-
-Or with an optional --port argument (default 65432):
-
-```shell
-wake lsp --port 1234
-```
-
-All LSP server features can be found in the [documentation](https://ackee.xyz/wake/docs/latest/language-server/).
-
-## License
-
-This project is licensed under the [ISC license](https://github.com/Ackee-Blockchain/wake/blob/main/LICENSE).
-
-## Partners
-
-RockawayX             |  Coinbase
-:-------------------------:|:-------------------------:
-[![](https://github.com/Ackee-Blockchain/wake/blob/main/images/rockawayx.jpg?raw=true)](https://rockawayx.com/)  |  [![](https://github.com/Ackee-Blockchain/wake/blob/main/images/coinbase.png?raw=true)](https://www.coinbase.com/)
-
-
-
-
-
-
+- Steps can be dynamically added in between workflow steps by including a `after-step` hook
+- Sessions can be resumed in between sessions by using the `resume` flag, by default new ones are created
+  - This makes it possible to create different agents for each step, i.e. audit agent, validation agent, etc.
+- Detector currently returns empty `DetectorResult[]` (AI results in working directory). If AI returns results into a JSON file, the detector will return the file contents as a `DetectorResult`
+- Max costs can be exceeded in the current implementation and serve more like a guardrail than a hard limit.
+  - A potential solution could be to request the session to be finished quicker once we exceed a percentage (i.e. 80%) of the max cost limit
+- YAML files could be a good candidate for storing results, as they are human readable and can be easily parsed.
