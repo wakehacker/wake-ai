@@ -139,7 +139,7 @@ class AIWorkflow(ABC):
 
         # Set up working directory
         if working_dir is not None:
-            self.working_dir = Path(working_dir)
+            self.working_dir = Path(working_dir).resolve()
         else:
             # Generate session ID for working directory
             from datetime import datetime
