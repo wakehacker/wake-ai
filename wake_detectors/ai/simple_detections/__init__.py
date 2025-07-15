@@ -1,0 +1,1 @@
+"""Simple AI-powered security detector."""
