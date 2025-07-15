@@ -1,5 +1,7 @@
 from .abi_encode_with_signature import AbiEncodeWithSignatureDetector
 from .ai.audit.detector import AIAuditDetector
+from .ai.detections.detector import AIDetector
+from .ai.simple_detections.detector import SimpleAIDetector
 from .axelar_proxy_contract_id import AxelarProxyContractIdDetector
 from .balance_relied_on import BalanceReliedOnDetector
 from .call_options_not_called import CallOptionsNotCalledDetector
@@ -25,4 +27,3 @@ from .unused_event import UnusedEventDetector
 from .unused_function import UnusedFunctionDetector
 from .unused_import import UnusedImportDetector
 from .unused_modifier import UnusedModifierDetector
-from .ai.audit.detector import AIAuditDetector

@@ -4,41 +4,31 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, TYPE_CHECKING
 
 import rich_click as click
 from rich.console import Console
 
-from wake.ai.utils import format_workflow_results
 from wake.detectors import (
     Detector,
     DetectorResult,
     detector,
 )
 
+from .validator import validate_all_findings
+
+if TYPE_CHECKING:
+    from wake.compiler.build_data_model import ProjectBuild
+
 logger = logging.getLogger(__name__)
 console = Console()
 
 
-def workflow_options_decorator(workflow_class):
-    """Decorator to add workflow-specific options to a detector command."""
-    def decorator(f):
-        # If workflow_class is None, skip adding options (they'll be added manually)
-        if workflow_class is None:
-            return f
-        
-        # Get workflow options and add them in reverse order
-        options = workflow_class.get_cli_options()
-        for opt_name, opt_config in reversed(list(options.items())):
-            # Extract param_decls and create option
-            param_decls = opt_config.pop("param_decls", [f"--{opt_name}"])
-            click.option(*param_decls, **opt_config)(f)
-        return f
-    return decorator
-
-
-class AIAuditDetector(Detector):
+class AIDetector(Detector):
     """AI-powered security audit detector using Claude Code."""
+
+    if TYPE_CHECKING:
+        build: ProjectBuild
 
     def __init__(self):
         self.scope_files: List[str] = []
@@ -50,9 +40,18 @@ class AIAuditDetector(Detector):
 
     def detect(self) -> List[DetectorResult]:
         """Run the AI audit workflow and convert results to DetectorResults."""
+        detector_results = []
+
         try:
-            # Import here to avoid circular imports
-            from wake.ai import ClaudeNotAvailableError
+            # Import here to avoid circular imports and import errors
+            try:
+                from wake.ai import ClaudeNotAvailableError
+                from wake.ai.detector_result_mock import DetectorResultFactory
+                from wake.ai.utils import format_workflow_results
+            except ImportError as e:
+                logger.error(f"Failed to import wake.ai modules: {e}")
+                console.print(f"[red]Error:[/red] AI modules not available. Ensure wake[ai] is installed.")
+                return []
 
             from .workflow import DetectorAuditWorkflow
 
@@ -88,7 +87,36 @@ class AIAuditDetector(Detector):
 
             console.print(format_workflow_results(results, "text"))
 
-            console.print(f"\n[green]Audit complete! Review results in:[/green] {workflow.working_dir}/")
+            # Parse findings and convert to DetectorResults
+            findings_dir = Path(workflow.working_dir) / "findings"
+            if findings_dir.exists():
+                console.print(f"\n[blue]Parsing findings from:[/blue] {findings_dir}")
+
+                # Validate and load findings
+                valid_findings, errors = validate_all_findings(findings_dir)
+
+                if errors:
+                    console.print("[yellow]Validation errors:[/yellow]")
+                    for error in errors:
+                        console.print(f"  - {error}")
+
+                if valid_findings:
+                    # Create DetectorResultFactory with build
+                    factory = DetectorResultFactory(self.build)
+
+                    # Convert findings to DetectorResults
+                    try:
+                        detector_results = factory.create_detector_results_batch(valid_findings)
+                        console.print(f"[green]Successfully parsed {len(detector_results)} findings[/green]")
+                    except Exception as e:
+                        logger.error(f"Failed to create DetectorResults: {e}")
+                        console.print(f"[red]Failed to create DetectorResults:[/red] {e}")
+                else:
+                    console.print("[yellow]No valid findings found[/yellow]")
+            else:
+                console.print(f"[yellow]No findings directory found at {findings_dir}[/yellow]")
+
+            console.print(f"\n[green]Audit complete! Review full results in:[/green] {workflow.working_dir}/")
 
         except ClaudeNotAvailableError as e:
             console.print(f"[red]Error:[/red] {e}")
@@ -99,9 +127,9 @@ class AIAuditDetector(Detector):
             if self.resume:
                 console.print("[yellow]Try running without --resume flag[/yellow]")
 
-        return []
+        return detector_results
 
-    @detector.command(name="ai-audit")
+    @detector.command(name="ai")
     @click.option(
         "--model",
         "-m",
@@ -137,7 +165,6 @@ class AIAuditDetector(Detector):
         multiple=True,
         help="Focus areas (e.g., 'reentrancy', 'ERC20', 'access-control')"
     )
-    @workflow_options_decorator(None)  # Will be fixed below
     def cli(self, **kwargs) -> None:
         """
         AI-powered security audit using Claude.
