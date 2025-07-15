@@ -47,7 +47,6 @@ Work in the assigned directory `{working_dir}` where the audit plan and results 
            severity: high  # info/warning/low/medium/high
            comment: "Confirmed: balance updated after external call on line 48, user.balance check on line 46 can be bypassed"
    ```
-
 4. **Create detailed issue files** (only for true positives)
    - Create `{working_dir}/audit/issues/` directory if needed
    - File naming: `[severity]-[contract]-[brief-description].adoc`
@@ -57,6 +56,34 @@ Work in the assigned directory `{working_dir}` where the audit plan and results 
      - Step-by-step exploitation scenario
      - Concrete proof-of-concept where possible
      - Specific remediation recommendations with code examples
+   - Follow this structure:
+   ```adoc
+   {% set title      = "Finding" %}
+   {% set id         = 'finding-id' %}
+   {% set severity   = 'Info' %} {#  Critical | High | Medium | Low | Warning | Info  #}
+   {% set target     = 'Contract.sol' %} {#  File, files or scope  #}
+   {% set type       = 'Code quality' %} {#  Data validation | Code quality | Logic error | Standards violation | Gas optimization | Logging | Trust model | Arithmetics | Access control | Unused code | Storage clashes | Denial of service | Front-running | Replay attack | Reentrancy | Function visibility | Overflow/underflow | Configuration | Reinitialization | Griefing  #}
+
+   {% block description %}
+   - Description of the finding.
+   - If needed, include a code excerpt from the source code.
+   .Excerpt from source code
+   [source, solidity, linenums]
+   ----
+   function foo() public {
+       // ...
+   }
+   ----
+   {% endblock %}
+
+   {% block exploit %}
+   - If needed, include an exploit scenario.
+   {% endblock %}
+
+   {% block recommendation %}
+   Remove the ...
+   {% endblock %}
+   ```
 
 5. **Double validation and quality control**
    - Re-examine every true positive for accuracy
