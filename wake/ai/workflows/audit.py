@@ -10,7 +10,7 @@ from ..flow import AIWorkflow, WorkflowStep, ClaudeCodeResponse
 
 class AuditWorkflow(AIWorkflow):
     """Fixed security audit workflow following industry best practices."""
-    
+
     name = "audit"
     # Default tools for auditing - needs read and write capabilities
     allowed_tools = ["Read", "Grep", "Glob", "LS", "Task", "TodoWrite", "Write", "Edit", "MultiEdit"]
@@ -37,6 +37,10 @@ class AuditWorkflow(AIWorkflow):
         self.scope_files = scope_files or []
         self.context_docs = context_docs or []
         self.focus_areas = focus_areas or []
+
+        self.add_context("scope_files", self.scope_files)
+        self.add_context("context_docs", self.context_docs)
+        self.add_context("focus_areas", self.focus_areas)
 
         # Load prompts from markdown files before parent init
         self._load_prompts()
@@ -100,28 +104,9 @@ class AuditWorkflow(AIWorkflow):
         )
 
     def _build_prompt(self, step_name: str) -> str:
-        """Build prompt with context injection points."""
+        """Build prompt"""
         base_prompt = self.prompts[step_name]
-
-        # Add scope information
-        if self.scope_files:
-            scope_section = f"\n\nFILES IN SCOPE:\n" + "\n".join(f"- {f}" for f in self.scope_files)
-        else:
-            scope_section = "\n\nSCOPE: Entire codebase"
-
-        # Add context documents
-        if self.context_docs:
-            context_section = f"\n\nADDITIONAL CONTEXT:\n" + "\n".join(f"- {doc}" for doc in self.context_docs)
-        else:
-            context_section = ""
-
-        # Add focus areas
-        if self.focus_areas:
-            focus_section = f"\n\nFOCUS AREAS:\n" + "\n".join(f"- {area}" for area in self.focus_areas)
-        else:
-            focus_section = ""
-
-        return base_prompt + scope_section + context_section + focus_section
+        return base_prompt
 
     def execute(self, context: Optional[Dict[str, Any]] = None, **kwargs) -> Dict[str, Any]:
         """Execute the audit workflow with proper context setup."""

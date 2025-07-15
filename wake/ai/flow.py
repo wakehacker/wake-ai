@@ -259,7 +259,7 @@ class AIWorkflow(ABC):
                         # First attempt - use original prompt
                         prompt = step.format_prompt(self.state.context)
                         logger.debug(f"Executing query for step '{step.name}'")
-                        
+
                         # Continue session only if this is not the first step
                         should_continue = self.state.current_step > 0
 
@@ -412,3 +412,15 @@ class AIWorkflow(ABC):
         self.state.context = data["context"]
         self.state.errors = data["errors"]
         logger.debug(f"Loaded state: step {self.state.current_step}/{len(self.steps)}, completed: {len(self.state.completed_steps)}")
+
+    def add_context(self, key: str, value: Any):
+        """Add a context variable."""
+        self.state.context[key] = value
+
+    def get_context(self, key: str) -> Any:
+        """Get a context variable."""
+        return self.state.context.get(key)
+
+    def get_context_keys(self) -> List[str]:
+        """Get all context keys."""
+        return list(self.state.context.keys())

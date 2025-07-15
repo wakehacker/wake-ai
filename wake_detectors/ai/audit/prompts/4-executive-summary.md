@@ -1,24 +1,41 @@
 # Generate Executive Summary
 
-Create a comprehensive executive summary of the audit findings.
+<task>
+Create a comprehensive executive summary of the audit findings based on validated results
+</task>
 
-## Steps:
+<context>
+Scope: {scope_files}
+Context: {context_docs}
+Focus: {focus_areas}
+Overview: `{working_dir}/audit/overview.md`
+Validated Plan: `{working_dir}/audit/plan.md`
+Issues Directory: `{working_dir}/audit/issues/`
+</context>
 
-1. **Gather information**
-   - Read `audit/overview.md` for codebase understanding
-   - Read `audit/plan.md` for all reviewed items
-   - Read all files in `audit/issues/` for true positive findings
+<working_dir>
+Work in the assigned directory `{working_dir}` where all audit artifacts are stored.
+</working_dir>
 
-2. **Create executive summary** (`audit/executive-summary.md`)
+<steps>
+
+1. **Gather validated audit results**
+   - Read `{working_dir}/audit/overview.md` for codebase architecture understanding
+   - Read `{working_dir}/audit/plan.md` for complete validation results and status
+   - Read all issue files in `{working_dir}/audit/issues/` for detailed true positive findings
+   - Extract severity counts and key technical details from validated issues
+
+2. **Create comprehensive executive summary** (`{working_dir}/audit/executive-summary.md`)
    Structure:
    ```markdown
    # Executive Summary
 
    ## Audit Overview
-   - **Audit Date**: [Date]
-   - **Auditor**: [Name]
-   - **Scope**: [List of audited contracts]
-   - **Commit Hash**: [If available]
+   - **Scope**: [List of audited contracts from scope]
+   - **Total Issues Identified**: [Count from validated plan]
+   - Include a report overview summary of the audit, including the scope, the total issues identified, and the key findings.
+   - Consider the security posture of the codebase, and the key findings.
+   - Talk about an overall assessment of the codebase security.
 
    ## Summary of Findings
 
@@ -27,49 +44,32 @@ Create a comprehensive executive summary of the audit findings.
    | High     | X     |
    | Medium   | X     |
    | Low      | X     |
+   | Warning  | X     |
    | Info     | X     |
    | **Total**| **X** |
 
-   ## Key Findings
-
-   ### High Severity
-   1. **[Issue Title]** ([Contract])
-      - Brief description of the issue and its impact
-      - Risk: [Specific risk to the protocol]
-
-   ### Medium Severity
-   [Similar format]
-
-   ### Low Severity
-   [Similar format]
-
-   ## Audit Methodology
-   - Manual code review
-   - Static analysis using Wake
-   - [Any other methods used]
-
-   ## Recommendations
-   1. **Immediate Actions** (High severity)
-      - [Specific actions for critical issues]
-
-   2. **Short-term Improvements** (Medium severity)
-      - [Actions for medium priority issues]
-
-   3. **Long-term Considerations** (Low severity)
-      - [Suggestions for code quality and minor issues]
-
-   ## Conclusion
-   [Overall assessment of the codebase security posture]
-   [Key strengths observed]
-   [Main areas of concern]
+   ## Key Technical Findings
+   - Short description of the most important findings
    ```
 
-3. **Cross-reference**
-   - Ensure all issues from `audit/issues/` are included
-   - Verify severity counts match actual findings
-   - Check that recommendations align with found issues
+3. **Technical accuracy validation**
+   - Cross-reference all findings with issue files to ensure accuracy
+   - Verify severity classifications match validation results
+   - Confirm technical details and locations are precise
+   - Ensure recommendations are specific and actionable
 
-4. **Professional tone**
-   - Use clear, technical language
-   - Avoid speculation beyond findings
-   - Focus on actionable insights
+4. **Professional reporting standards**
+   - Use precise technical language with specific code references
+   - Focus on concrete findings rather than theoretical risks
+   - Maintain clear severity rationale based on exploitability and impact
+   - Be technical and not speculative.
+   - Report should be consice and to the point, without extra verbosity.
+</steps>
+
+<reporting_standards>
+**Professional Quality**: The summary must demonstrate:
+- Deep understanding of the project's technical architecture
+- Clear communication of complex technical issues
+- Balanced assessment of both risks and strengths
+- Evidence-based conclusions from thorough validation
+</reporting_standards>
