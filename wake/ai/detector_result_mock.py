@@ -93,15 +93,25 @@ class DetectorResultFactory:
         end_line: int
     ) -> Tuple[int, int]:
         """Convert line numbers to byte offsets."""
-        # Line numbers are 1-based
+        # Use SourceUnit's built-in method to get byte offset for start line
+        # This will automatically build the lines index if needed
+        start_byte = source_unit.get_line_col_from_byte_offset(0)[0]  # Trigger index build
+        
+        # Now access the _lines_index which should be built
+        if not hasattr(source_unit, '_lines_index') or source_unit._lines_index is None:
+            # Fallback: build index manually like SourceUnit does
+            source_unit._lines_index = []
+            prefix_sum = 0
+            for line in source_unit._file_source.splitlines(keepends=True):
+                source_unit._lines_index.append((line, prefix_sum))
+                prefix_sum += len(line)
+        
+        lines_index = source_unit._lines_index
+        
+        # Line numbers are 1-based, convert to 0-based for indexing
         start_line_idx = start_line - 1
         end_line_idx = end_line - 1
         
-        if not hasattr(source_unit, '_lines_index') or source_unit._lines_index is None:
-            # Build lines index if not available
-            source_unit._build_lines_index()
-        
-        lines_index = source_unit._lines_index
         if start_line_idx >= len(lines_index) or end_line_idx >= len(lines_index):
             raise ValueError(f"Line numbers out of range for {source_unit.source_unit_name}")
         
@@ -110,11 +120,11 @@ class DetectorResultFactory:
         
         # Get byte offset for end of end_line
         if end_line_idx + 1 < len(lines_index):
-            # Not the last line, use start of next line
+            # Not the last line, use start of next line minus 1
             end_byte = lines_index[end_line_idx + 1][1] - 1
         else:
             # Last line, use end of file
-            end_byte = len(source_unit.source)
+            end_byte = len(source_unit._file_source)
         
         return (start_byte, end_byte)
     
