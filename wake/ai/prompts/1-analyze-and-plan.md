@@ -54,7 +54,7 @@ You have access to the whole codebase, but have assigned a working directory to 
      - status: `pending`, as the issue will be validated later by another agent
      - location: the location of the issue
      - description: the description of the issue
-     - severity: the severity of the issue
+     - severity: the severity of the issue (critical, high, medium, low, info)
    - Create a pure YAML file following the structure below:
    ```yaml
    contracts:
@@ -66,8 +66,8 @@ You have access to the whole codebase, but have assigned a working directory to 
              lines: "45-52"
              function: withdraw
            description: Function allows reentrant call before state update
-           severity: high
-         - title: Reentrancy vulnerability
+           severity: critical
+         - title: Unauthorized minting
            status: pending
            location:
              lines: "45-52"

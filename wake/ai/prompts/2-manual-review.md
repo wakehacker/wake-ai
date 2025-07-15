@@ -44,7 +44,7 @@ Work in the assigned directory `{working_dir}` where the audit plan and results 
              lines: "45-52"
              function: withdraw
            description: Function calls external contract before updating user balance, enabling reentrancy
-           severity: high  # info/warning/low/medium/high
+           severity: high  # critical/high/medium/low/info/warning
            comment: "Confirmed: balance updated after external call on line 48, user.balance check on line 46 can be bypassed"
    ```
 
@@ -91,7 +91,8 @@ Use these tools for thorough code analysis during validation:
 - Real-world impact justifies the severity rating
 
 **Severity Classification Guidelines**:
-- **High**: Loss of funds, access control exploits, protocol-breaking vulnerabilities
+- **Critical**: Direct loss of funds, complete protocol compromise, unrestricted access control bypass
+- **High**: Loss of funds under specific conditions, access control exploits, protocol-breaking vulnerabilities
 - **Medium**: Exploitable issues with limited financial impact, partial accounting errors
 - **Low**: Minor accounting issues, edge cases that don't lead to severe consequences
 - **Warning**: Non-exploitable issues that could cause problems under specific conditions

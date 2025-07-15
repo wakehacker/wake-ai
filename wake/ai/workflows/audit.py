@@ -131,7 +131,7 @@ class AuditWorkflow(AIWorkflow):
 
         return (len(errors) == 0, errors)
 
-    def _validate_analyze_anplan(self, response: ClaudeCodeResponse) -> Tuple[bool, List[str]]:
+    def _validate_analyze_and_plan(self, response: ClaudeCodeResponse) -> Tuple[bool, List[str]]:
         """Validate analyze and plan step - check for required files and YAML structure."""
         errors = []
 
@@ -179,7 +179,7 @@ class AuditWorkflow(AIWorkflow):
                                         errors.append(f"Contract {contract.get('name', i)} issue {j} location missing 'lines' or 'function'")
 
                                 # Validate severity values
-                                if 'severity' in issue and issue['severity'] not in ['info', 'warning', 'low', 'medium', 'high']:
+                                if 'severity' in issue and issue['severity'] not in ['critical', 'high', 'medium', 'low', 'info', 'warning']:
                                     errors.append(f"Contract {contract.get('name', i)} issue {j} has invalid severity: {issue['severity']}")
 
                                 # Validate status

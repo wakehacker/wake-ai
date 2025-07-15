@@ -41,6 +41,7 @@ Work in the assigned directory `{working_dir}` where all audit artifacts are sto
 
    | Severity | Count |
    |----------|-------|
+   | Critical | X     |
    | High     | X     |
    | Medium   | X     |
    | Low      | X     |
