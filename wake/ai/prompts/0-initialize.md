@@ -1,8 +1,11 @@
 # Initialize the codebase
 
-Initialize the codebase for a security audit. We will need the `wake` tool to be running successfully, so that it is able to properly compile the codebase and run static analysis commands and other.
+<task>
+Initialize the codebase for a security audit. The `wake` tool should be running successfully, so that it is able to properly compile the codebase and run static analysis commands and other.
+</task>
 
-## Steps:
+
+<steps>
 
 1. **Install dependencies**
     - Install all required dependencies for the codebase (those might be `npm`, `pnpm`, `yarn`, etc.)
@@ -20,3 +23,4 @@ Initialize the codebase for a security audit. We will need the `wake` tool to be
     - Do NOT modify the codebase in any way
     - Do NOT force it, if it is not working after a few attempts, leave it as is
 
+</steps>
