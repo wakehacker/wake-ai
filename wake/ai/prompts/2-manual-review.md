@@ -67,7 +67,6 @@ Work in the assigned directory `{working_dir}` where the audit plan and results 
    {% block description %}
    - Description of the finding.
    - If needed, include a code excerpt from the source code.
-   .Excerpt from source code
    [source, solidity, linenums]
    ----
    function foo() public {
