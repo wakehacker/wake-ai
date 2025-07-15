@@ -5,7 +5,7 @@ Perform systematic manual review of the codebase following the audit plan with r
 </task>
 
 <context>
-Plan: `{working_dir}/audit/plan.yaml`
+Plan: `{working_dir}/audit/plan.md`
 </context>
 
 <working_dir>
@@ -15,7 +15,7 @@ Work in the assigned directory `{working_dir}` where the audit plan and results 
 <steps>
 
 1. **Load and validate audit plan**
-   - Read `{working_dir}/audit/plan.yaml`
+   - Read `{working_dir}/audit/plan.md`
    - Verify all planned issues are technically sound and codebase-specific
    - Remove any generic findings that slipped through initial analysis
 
@@ -29,7 +29,7 @@ Work in the assigned directory `{working_dir}` where the audit plan and results 
      - Verify exploitability with concrete attack scenarios
      - Check for mitigating factors or protective mechanisms
 
-3. **Update plan with validation results** (`{working_dir}/audit/plan.yaml`)
+3. **Update plan with validation results** (`{working_dir}/audit/plan.md`)
    - Modify the YAML structure to include validation status
    - Update each issue with the `status` field, adding a `comment` field to explain the validation results
    - Consider updating the `severity` field based on the validation results if the issue is not a false positive
@@ -44,10 +44,9 @@ Work in the assigned directory `{working_dir}` where the audit plan and results 
              lines: "45-52"
              function: withdraw
            description: Function calls external contract before updating user balance, enabling reentrancy
-           severity: high  # critical/high/medium/low/info/warning
+           severity: high  # info/warning/low/medium/high
            comment: "Confirmed: balance updated after external call on line 48, user.balance check on line 46 can be bypassed"
    ```
-
 4. **Create detailed issue files** (only for true positives)
    - Create `{working_dir}/audit/issues/` directory if needed
    - File naming: `[severity]-[contract]-[brief-description].adoc`
@@ -57,6 +56,34 @@ Work in the assigned directory `{working_dir}` where the audit plan and results 
      - Step-by-step exploitation scenario
      - Concrete proof-of-concept where possible
      - Specific remediation recommendations with code examples
+   - Follow this structure:
+   ```adoc
+   {% set title      = "Finding" %}
+   {% set id         = 'finding-id' %}
+   {% set severity   = 'Info' %} {#  Critical | High | Medium | Low | Warning | Info  #}
+   {% set target     = 'Contract.sol' %} {#  File, files or scope  #}
+   {% set type       = 'Code quality' %} {#  Data validation | Code quality | Logic error | Standards violation | Gas optimization | Logging | Trust model | Arithmetics | Access control | Unused code | Storage clashes | Denial of service | Front-running | Replay attack | Reentrancy | Function visibility | Overflow/underflow | Configuration | Reinitialization | Griefing  #}
+
+   {% block description %}
+   - Description of the finding.
+   - If needed, include a code excerpt from the source code.
+   .Excerpt from source code
+   [source, solidity, linenums]
+   ----
+   function foo() public {
+       // ...
+   }
+   ----
+   {% endblock %}
+
+   {% block exploit %}
+   - If needed, include an exploit scenario.
+   {% endblock %}
+
+   {% block recommendation %}
+   Remove the ...
+   {% endblock %}
+   ```
 
 5. **Double validation and quality control**
    - Re-examine every true positive for accuracy
@@ -91,8 +118,7 @@ Use these tools for thorough code analysis during validation:
 - Real-world impact justifies the severity rating
 
 **Severity Classification Guidelines**:
-- **Critical**: Direct loss of funds, complete protocol compromise, unrestricted access control bypass
-- **High**: Loss of funds under specific conditions, access control exploits, protocol-breaking vulnerabilities
+- **High**: Loss of funds, access control exploits, protocol-breaking vulnerabilities
 - **Medium**: Exploitable issues with limited financial impact, partial accounting errors
 - **Low**: Minor accounting issues, edge cases that don't lead to severe consequences
 - **Warning**: Non-exploitable issues that could cause problems under specific conditions
