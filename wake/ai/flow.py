@@ -49,6 +49,7 @@ class WorkflowStep:
         max_cost: Maximum cost allowed for initial attempt
         max_retry_cost: Maximum cost for retry attempts (defaults to max_cost)
         max_retries: Maximum number of retries if validation fails
+        continue_session: Whether to continue the Claude session from previous step (default: False)
     """
 
     name: str
@@ -59,6 +60,7 @@ class WorkflowStep:
     max_cost: Optional[float] = None
     max_retry_cost: Optional[float] = None
     max_retries: int = 3
+    continue_session: bool = False
 
     def format_prompt(self, context: Dict[str, Any]) -> str:
         """Format the prompt template with context."""
@@ -199,8 +201,21 @@ class AIWorkflow(ABC):
                  max_cost: Optional[float] = None,
                  validator: Optional[Callable[[ClaudeCodeResponse], Tuple[bool, List[str]]]] = None,
                  max_retries: int = 3,
-                 max_retry_cost: Optional[float] = None):
-        """Add a step to the workflow."""
+                 max_retry_cost: Optional[float] = None,
+                 continue_session: bool = False):
+        """Add a step to the workflow.
+        
+        Args:
+            name: Step name
+            prompt_template: Prompt template with {context_var} placeholders
+            tools: List of allowed tools for this step (overrides session defaults)
+            disallowed_tools: List of disallowed tools for this step
+            max_cost: Maximum cost allowed for initial attempt
+            validator: Optional validation function returning (success, errors)
+            max_retries: Maximum number of retries if validation fails
+            max_retry_cost: Maximum cost for retry attempts (defaults to max_cost)
+            continue_session: Whether to continue the Claude session from previous step (default: False)
+        """
         step = WorkflowStep(
             name=name,
             prompt_template=prompt_template,
@@ -209,7 +224,8 @@ class AIWorkflow(ABC):
             max_cost=max_cost,
             validator=validator,
             max_retries=max_retries,
-            max_retry_cost=max_retry_cost
+            max_retry_cost=max_retry_cost,
+            continue_session=continue_session
         )
         self.steps.append(step)
         logger.debug(f"Added step '{name}' to workflow (tools: {tools}, max_cost: {max_cost})")
@@ -260,8 +276,8 @@ class AIWorkflow(ABC):
                         prompt = step.format_prompt(self.state.context)
                         logger.debug(f"Executing query for step '{step.name}'")
 
-                        # Continue session only if this is not the first step
-                        should_continue = self.state.current_step > 0
+                        # Continue session only if step explicitly requests it
+                        should_continue = step.continue_session
 
                         if step.max_cost:
                             logger.info(f"Querying with cost limit ${step.max_cost} for step '{step.name}' (continue_session={should_continue})")
