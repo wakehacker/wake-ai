@@ -42,11 +42,10 @@ def all_workflow_options():
     help="Workflow to run"
 )
 @click.option(
-    "--output",
-    "-o",
+    "--working-dir",
+    "-w",
     type=click.Path(),
-    default="audit",
-    help="Output directory for results"
+    help="Working directory for AI workflow (defaults to .wake/ai/<session-id>)"
 )
 @click.option(
     "--model",
@@ -83,7 +82,7 @@ def run_ai(ctx: click.Context, **kwargs):
         """
         # Show what we're doing
         flow = kwargs["flow"]
-        output = kwargs["output"]
+        working_dir = kwargs.get("working_dir")
         resume = kwargs["resume"]
 
         console.print(f"[blue]Starting {flow} workflow[/blue]")
@@ -100,10 +99,6 @@ def run_ai(ctx: click.Context, **kwargs):
         if "focus" in kwargs and kwargs["focus"]:
             console.print(f"[blue]Focus areas:[/blue] {', '.join(kwargs['focus'])}")
 
-        # Create output directory
-        output_path = Path(output)
-        output_path.mkdir(exist_ok=True)
-
         # Get workflow class
         workflow_class = AVAILABLE_WORKFLOWS.get(flow)
         if not workflow_class:
@@ -117,6 +112,8 @@ def run_ai(ctx: click.Context, **kwargs):
         init_args["model"] = kwargs["model"]
         if kwargs.get("execution_dir"):
             init_args["execution_dir"] = kwargs["execution_dir"]
+        if working_dir:
+            init_args["working_dir"] = working_dir
 
         # Create workflow instance
         workflow = workflow_class(**init_args)

@@ -131,7 +131,7 @@ class AuditWorkflow(AIWorkflow):
 
         return (len(errors) == 0, errors)
 
-    def _validate_analyze_and_plan(self, response: ClaudeCodeResponse) -> Tuple[bool, List[str]]:
+    def _validate_analyze_anplan(self, response: ClaudeCodeResponse) -> Tuple[bool, List[str]]:
         """Validate analyze and plan step - check for required files and YAML structure."""
         errors = []
 
