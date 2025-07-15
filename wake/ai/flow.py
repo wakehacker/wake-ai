@@ -159,7 +159,7 @@ class AIWorkflow(ABC):
         tools_disallowed = disallowed_tools if disallowed_tools is not None else self.disallowed_tools
 
         # Set execution directory
-        exec_dir = Path(execution_dir) if execution_dir else Path.cwd()
+        self.execution_dir = Path(execution_dir) if execution_dir else Path.cwd()
 
         # Handle session creation
         if session is not None:
@@ -168,7 +168,7 @@ class AIWorkflow(ABC):
             self.session = ClaudeCodeSession(
                 model=model,
                 working_dir=self.working_dir,
-                execution_dir=exec_dir,
+                execution_dir=self.execution_dir,
                 allowed_tools=tools_allowed,
                 disallowed_tools=tools_disallowed
             )
@@ -176,7 +176,7 @@ class AIWorkflow(ABC):
             # Default to creating a session with default model
             self.session = ClaudeCodeSession(
                 working_dir=self.working_dir,
-                execution_dir=exec_dir,
+                execution_dir=self.execution_dir,
                 allowed_tools=tools_allowed,
                 disallowed_tools=tools_disallowed
             )

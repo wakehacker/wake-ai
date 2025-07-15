@@ -122,10 +122,10 @@ class AuditWorkflow(AIWorkflow):
         errors = []
 
         # Check if wake.toml exists (created by wake init)
-        wake_config = Path(self.working_dir) / "wake.toml"
+        wake_config = Path(self.execution_dir) / "wake.toml"
         if not wake_config.exists():
             # Check in parent directory too as wake might be initialized there
-            parent_wake_config = Path(self.working_dir).parent / "wake.toml"
+            parent_wake_config = Path(self.execution_dir).parent / "wake.toml"
             if not parent_wake_config.exists():
                 errors.append("wake.toml not found - wake init may have failed")
 
