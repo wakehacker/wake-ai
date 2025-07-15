@@ -21,12 +21,7 @@ You have access to the whole codebase, but have assigned a working directory to 
    - Otherwise, identify core contracsts (main business logic, not libraries/interfaces)
    - Read key files to understand architecture and relationships
 
-2. **Create audit directory**
-   ```bash
-   mkdir -p {working_dir}/audit
-   ```
-
-3. **Generate codebase overview** (`{working_dir}/audit/overview.md`)
+2. **Generate codebase overview** (`{working_dir}/audit/overview.md`)
    Structure:
    ```markdown
    # Codebase Overview
@@ -46,7 +41,7 @@ You have access to the whole codebase, but have assigned a working directory to 
    - Actor Name: [permissions and interactions]
    ```
 
-4. **Create vulnerability checklist** (`{working_dir}/audit/plan.yaml`)
+3. **Create vulnerability checklist** (`{working_dir}/audit/plan.md`)
    - Split the plan by contracts
    - For each contract, create a list of issues to check for
    - For each issue, add the following fields:
@@ -54,8 +49,9 @@ You have access to the whole codebase, but have assigned a working directory to 
      - status: `pending`, as the issue will be validated later by another agent
      - location: the location of the issue
      - description: the description of the issue
-     - severity: the severity of the issue (critical, high, medium, low, info)
-   - Create a pure YAML file following the structure below:
+     - severity: the severity of the issue
+   - Follow the structure below:
+   Structure:
    ```yaml
    contracts:
      - name: ContractA
@@ -66,8 +62,8 @@ You have access to the whole codebase, but have assigned a working directory to 
              lines: "45-52"
              function: withdraw
            description: Function allows reentrant call before state update
-           severity: critical
-         - title: Unauthorized minting
+           severity: high
+         - title: Reentrancy vulnerability
            status: pending
            location:
              lines: "45-52"

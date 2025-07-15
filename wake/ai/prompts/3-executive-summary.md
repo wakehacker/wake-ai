@@ -9,7 +9,7 @@ Scope: {scope_files}
 Context: {context_docs}
 Focus: {focus_areas}
 Overview: `{working_dir}/audit/overview.md`
-Validated Plan: `{working_dir}/audit/plan.yaml`
+Validated Plan: `{working_dir}/audit/plan.md`
 Issues Directory: `{working_dir}/audit/issues/`
 </context>
 
@@ -21,7 +21,7 @@ Work in the assigned directory `{working_dir}` where all audit artifacts are sto
 
 1. **Gather validated audit results**
    - Read `{working_dir}/audit/overview.md` for codebase architecture understanding
-   - Read `{working_dir}/audit/plan.yaml` for complete validation results and status
+   - Read `{working_dir}/audit/plan.md` for complete validation results and status
    - Read all issue files in `{working_dir}/audit/issues/` for detailed true positive findings
    - Extract severity counts and key technical details from validated issues
 
@@ -41,7 +41,6 @@ Work in the assigned directory `{working_dir}` where all audit artifacts are sto
 
    | Severity | Count |
    |----------|-------|
-   | Critical | X     |
    | High     | X     |
    | Medium   | X     |
    | Low      | X     |
