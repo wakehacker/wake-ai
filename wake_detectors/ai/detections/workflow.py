@@ -8,6 +8,9 @@ from wake.ai.flow import AIWorkflow
 
 class DetectorAuditWorkflow(AIWorkflow):
     """Security audit workflow that loads prompts from detector directory."""
+    
+    # Default tools for detection - needs read, write, search capabilities
+    allowed_tools = ["Read", "Write", "Edit", "Bash", "Grep", "Glob", "LS", "Task", "TodoWrite", "MultiEdit"]
 
     def __init__(
         self,

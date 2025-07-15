@@ -9,6 +9,9 @@ from wake.ai.flow import AIWorkflow
 class SimpleDetectionsWorkflow(AIWorkflow):
     """Simple detection workflow that directly finds vulnerabilities."""
 
+    # Default tools for detection - needs read, write, search capabilities
+    allowed_tools = ["Read", "Write", "Edit", "Bash", "Grep", "Glob", "LS", "Task", "TodoWrite", "MultiEdit"]
+
     def __init__(
         self,
         scope_files: Optional[List[str]] = None,
@@ -64,7 +67,6 @@ class SimpleDetectionsWorkflow(AIWorkflow):
         self.add_step(
             name="find_detections",
             prompt_template=self.prompts["find_detections"],
-            tools=["read", "search", "grep", "write"],
             max_cost=15.0
         )
 
