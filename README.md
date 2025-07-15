@@ -320,3 +320,5 @@ class AuditWorkflow(AIWorkflow):
 - Max costs can be exceeded in the current implementation and serve more like a guardrail than a hard limit.
   - A potential solution could be to request the session to be finished quicker once we exceed a percentage (i.e. 80%) of the max cost limit
 - YAML files could be a good candidate for storing results, as they are human readable and can be easily parsed.
+- Sandboxing Claude Code is not implemented atm, but should be added before running on servers.
+- [] Add auto remove working folder option
