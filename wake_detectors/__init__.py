@@ -27,3 +27,4 @@ from .unused_event import UnusedEventDetector
 from .unused_function import UnusedFunctionDetector
 from .unused_import import UnusedImportDetector
 from .unused_modifier import UnusedModifierDetector
+from .ai.test_detections.detector import TestDetector
