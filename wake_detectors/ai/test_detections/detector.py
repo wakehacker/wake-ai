@@ -87,26 +87,28 @@ class TestDetector(Detector):
 
         return detector_results
 
-    @detector.command(name="test-ai")
-    @click.option(
-        "--folder",
-        "-f",
-        help="Override test folder path"
-    )
-    def cli(self, **kwargs) -> None:
-        """
-        Test detector that reads findings from a predefined directory.
 
-        This detector skips the AI part and directly reads findings from:
-        /Users/lukasrajnoha/Data/Work/ABCH/test/test-wake-ai/.wake/ai/20250716_001432_rke1g8
+@detector.command(name="test-ai")
+@click.option(
+    "--folder",
+    "-f",
+    help="Override test folder path"
+)
+def cli(**kwargs) -> None:
+    """
+    Test detector that reads findings from a predefined directory.
 
-        Examples:
-            # Use default test folder
-            wake detect test-ai
+    This detector skips the AI part and directly reads findings from:
+    /Users/lukasrajnoha/Data/Work/ABCH/test/test-wake-ai/.wake/ai/20250716_001432_rke1g8
 
-            # Override test folder
-            wake detect test-ai --folder /path/to/test/folder
-        """
-        # Override test folder if provided
-        if kwargs.get("folder"):
-            self.test_folder = kwargs["folder"]
+    Examples:
+        # Use default test folder
+        wake detect test-ai
+
+        # Override test folder
+        wake detect test-ai --folder /path/to/test/folder
+    """
+    detector = TestDetector()
+    # Override test folder if provided
+    if kwargs.get("folder"):
+        detector.test_folder = kwargs["folder"]
