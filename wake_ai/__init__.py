@@ -19,19 +19,23 @@ from .results import (
 
 # Detection imports
 from .detections import (
-    AIDetection,
-    AILocation,
+    Detection,
+    Location,
     Severity,
-    print_ai_detection,
-    export_ai_detections_json,
-    AIDetectionResult,
+)
+from .utils.formatters import (
+    print_detection,
+    export_detections_json,
+)
+from .utils.audit import (
+    AuditResult,
 )
 
 # Runner imports
 from .runner import run_ai_workflow
 
 # Utils imports
-from .utils import (
+from .utils.workflow import (
     load_workflow_from_file,
 )
 
@@ -57,12 +61,12 @@ __all__ = [
     "SimpleResult",
     "MessageResult",
     # Detections
-    "AIDetection",
-    "AILocation",
+    "Detection",
+    "Location",
     "Severity",
-    "print_ai_detection",
-    "export_ai_detections_json",
-    "AIDetectionResult",
+    "print_detection",
+    "export_detections_json",
+    "AuditResult",
     # Runner
     "run_ai_workflow",
     # Utils
