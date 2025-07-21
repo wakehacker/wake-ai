@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any, Callable, Union, Tuple, Type
 from datetime import datetime
 import re
+import shutil
 
 from .claude import ClaudeCodeSession, ClaudeCodeResponse
 from ..results import AIResult
@@ -116,6 +117,8 @@ class AIWorkflow(ABC):
     # Default tools for the workflow (can be overridden by subclasses)
     allowed_tools: List[str] = []
     disallowed_tools: List[str] = []
+    # Default cleanup behavior (can be overridden by subclasses)
+    cleanup_working_dir: bool = True
 
     def __init__(
         self,
@@ -126,7 +129,8 @@ class AIWorkflow(ABC):
         working_dir: Optional[Union[str, Path]] = None,
         execution_dir: Optional[Union[str, Path]] = None,
         allowed_tools: Optional[List[str]] = None,
-        disallowed_tools: Optional[List[str]] = None
+        disallowed_tools: Optional[List[str]] = None,
+        cleanup_working_dir: Optional[bool] = None
     ):
         """Initialize workflow.
 
@@ -139,9 +143,13 @@ class AIWorkflow(ABC):
             execution_dir: Directory where Claude CLI is executed (default: current directory)
             allowed_tools: Override default allowed tools
             disallowed_tools: Override default disallowed tools
+            cleanup_working_dir: Whether to remove working_dir after completion (default: True)
         """
         self.name = name
         self.result_class = result_class
+        
+        # Set cleanup behavior (use instance value if provided, else class default)
+        self.cleanup_working_dir = cleanup_working_dir if cleanup_working_dir is not None else self.__class__.cleanup_working_dir
 
         # Set up working directory
         if working_dir is not None:
@@ -358,6 +366,17 @@ class AIWorkflow(ABC):
         self.state.completed_at = datetime.now()
         results = self._prepare_results()
         logger.info(f"Workflow '{self.name}' completed successfully in {results.get('duration', 0):.2f} seconds")
+        
+        # Clean up working directory if configured
+        if self.cleanup_working_dir and self.working_dir.exists():
+            try:
+                shutil.rmtree(self.working_dir)
+                logger.debug(f"Cleaned up working directory: {self.working_dir}")
+            except Exception as e:
+                logger.warning(f"Failed to clean up working directory {self.working_dir}: {e}")
+        elif not self.cleanup_working_dir:
+            logger.debug(f"Preserving working directory: {self.working_dir}")
+        
         return results
 
     def _custom_context_update(self, step_name: str, response: ClaudeCodeResponse):

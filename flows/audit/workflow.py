@@ -14,6 +14,8 @@ class AuditWorkflow(AIWorkflow):
     name = "audit"
     # Default tools for auditing - needs read, write, edit, and bash capabilities
     allowed_tools = ["Read", "Write", "Edit", "Bash", "Grep", "Glob", "LS", "Task", "TodoWrite", "MultiEdit"]
+    # Preserve audit results by default
+    cleanup_working_dir = False
 
     def __init__(
         self,

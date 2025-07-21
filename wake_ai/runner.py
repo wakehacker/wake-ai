@@ -65,6 +65,7 @@ def run_ai_workflow(
     allowed_tools = kwargs.pop("allowed_tools", None)
     disallowed_tools = kwargs.pop("disallowed_tools", None)
     execution_dir = kwargs.pop("execution_dir", None)
+    cleanup_working_dir = kwargs.pop("cleanup_working_dir", None)
 
     # All remaining kwargs go to the workflow
     init_args = {
@@ -72,7 +73,8 @@ def run_ai_workflow(
         "working_dir": working_dir,
         "execution_dir": execution_dir,
         "allowed_tools": allowed_tools,
-        "disallowed_tools": disallowed_tools
+        "disallowed_tools": disallowed_tools,
+        "cleanup_working_dir": cleanup_working_dir
     }
     init_args.update(kwargs)
 

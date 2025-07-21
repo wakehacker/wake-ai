@@ -124,6 +124,10 @@ Each workflow session creates an isolated working directory:
 - **Path Template**: `.wake/ai/<session-id>/`
 - **Automatic Creation**: Directory created on workflow initialization
 - **Context Access**: Available as `{working_dir}` in all prompts
+- **Automatic Cleanup**: By default, working directories are removed after successful completion
+  - Audit workflow preserves results by default (`cleanup_working_dir = False`)
+  - Override via CLI: `--no-cleanup` to preserve, `--cleanup` to force cleanup
+  - Override in code: pass `cleanup_working_dir=False` to workflow constructor
 
 ### State Persistence
 The workflow state is saved after each step:

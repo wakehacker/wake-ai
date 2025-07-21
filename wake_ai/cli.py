@@ -87,6 +87,11 @@ def all_workflow_options():
     help="Export detections to JSON file"
 )
 @click.option(
+    "--no-cleanup/--cleanup",
+    default=None,
+    help="Don't clean up working directory after completion (default: cleanup for most workflows, keep for audit)"
+)
+@click.option(
     "--verbose",
     "-v",
     is_flag=True,
@@ -146,6 +151,9 @@ def main(ctx: click.Context, **kwargs):
         init_args["execution_dir"] = kwargs["execution_dir"]
     if kwargs.get("working_dir"):
         init_args["working_dir"] = kwargs["working_dir"]
+    if kwargs.get("no_cleanup") is not None:
+        # CLI uses --no-cleanup flag, so invert it to get cleanup_working_dir
+        init_args["cleanup_working_dir"] = not kwargs["no_cleanup"]
 
     try:
         # Create workflow instance
