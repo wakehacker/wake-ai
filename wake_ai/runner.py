@@ -61,8 +61,6 @@ def run_ai_workflow(
     else:
         working_dir = Path(working_dir)
 
-    logger.info(f"Running {workflow_name} workflow with model {model}")
-
     # Extract tool configuration
     allowed_tools = kwargs.pop("allowed_tools", None)
     disallowed_tools = kwargs.pop("disallowed_tools", None)
@@ -87,16 +85,18 @@ def run_ai_workflow(
         logger.warning(f"Attempting with minimal args. Unused args: {list(kwargs.keys())}")
         workflow = workflow_class(model=model, working_dir=working_dir)
 
+    logger.info(f"Running {workflow_name} workflow with model {model}, working_dir: {workflow.working_dir}")
+
     # Override state directory if provided
     if working_dir:
         workflow.working_dir = Path(working_dir)
         workflow.working_dir.mkdir(parents=True, exist_ok=True)
 
     # Execute workflow
-    logger.info(f"Executing {workflow_name} workflow (resume={resume})")
+    logger.debug(f"Executing {workflow_name} workflow (resume={resume})")
     try:
         results = workflow.execute(resume=resume)
-        logger.info(f"Workflow {workflow_name} completed successfully")
+        logger.debug(f"Workflow {workflow_name} completed successfully")
         return results
     except ClaudeNotAvailableError:
         # Re-raise as is for clear error message
