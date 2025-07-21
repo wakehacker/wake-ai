@@ -10,9 +10,14 @@ from .framework import (
     WorkflowExecutionError,
 )
 
-# Task and result imports
-from .tasks import AITask, DetectionTask
-from .results import AIResult, SimpleResult
+# Result imports
+from .results import (
+    AIResult, 
+    SimpleResult, 
+    MessageResult, 
+    DetectionResult, 
+    AuditDetectionResult
+)
 from .detections import (
     AIDetection,
     AILocation,
@@ -33,12 +38,12 @@ __all__ = [
     "WorkflowStep",
     "ClaudeNotAvailableError",
     "WorkflowExecutionError",
-    # Tasks
-    "AITask",
-    "DetectionTask",
     # Results
     "AIResult",
     "SimpleResult",
+    "MessageResult",
+    "DetectionResult",
+    "AuditDetectionResult",
     # Detections
     "AIDetection",
     "AILocation",

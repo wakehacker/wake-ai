@@ -1,7 +1,8 @@
 """Simple test workflow implementation."""
 
-from typing import Dict, Any
+from typing import Dict, Any, Type
 from wake.ai.framework.flow import AIWorkflow
+from wake.ai.results import AIResult, MessageResult
 
 
 class TestWorkflow(AIWorkflow):
@@ -51,3 +52,7 @@ class TestWorkflow(AIWorkflow):
     def process_cli_args(cls, **kwargs) -> Dict[str, Any]:
         """Process CLI arguments for test workflow."""
         return {}  # No special processing needed
+    
+    def get_result_class(self) -> Type[AIResult]:
+        """Return MessageResult for simple status output."""
+        return MessageResult

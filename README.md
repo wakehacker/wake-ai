@@ -8,18 +8,26 @@ The core component of Wake AI are workflows which consist of a set of steps. Eac
 wake/
 ├── wake/cli/ai.py              # `wake ai` command implementation
 ├── wake/ai/                    # Core AI module
-│   ├── claude.py               # Claude Code wrapper
-│   ├── flow.py                 # Base workflow infrastructure
-│   ├── prompts/
-│       └── <prompt-name>.md    # Shared prompts files for workflows
-│   ├── utils.py                # Shared utility functions
+│   ├── framework/              # Core framework components
+│   │   ├── claude.py           # Claude Code wrapper
+│   │   ├── flow.py             # Base workflow infrastructure
+│   │   ├── exceptions.py       # Framework exceptions
+│   │   └── utils.py            # Framework utility functions
+│   ├── detections.py           # Detection-specific classes and utilities
+│   ├── results.py              # Result system (AIResult, SimpleResult)
+│   ├── tasks.py                # Task classes (AITask, DetectionTask)
 │   ├── runner.py               # Workflow execution helper
-│   └── workflows/              # Workflow implementations
-│       └── <workflow-name>.py  # Specific workflows implementations runnable from the CLI
+│   └── utils.py                # Shared utility functions
 │
-└── wake_detectors/ai/audit/    # Detector wrapper
-    └── detector.py             # AIAuditDetector class
-    └── prompts/                # AIAuditDetector prompts
+└── wake_ai/                    # AI workflow implementations
+    ├── audit/                  # Security audit workflow
+    │   ├── workflow.py         # AuditWorkflow implementation
+    │   └── prompts/            # Audit-specific prompts
+    │       ├── 0-initialize.md
+    │       ├── 1-analyze-and-plan.md
+    │       ├── 2-manual-review.md
+    │       └── 3-executive-summary.md
+    └── ...                     # More workflows
 ```
 
 ## Execution Paths
@@ -210,7 +218,7 @@ wake ai --flow audit -f reentrancy -f "access control" --model sonnet
 Here's a simplified example of how the audit workflow is implemented:
 
 ```python
-from wake.ai.flow import AIWorkflow, ClaudeCodeResponse
+from wake.ai.framework.flow import AIWorkflow, ClaudeCodeResponse
 from typing import Tuple, List
 
 class AuditWorkflow(AIWorkflow):

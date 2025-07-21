@@ -1,6 +1,6 @@
 """Example workflow demonstrating custom result types."""
 
-from typing import Dict, Any
+from typing import Dict, Any, Type
 
 from wake.ai.framework.flow import AIWorkflow
 from wake.ai.results import AIResult, SimpleResult
@@ -28,17 +28,9 @@ Working directory: {working_dir}
             max_cost=5.0
         )
     
-    def format_results(self, results: Dict[str, Any]) -> AIResult:
-        """Return a simple key-value result."""
-        # In a real workflow, you'd parse the Claude response
-        # and extract structured data
-        return SimpleResult({
-            "workflow": self.name,
-            "status": "completed",
-            "working_directory": str(self.working_dir),
-            "steps_completed": len(self.state.completed_steps),
-            "total_cost": results.get("total_cost", 0)
-        })
+    def get_result_class(self) -> Type[AIResult]:
+        """Return SimpleResult for basic key-value output."""
+        return SimpleResult
     
     @classmethod
     def get_cli_options(cls) -> Dict[str, Any]:

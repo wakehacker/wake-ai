@@ -1,7 +1,7 @@
 """Security audit workflow implementation."""
 
 from pathlib import Path
-from typing import List, Optional, Dict, Any, Tuple, Union
+from typing import List, Optional, Dict, Any, Tuple, Union, Type
 import yaml
 
 from wake.ai.framework.claude import ClaudeCodeSession
@@ -345,17 +345,7 @@ class AuditWorkflow(AIWorkflow):
             "focus_areas": list(kwargs.get("focus", []))
         }
     
-    def format_results(self, results: Dict[str, Any]) -> AIResult:
-        """Convert audit results to DetectionTask."""
-        from wake.ai.tasks import DetectionTask
-        from wake.ai.detections import AuditResultParser
-        
-        # Parse audit results directly
-        detections = AuditResultParser.parse_audit_results(self.working_dir)
-        
-        # Create a custom DetectionTask for security audits
-        class SecurityAuditTask(DetectionTask):
-            def get_task_type(self) -> str:
-                return "security-audit"
-        
-        return SecurityAuditTask(detections, self.working_dir)
+    def get_result_class(self) -> Type[AIResult]:
+        """Return the AuditDetectionResult class for parsing audit output."""
+        from wake.ai.results import AuditDetectionResult
+        return AuditDetectionResult
