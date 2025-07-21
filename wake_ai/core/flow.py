@@ -158,7 +158,7 @@ class AIWorkflow(ABC):
 
         # Create working directory
         self.working_dir.mkdir(parents=True, exist_ok=True)
-        logger.info(f"Created working directory: {self.working_dir}")
+        logger.debug(f"Created working directory: {self.working_dir}")
 
         # Use provided tools or class defaults
         tools_allowed = allowed_tools if allowed_tools is not None else self.allowed_tools
@@ -190,7 +190,7 @@ class AIWorkflow(ABC):
         self.steps: List[WorkflowStep] = []
         self.state = WorkflowState()
         self._setup_steps()
-        logger.info(f"Workflow '{name}' initialized with {len(self.steps)} steps")
+        logger.debug(f"Workflow '{name}' initialized with {len(self.steps)} steps")
 
         # Add working directory to context
         self.state.context["working_dir"] = str(self.working_dir)
@@ -236,7 +236,7 @@ class AIWorkflow(ABC):
 
     def execute(self, context: Optional[Dict[str, Any]] = None, resume: bool = False) -> Dict[str, Any]:
         """Execute the workflow."""
-        logger.info(f"Starting workflow '{self.name}' execution (resume={resume})")
+        logger.debug(f"Starting workflow '{self.name}' execution (resume={resume})")
 
         if resume and (self.working_dir / f"{self.name}_state.json").exists():
             logger.debug(f"Resuming workflow from saved state")
@@ -247,7 +247,7 @@ class AIWorkflow(ABC):
             # Add working directory to context
             self.state.context["working_dir"] = str(self.working_dir)
             self.state.started_at = datetime.now()
-            logger.info(f"Starting fresh workflow execution with working_dir: {self.working_dir}")
+            logger.debug(f"Starting fresh workflow execution with working_dir: {self.working_dir}")
 
         # Execute steps
         while self.state.current_step < len(self.steps):
@@ -284,10 +284,10 @@ class AIWorkflow(ABC):
                         should_continue = step.continue_session
 
                         if step.max_cost:
-                            logger.info(f"Querying with cost limit ${step.max_cost} for step '{step.name}' (continue_session={should_continue})")
+                            logger.debug(f"Querying with cost limit ${step.max_cost} for step '{step.name}' (continue_session={should_continue})")
                             response = self.session.query_with_cost(prompt, step.max_cost, continue_session=should_continue)
                         else:
-                            logger.info(f"Querying step '{step.name}' (continue_session={should_continue})")
+                            logger.debug(f"Querying step '{step.name}' (continue_session={should_continue})")
                             response = self.session.query(prompt, continue_session=should_continue)
                     else:
                          # Retry attempt - add error correction prompt
@@ -299,19 +299,20 @@ class AIWorkflow(ABC):
 
                         # Always continue session for retries
                         if step.max_retry_cost:
-                            logger.info(f"Querying retry with cost limit ${step.max_retry_cost} for step '{step.name}'")
+                            logger.debug(f"Querying retry with cost limit ${step.max_retry_cost} for step '{step.name}'")
                             response = self.session.query_with_cost(prompt, step.max_retry_cost, continue_session=True)
                         else:
-                            logger.info(f"Querying retry for step '{step.name}'")
+                            logger.debug(f"Querying retry for step '{step.name}'")
                             response = self.session.query(prompt, continue_session=True)
 
                     # Log response details
-                    logger.info(f"Step '{step.name}' completed with cost ${response.cost:.4f}, {response.num_turns} turns")
+                    retry_msg = f" after {retry_count} retries" if retry_count > 0 else ""
+                    logger.info(f"Step '{step.name}' completed{retry_msg} - cost: ${response.cost:.4f}, turns: {response.num_turns}")
                     logger.debug(f"Response: {response.content}")
 
                     # Log session ID after first step's first query
                     if self.state.current_step == 0 and retry_count == 0 and response.session_id:
-                        logger.info(f"Claude session ID: {response.session_id}")
+                        logger.debug(f"Claude session ID: {response.session_id}")
 
                     # Validate response
                     success, validation_errors = step.validate_response(response)
@@ -324,7 +325,7 @@ class AIWorkflow(ABC):
                         self._custom_context_update(step.name, response)
                         self.state.current_step += 1
                         self._save_state()
-                        logger.info(f"Step '{step.name}' completed successfully after {retry_count} retries")
+                        # Step completion already logged above with retry info
                         break
                     else:
                         # Validation failed

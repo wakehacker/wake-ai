@@ -136,9 +136,9 @@ class ClaudeCodeSession:
         if session_id:
             self.session_history.append(session_id)
 
-        logger.info(f"Initializing ClaudeCodeSession: model={model}, working_dir={self.working_dir}, execution_dir={self.execution_dir}")
+        logger.debug(f"Initializing ClaudeCodeSession: model={model}, working_dir={self.working_dir}, execution_dir={self.execution_dir}")
         if session_id:
-            logger.info(f"Session ID provided: {session_id}")
+            logger.debug(f"Session ID provided: {session_id}")
         logger.debug(f"Allowed tools: {self.allowed_tools}")
         logger.debug(f"Disallowed tools: {self.disallowed_tools}")
 
@@ -184,7 +184,7 @@ class ClaudeCodeSession:
         # Output configuration
         cmd.extend(["-p", prompt])
 
-        logger.info(f"Executing query with cmd: {cmd}")
+        logger.debug(f"Executing query with cmd: {cmd}")
         logger.debug(f"Built command: {' '.join(cmd[:10])}..." if len(' '.join(cmd)) > 100 else f"Built command: {' '.join(cmd)}")
         return cmd
 
@@ -294,7 +294,7 @@ class ClaudeCodeSession:
         Returns:
             ClaudeCodeResponse with the result
         """
-        logger.info(f"Starting cost-limited query (limit=${cost_limit:.2f}, turn_step={turn_step}, continue_session={continue_session})")
+        logger.debug(f"Starting cost-limited query (limit=${cost_limit:.2f}, turn_step={turn_step}, continue_session={continue_session})")
 
         total_cost = 0.0
         session_id = self.last_session_id if continue_session else None
