@@ -1,7 +1,7 @@
 """AI-assisted development tools for Wake."""
 
 # Framework imports
-from .framework import (
+from .core import (
     ClaudeCodeResponse,
     ClaudeCodeSession,
     AIWorkflow,

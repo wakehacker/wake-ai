@@ -10,7 +10,7 @@ The project is organized into two main directories:
 
 ### 1. Core Framework (`wake_ai/`)
 Contains the AI framework implementation:
-- **framework/** - Core Claude integration and workflow engine
+- **core/** - Core Claude integration and workflow engine
   - `claude.py` - Claude Code CLI wrapper with session management
   - `flow.py` - Base workflow and step classes
   - `exceptions.py` - Custom exceptions
@@ -138,7 +138,7 @@ To create a new workflow, inherit from `AIWorkflow`:
 
 ```python
 from wake_ai import AIWorkflow, WorkflowStep
-from wake_ai.framework.utils import validate_yaml_output
+from wake_ai.core.utils import validate_yaml_output
 
 class MyWorkflow(AIWorkflow):
     """Custom workflow implementation."""

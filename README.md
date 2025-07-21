@@ -64,7 +64,7 @@ Wake AI consists of two main components:
 ```
 wake_ai/
 ├── __init__.py                 # Package initialization
-├── framework/                  # Core framework components
+├── core/                       # Core framework components
 │   ├── claude.py              # Claude Code wrapper
 │   ├── flow.py                # Base workflow infrastructure
 │   ├── exceptions.py          # Framework exceptions
@@ -247,7 +247,7 @@ wake ai --flow audit -f reentrancy -f "access control" --model sonnet
 Here's a simplified example of how the audit workflow is implemented:
 
 ```python
-from wake.ai.framework.flow import AIWorkflow, ClaudeCodeResponse
+from wake_ai.core.flow import AIWorkflow, ClaudeCodeResponse
 from typing import Tuple, List
 
 class AuditWorkflow(AIWorkflow):
@@ -488,7 +488,7 @@ This flexible architecture allows us to define new result types (e.g., fuzzing r
 
 
 ## Todo
-- [ ] Extract `framework` into a separate module + repo
+- [x] Extract `core` into a separate module + repo
 - [ ] Add auto remove working folder option
 - [ ] Sandbox Claude Code
 - [ ] Enable defining AI flows in `wake_ai` folder under private repo

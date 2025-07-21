@@ -1,7 +1,7 @@
 """Wake AI - AI-powered smart contract security analysis framework."""
 
 # Framework imports
-from .framework import (
+from .core import (
     ClaudeCodeResponse,
     ClaudeCodeSession,
     AIWorkflow,

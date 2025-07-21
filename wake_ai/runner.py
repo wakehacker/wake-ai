@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List, Union
 
 # Workflows are passed from CLI, not imported here
-from .framework import ClaudeNotAvailableError, WorkflowExecutionError
+from .core import ClaudeNotAvailableError, WorkflowExecutionError
 
 logger = logging.getLogger(__name__)
 
