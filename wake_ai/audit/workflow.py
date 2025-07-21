@@ -1,12 +1,11 @@
 """Security audit workflow implementation."""
 
 from pathlib import Path
-from typing import List, Optional, Dict, Any, Tuple, Union, Type
+from typing import List, Optional, Dict, Any, Tuple, Union
 import yaml
 
 from wake.ai.framework.claude import ClaudeCodeSession
 from wake.ai.framework.flow import AIWorkflow, ClaudeCodeResponse
-from wake.ai.results import AIResult
 
 
 class AuditWorkflow(AIWorkflow):
@@ -42,8 +41,19 @@ class AuditWorkflow(AIWorkflow):
         # Load prompts from markdown files before parent init
         self._load_prompts()
 
+        # Import result class
+        from wake.ai.detections import AIDetectionResult
+
         # Now call parent init which will call _setup_steps
-        super().__init__(name=self.name, session=session, model=model, working_dir=working_dir, execution_dir=execution_dir, **kwargs)
+        super().__init__(
+            name=self.name,
+            result_class=AIDetectionResult,
+            session=session,
+            model=model,
+            working_dir=working_dir,
+            execution_dir=execution_dir,
+            **kwargs
+        )
 
         # Add context after parent init (which creates self.state)
         self.add_context("scope_files", self.scope_files)
@@ -344,8 +354,4 @@ class AuditWorkflow(AIWorkflow):
             "context_docs": list(kwargs.get("context", [])),
             "focus_areas": list(kwargs.get("focus", []))
         }
-    
-    def get_result_class(self) -> Type[AIResult]:
-        """Return the AuditDetectionResult class for parsing audit output."""
-        from wake.ai.results import AuditDetectionResult
-        return AuditDetectionResult
+

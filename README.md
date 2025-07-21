@@ -14,8 +14,7 @@ wake/
 │   │   ├── exceptions.py       # Framework exceptions
 │   │   └── utils.py            # Framework utility functions
 │   ├── detections.py           # Detection-specific classes and utilities
-│   ├── results.py              # Result system (AIResult, SimpleResult)
-│   ├── tasks.py                # Task classes (AITask, DetectionTask)
+│   ├── results.py              # Result system (AIResult, SimpleResult, DetectionResult)
 │   ├── runner.py               # Workflow execution helper
 │   └── utils.py                # Shared utility functions
 │

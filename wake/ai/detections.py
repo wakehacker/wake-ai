@@ -2,20 +2,19 @@
 
 from __future__ import annotations
 
+import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union, TYPE_CHECKING
-import json
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
+
 import yaml
-import re
 
 from wake.utils import StrEnum
 
 if TYPE_CHECKING:
     from rich.console import Console
-    from rich.style import Style
     from rich.syntax import SyntaxTheme
-    from rich.tree import Tree
 
 
 class Severity(StrEnum):
@@ -132,6 +131,167 @@ class AIDetection:
         )
 
 
+class AIDetectionResult:
+    """Detection result specifically for security audit workflows."""
+
+    def __init__(self, detections: List[Tuple[str, AIDetection]], working_dir: Path):
+        self.detections = detections
+        self.working_dir = working_dir
+
+    @classmethod
+    def from_working_dir(cls, working_dir: Path, raw_results: Dict[str, Any]) -> "AIDetectionResult":
+        """Parse audit workflow results from the working directory.
+
+        Looks for the standard audit output structure and parses YAML/AsciiDoc files.
+        """
+        # Create instance first
+        instance = cls([], working_dir)
+        # Then parse detections using instance method
+        instance.detections = instance.parse_audit_results(working_dir)
+        return instance
+
+    def parse_audit_results(self, working_dir: Path) -> List[Tuple[str, AIDetection]]:
+        """Parse audit workflow results into AIDetection format.
+
+        Args:
+            working_dir: Path to the workflow working directory
+
+        Returns:
+            List of (detector_name, AIDetection) tuples
+        """
+        results = []
+        audit_dir = working_dir / "audit"
+
+        if not audit_dir.exists():
+            return results
+
+        # Read the plan.yaml file
+        plan_file = audit_dir / "plan.yaml"
+        if not plan_file.exists():
+            return results
+
+        try:
+            with open(plan_file, 'r') as f:
+                plan_data = yaml.safe_load(f)
+        except Exception:
+            return results
+
+        # Convert true positive issues to AIDetectorResult
+        for contract in plan_data.get('contracts', []):
+            contract_name = contract.get('name', 'Unknown')
+
+            for issue in contract.get('issues', []):
+                if issue.get('status') != 'true_positive':
+                    continue
+
+                # Map severity
+                severity_map = {
+                    'critical': Severity.CRITICAL,
+                    'high': Severity.HIGH,
+                    'medium': Severity.MEDIUM,
+                    'low': Severity.LOW,
+                    'info': Severity.INFO,
+                    'warning': Severity.WARNING
+                }
+                severity = severity_map.get(issue.get('severity', 'medium').lower(), Severity.MEDIUM)
+
+                # Build location
+                location = None
+                if 'location' in issue:
+                    loc_data = issue['location']
+                    location = AILocation(
+                        target=f"{contract_name}.{loc_data.get('function', 'contract')}",
+                        file_path=Path(loc_data['file']) if 'file' in loc_data else None,
+                        start_line=loc_data.get('lines', {}).get('start'),
+                        end_line=loc_data.get('lines', {}).get('end'),
+                        source_snippet=loc_data.get('code_snippet')
+                    )
+
+                # Get issue details from the issue file if it exists
+                detection_text = issue.get('description', '')
+                recommendation = issue.get('recommendation', '')
+                exploit = issue.get('exploit', '')
+
+                # Try to find the detailed issue file
+                issues_dir = audit_dir / "issues"
+                if issues_dir.exists():
+                    issue_file = self._find_issue_file(issues_dir, issue, contract_name)
+
+                    if issue_file:
+                        sections = self._parse_adoc_file(issue_file)
+
+                        # Use parsed sections
+                        if 'Description' in sections:
+                            detection_text = sections['Description']
+                        if 'Recommendation' in sections:
+                            recommendation = sections['Recommendation']
+                        if 'Proof of Concept' in sections or 'Exploit Scenario' in sections:
+                            exploit = sections.get('Proof of Concept', sections.get('Exploit Scenario', ''))
+
+                # Create the detection
+                detection = AIDetection(
+                    name=issue.get('title', 'Unnamed Issue'),
+                    severity=severity,
+                    detection_type="vulnerability",
+                    location=location,
+                    detection=detection_text,
+                    recommendation=recommendation,
+                    exploit=exploit,
+                    metadata={
+                        "contract": contract_name,
+                        "validation_comment": issue.get('comment', '')
+                    }
+                )
+
+                results.append(("ai-audit", detection))
+
+        return results
+
+    def _find_issue_file(self, issues_dir: Path, issue: Dict[str, Any], contract_name: str) -> Optional[Path]:
+        """Find the detailed issue file for a given issue."""
+        # Create a safe filename from the issue title
+        safe_title = re.sub(r'[^a-zA-Z0-9_-]', '_', issue.get('title', 'issue'))
+        possible_files = [
+            issues_dir / f"{safe_title}.adoc",
+            issues_dir / f"{contract_name}_{safe_title}.adoc"
+        ]
+
+        for pf in possible_files:
+            if pf.exists():
+                return pf
+
+        # If still not found, try to match by content
+        for adoc_file in issues_dir.glob("*.adoc"):
+            content = adoc_file.read_text()
+            if issue.get('title', '') in content:
+                return adoc_file
+
+        return None
+
+    def _parse_adoc_file(self, file_path: Path) -> Dict[str, str]:
+        """Parse an AsciiDoc file and extract sections."""
+        content = file_path.read_text()
+
+        # Extract sections (simplified parsing)
+        sections = {}
+        current_section = None
+        current_content = []
+
+        for line in content.split('\n'):
+            if line.startswith('== '):
+                if current_section:
+                    sections[current_section] = '\n'.join(current_content).strip()
+                current_section = line[3:].strip()
+                current_content = []
+            elif current_section:
+                current_content.append(line)
+
+        if current_section:
+            sections[current_section] = '\n'.join(current_content).strip()
+
+        return sections
+
+
 def print_ai_detection(
     detector_name: str,
     detection: AIDetection,
@@ -230,151 +390,3 @@ def export_ai_detections_json(
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(data, indent=2))
-
-
-class AuditResultParser:
-    """Parser for audit workflow results."""
-
-    @staticmethod
-    def parse_audit_results(working_dir: Path) -> List[Tuple[str, AIDetection]]:
-        """Parse audit workflow results into AIDetection format.
-
-        Args:
-            working_dir: Path to the workflow working directory
-
-        Returns:
-            List of (detector_name, AIDetection) tuples
-        """
-        results = []
-        audit_dir = working_dir / "audit"
-
-        if not audit_dir.exists():
-            return results
-
-        # Read the plan.yaml file
-        plan_file = audit_dir / "plan.yaml"
-        if not plan_file.exists():
-            return results
-
-        try:
-            with open(plan_file, 'r') as f:
-                plan_data = yaml.safe_load(f)
-        except Exception:
-            return results
-
-        # Convert true positive issues to AIDetectorResult
-        for contract in plan_data.get('contracts', []):
-            contract_name = contract.get('name', 'Unknown')
-
-            for issue in contract.get('issues', []):
-                if issue.get('status') != 'true_positive':
-                    continue
-
-                # Map severity
-                severity_map = {
-                    'critical': Severity.CRITICAL,
-                    'high': Severity.HIGH,
-                    'medium': Severity.MEDIUM,
-                    'low': Severity.LOW,
-                    'info': Severity.INFO,
-                    'warning': Severity.WARNING
-                }
-                severity = severity_map.get(issue.get('severity', 'medium').lower(), Severity.MEDIUM)
-
-                # Build location
-                location = None
-                if 'location' in issue:
-                    loc_data = issue['location']
-                    location = AILocation(
-                        target=f"{contract_name}.{loc_data.get('function', 'contract')}",
-                        file_path=Path(loc_data['file']) if 'file' in loc_data else None,
-                        start_line=loc_data.get('lines', {}).get('start'),
-                        end_line=loc_data.get('lines', {}).get('end'),
-                        source_snippet=loc_data.get('code_snippet')
-                    )
-
-                # Get issue details from the issue file if it exists
-                detection_text = issue.get('description', '')
-                recommendation = issue.get('recommendation', '')
-                exploit = issue.get('exploit', '')
-
-                # Try to find the detailed issue file
-                issues_dir = audit_dir / "issues"
-                if issues_dir.exists():
-                    issue_file = AuditResultParser._find_issue_file(issues_dir, issue, contract_name)
-
-                    if issue_file:
-                        sections = AuditResultParser._parse_adoc_file(issue_file)
-
-                        # Use parsed sections
-                        if 'Description' in sections:
-                            detection_text = sections['Description']
-                        if 'Recommendation' in sections:
-                            recommendation = sections['Recommendation']
-                        if 'Proof of Concept' in sections or 'Exploit Scenario' in sections:
-                            exploit = sections.get('Proof of Concept', sections.get('Exploit Scenario', ''))
-
-                # Create the detection
-                detection = AIDetection(
-                    name=issue.get('title', 'Unnamed Issue'),
-                    severity=severity,
-                    detection_type="vulnerability",
-                    location=location,
-                    detection=detection_text,
-                    recommendation=recommendation,
-                    exploit=exploit,
-                    metadata={
-                        "contract": contract_name,
-                        "validation_comment": issue.get('comment', '')
-                    }
-                )
-
-                results.append(("ai-audit", detection))
-
-        return results
-
-    @staticmethod
-    def _find_issue_file(issues_dir: Path, issue: Dict[str, Any], contract_name: str) -> Optional[Path]:
-        """Find the detailed issue file for a given issue."""
-        # Create a safe filename from the issue title
-        safe_title = re.sub(r'[^a-zA-Z0-9_-]', '_', issue.get('title', 'issue'))
-        possible_files = [
-            issues_dir / f"{safe_title}.adoc",
-            issues_dir / f"{contract_name}_{safe_title}.adoc"
-        ]
-
-        for pf in possible_files:
-            if pf.exists():
-                return pf
-
-        # If still not found, try to match by content
-        for adoc_file in issues_dir.glob("*.adoc"):
-            content = adoc_file.read_text()
-            if issue.get('title', '') in content:
-                return adoc_file
-
-        return None
-
-    @staticmethod
-    def _parse_adoc_file(file_path: Path) -> Dict[str, str]:
-        """Parse an AsciiDoc file and extract sections."""
-        content = file_path.read_text()
-
-        # Extract sections (simplified parsing)
-        sections = {}
-        current_section = None
-        current_content = []
-
-        for line in content.split('\n'):
-            if line.startswith('== '):
-                if current_section:
-                    sections[current_section] = '\n'.join(current_content).strip()
-                current_section = line[3:].strip()
-                current_content = []
-            elif current_section:
-                current_content.append(line)
-
-        if current_section:
-            sections[current_section] = '\n'.join(current_content).strip()
-
-        return sections

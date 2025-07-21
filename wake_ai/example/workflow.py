@@ -1,9 +1,9 @@
 """Example workflow demonstrating custom result types."""
 
-from typing import Dict, Any, Type
+from typing import Dict, Any
 
 from wake.ai.framework.flow import AIWorkflow
-from wake.ai.results import AIResult, SimpleResult
+from wake.ai.results import SimpleResult
 
 
 class ExampleWorkflow(AIWorkflow):
@@ -11,6 +11,14 @@ class ExampleWorkflow(AIWorkflow):
     
     name = "example"
     allowed_tools = ["Read", "Write", "Bash", "Grep"]
+    
+    def __init__(self, **kwargs):
+        """Initialize example workflow with SimpleResult."""
+        super().__init__(
+            name=self.name,
+            result_class=SimpleResult,
+            **kwargs
+        )
     
     def _setup_steps(self):
         """Setup a simple workflow with one step."""
@@ -28,9 +36,6 @@ Working directory: {working_dir}
             max_cost=5.0
         )
     
-    def get_result_class(self) -> Type[AIResult]:
-        """Return SimpleResult for basic key-value output."""
-        return SimpleResult
     
     @classmethod
     def get_cli_options(cls) -> Dict[str, Any]:
