@@ -106,3 +106,4 @@ poetry.lock
 # Jupyter Notebooks
 .ipynb_checkpoints
 *.ipynb
+.wake
