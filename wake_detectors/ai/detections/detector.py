@@ -9,6 +9,8 @@ from typing import List, Tuple, TYPE_CHECKING
 import rich_click as click
 from rich.console import Console
 
+from wake.ai.detector import AIDetector
+from wake.ai.detector_result import AIDetectionResult, AILocation
 from wake.detectors import (
     Detector,
     DetectorResult,
@@ -24,7 +26,7 @@ logger = logging.getLogger(__name__)
 console = Console()
 
 
-class AIDetector(Detector):
+class AITestDetector(AIDetector):
     """AI-powered security audit detector using Claude Code."""
 
     if TYPE_CHECKING:
@@ -101,16 +103,20 @@ class AIDetector(Detector):
                         console.print(f"  - {error}")
 
                 if valid_findings:
-                    # Create DetectorResultFactory with build
-                    factory = DetectorResultFactory(self.build)
+                    # Create AIDetector findings
+                    for finding in valid_findings:
+                        detector_results.append(AIDetectionResult(
+                            name=finding["name"],
+                            location=AILocation(
+                                target=finding["target"],
+                            ),
+                            detection=finding["description"],
+                            recommendation=finding["recommendation"],
+                            exploit=finding["exploit"],
+                            subdetections=[]
+                        ))
 
-                    # Convert findings to DetectorResults
-                    try:
-                        detector_results = factory.create_detector_results_batch(valid_findings)
-                        console.print(f"[green]Successfully parsed {len(detector_results)} findings[/green]")
-                    except Exception as e:
-                        logger.error(f"Failed to create DetectorResults: {e}")
-                        console.print(f"[red]Failed to create DetectorResults:[/red] {e}")
+                    console.print(f"[green]Successfully parsed {len(detector_results)} findings[/green]")
                 else:
                     console.print("[yellow]No valid findings found[/yellow]")
             else:

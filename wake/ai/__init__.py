@@ -6,6 +6,8 @@ from .workflows import AVAILABLE_WORKFLOWS, AuditWorkflow
 from .runner import run_ai_workflow
 from .exceptions import ClaudeNotAvailableError, WorkflowExecutionError
 from .detector_result_mock import DetectorResultFactory, MockLocation, MockIrNode
+from .detector_result import AIDetectorResult, AIDetectionResult, AILocation, AISeverity, print_ai_detection, export_ai_detections_json
+from .detector import AIDetector
 
 __all__ = [
     "ClaudeCodeResponse",
@@ -20,4 +22,11 @@ __all__ = [
     "DetectorResultFactory",
     "MockLocation",
     "MockIrNode",
+    "AIDetectorResult",
+    "AIDetectionResult",
+    "AILocation",
+    "AISeverity",
+    "AIDetector",
+    "print_ai_detection",
+    "export_ai_detections_json",
 ]
