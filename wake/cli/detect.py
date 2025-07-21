@@ -537,8 +537,8 @@ async def detect_(
             console.record = True
 
         # Import AI types
-        from wake.ai import AIDetectorResult, print_ai_detection, AISeverity
-        
+        from wake.ai import AIDetectorResult, print_ai_detection, Severity
+
         # Collect all detections (both regular and AI)
         all_detections: List[Tuple[str, Union[DetectorResult, AIDetectorResult]]] = []
         for detector_name in detections.keys():
@@ -554,15 +554,15 @@ async def detect_(
             if isinstance(result, AIDetectorResult):
                 # Map AI severity to impact/confidence for sorting
                 severity_to_impact = {
-                    AISeverity.INFO: (0, 2),  # info, high
-                    AISeverity.WARNING: (1, 2),  # warning, high  
-                    AISeverity.LOW: (2, 2),  # low, high
-                    AISeverity.MEDIUM: (3, 2),  # medium, high
-                    AISeverity.HIGH: (4, 2),  # high, high
-                    AISeverity.CRITICAL: (4, 2),  # high, high
+                    Severity.INFO: (0, 2),  # info, high
+                    Severity.WARNING: (1, 2),  # warning, high
+                    Severity.LOW: (2, 2),  # low, high
+                    Severity.MEDIUM: (3, 2),  # medium, high
+                    Severity.HIGH: (4, 2),  # high, high
+                    Severity.CRITICAL: (4, 2),  # high, high
                 }
                 impact_idx, conf_idx = severity_to_impact[result.severity]
-                
+
                 # Use location info if available
                 if result.detection.location:
                     loc = result.detection.location
@@ -573,7 +573,7 @@ async def detect_(
                     source_unit_name = ""
                     start_offset = 0
                     end_offset = 0
-                    
+
                 return (impact_idx * 3 + conf_idx, source_unit_name, start_offset, end_offset)
             else:
                 # Regular DetectorResult
@@ -585,7 +585,7 @@ async def detect_(
                     result.detection.ir_node.byte_location[0],
                     result.detection.ir_node.byte_location[1],
                 )
-        
+
         all_detections.sort(key=get_sort_key)
 
         # Print detections (handle both types)
@@ -611,7 +611,7 @@ async def detect_(
 
         # Check if there are any AI detections
         has_ai_detections = any(isinstance(d[1], AIDetectorResult) for d in all_detections)
-        
+
         if export == "html":
             if has_ai_detections:
                 console.print("[yellow]Note: AI detector results may not display correctly in HTML export. Use JSON export instead.[/yellow]")
@@ -708,15 +708,15 @@ async def detect_(
                     # Handle AI detection
                     info = detection.to_dict()
                     info["detector_name"] = detector_name
-                    
+
                     # Add impact/confidence for compatibility
                     severity_to_impact = {
-                        AISeverity.INFO: ("info", "high"),
-                        AISeverity.WARNING: ("warning", "high"),
-                        AISeverity.LOW: ("low", "high"),
-                        AISeverity.MEDIUM: ("medium", "high"),
-                        AISeverity.HIGH: ("high", "high"),
-                        AISeverity.CRITICAL: ("high", "high"),
+                        Severity.INFO: ("info", "high"),
+                        Severity.WARNING: ("warning", "high"),
+                        Severity.LOW: ("low", "high"),
+                        Severity.MEDIUM: ("medium", "high"),
+                        Severity.HIGH: ("high", "high"),
+                        Severity.CRITICAL: ("high", "high"),
                     }
                     impact, confidence = severity_to_impact[detection.severity]
                     info["impact"] = impact

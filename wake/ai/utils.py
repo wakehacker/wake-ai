@@ -10,7 +10,7 @@ try:
 except ImportError:
     HAS_YAML = False
 
-from .flow import AIWorkflow
+from .framework import AIWorkflow
 
 
 def load_workflow_from_file(workflow_file: Union[str, Path]) -> AIWorkflow:
@@ -161,25 +161,3 @@ def format_workflow_results(results: Dict[str, Any], output_format: str = "text"
         return "\n".join(lines)
 
 
-def validate_claude_cli():
-    """Check if Claude Code CLI is available and properly configured.
-
-    Raises:
-        ClaudeNotAvailableError: If Claude CLI is not available
-    """
-    import subprocess
-    from .exceptions import ClaudeNotAvailableError
-
-    try:
-        result = subprocess.run(
-            ["claude", "--version"],
-            capture_output=True,
-            text=True,
-            check=False
-        )
-
-        if result.returncode != 0:
-            raise ClaudeNotAvailableError()
-
-    except FileNotFoundError:
-        raise ClaudeNotAvailableError()

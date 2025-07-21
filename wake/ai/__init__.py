@@ -1,32 +1,55 @@
 """AI-assisted development tools for Wake."""
 
-from .claude import ClaudeCodeResponse, ClaudeCodeSession
-from .flow import AIWorkflow, WorkflowStep
+# Framework imports
+from .framework import (
+    ClaudeCodeResponse,
+    ClaudeCodeSession,
+    AIWorkflow,
+    WorkflowStep,
+    ClaudeNotAvailableError,
+    WorkflowExecutionError,
+)
+
+# Task and result imports
+from .tasks import AITask, DetectionTask
+from .results import AIResult, SimpleResult, MessageResult
+from .detections import (
+    AIDetection,
+    AILocation,
+    Severity,
+    print_ai_detection,
+    export_ai_detections_json,
+    AuditResultParser,
+)
+
+# Workflow imports
 from .workflows import AVAILABLE_WORKFLOWS, AuditWorkflow
 from .runner import run_ai_workflow
-from .exceptions import ClaudeNotAvailableError, WorkflowExecutionError
-from .detector_result_mock import DetectorResultFactory, MockLocation, MockIrNode
-from .detector_result import AIDetectorResult, AIDetectionResult, AILocation, AISeverity, print_ai_detection, export_ai_detections_json
-from .detector import AIDetector
 
 __all__ = [
+    # Framework
     "ClaudeCodeResponse",
     "ClaudeCodeSession",
     "AIWorkflow",
     "WorkflowStep",
+    "ClaudeNotAvailableError",
+    "WorkflowExecutionError",
+    # Tasks
+    "AITask",
+    "DetectionTask",
+    # Results
+    "AIResult",
+    "SimpleResult",
+    "MessageResult",
+    # Detections
+    "AIDetection",
+    "AILocation",
+    "Severity",
+    "print_ai_detection",
+    "export_ai_detections_json",
+    "AuditResultParser",
+    # Workflows
     "AVAILABLE_WORKFLOWS",
     "AuditWorkflow",
     "run_ai_workflow",
-    "ClaudeNotAvailableError",
-    "WorkflowExecutionError",
-    "DetectorResultFactory",
-    "MockLocation",
-    "MockIrNode",
-    "AIDetectorResult",
-    "AIDetectionResult",
-    "AILocation",
-    "AISeverity",
-    "AIDetector",
-    "print_ai_detection",
-    "export_ai_detections_json",
 ]
