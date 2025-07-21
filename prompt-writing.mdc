@@ -7,11 +7,17 @@ alwaysApply: false
 
 ## Core Structural Principles
 
-**Context-First Architecture**: The prompt establishes the AI's role and operational environment immediately. Rather than burying context in examples, it frontloads the AI's identity ("You are an AI coding assistant, powered by Claude Sonnet 4") and operational constraints ("You operate in Cursor").
+**Task-First Architecture**: Modern prompts lead with a concise `<task>` declaration that states the primary objective in one clear sentence. This is followed by context, not preceded by it. The task acts as an anchor that all subsequent instructions reference.
 
-**Hierarchical Information Flow**: Information is organized from general to specific, with each section building upon previous context. The prompt moves from role definition → communication standards → tool usage → specific behavioral instructions → edge cases.
+**Context-Task-Steps Flow**: The optimal structure follows this pattern:
+1. `<task>` - What needs to be done (one sentence)
+2. `<context>` - Situational awareness and background
+3. `<working_dir>` - Where to operate (if applicable)
+4. `<steps>` - How to accomplish the task
+5. `<validation_requirements>` - Quality gates and checks
+6. `<output_format>` - Expected deliverables
 
-**Explicit Goal Declaration**: The main objective is stated clearly and early ("Your main goal is to follow the USER's instructions"), avoiding ambiguity about primary vs secondary objectives.
+**Explicit Goal Declaration**: The main objective is stated clearly in the `<task>` section, with all subsequent sections supporting this primary goal.
 
 ## Formatting and Organization Techniques
 
@@ -53,6 +59,38 @@ alwaysApply: false
 **Meta-Cognitive Instructions**: Includes thinking-about-thinking directives ("briefly consider: What information do I need") that program higher-order reasoning patterns.
 
 **Progressive Disclosure Management**: Balances thoroughness with cognitive load by revealing complexity gradually and contextually.
+
+## Wake AI-Specific Patterns
+
+**Step-Based Execution Model**: Wake AI prompts structure work as numbered steps with:
+- **Bold headings** for major steps
+- Letter-indexed (a, b, c) sub-steps for complex operations  
+- Bullet points for specific checks within sub-steps
+- Inline code examples and tool commands where relevant
+
+**Validation-Driven Workflow**: Every Wake AI prompt includes explicit validation sections:
+- `<validation_requirements>` or `<validation_practices>` blocks
+- Technical evidence standards
+- False positive elimination criteria
+- Severity classification guidelines
+
+**Tool Integration Syntax**: Prompts explicitly reference command-line tools:
+```bash
+wake init
+wake detect reentrancy
+wake print storage-layout <file>
+```
+
+**Structured Output Specifications**: The `<output_format>` section provides:
+- Complete YAML/Markdown structure examples
+- Field-by-field documentation
+- Real-world code examples
+- File naming conventions
+
+**Progressive Refinement Pattern**: Wake AI workflows follow a three-phase pattern:
+1. **Discovery Phase**: Initial scanning and identification
+2. **Analysis Phase**: Deep validation and verification
+3. **Documentation Phase**: Structured output generation
 
 ## Quality Assurance Mechanisms
 

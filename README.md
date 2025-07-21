@@ -574,21 +574,21 @@ from wake_ai.templates import MarkdownDetector
 
 class UniswapDetector(MarkdownDetector):
     """Detector for Uniswap-specific vulnerabilities."""
-    
+
     name = "uniswap"
-    
+
     def get_detector_prompt(self) -> str:
         """Define what vulnerabilities to detect."""
         return """
         Analyze this codebase for Uniswap integration vulnerabilities.
-        
+
         Check for:
         1. Incorrect reserve usage (token0/token1 order)
         2. Missing slippage protection in swaps
         3. Price oracle manipulation risks
         4. Flash loan callback vulnerabilities
         5. Hardcoded router/factory addresses
-        
+
         For each issue found, provide:
         - Clear explanation of the vulnerability
         - Severity assessment (critical/high/medium/low)
@@ -619,9 +619,9 @@ from wake_ai.templates import MarkdownDetector
 
 class ReentrancyDetector(MarkdownDetector):
     """Enhanced reentrancy detector leveraging Wake's static analysis."""
-    
+
     name = "reentrancy"
-    
+
     def get_detector_prompt(self) -> str:
         return """# Reentrancy Vulnerability Analysis
 
@@ -667,3 +667,14 @@ pip install claude-code
 # Authenticate with your API key
 claude-code auth
 ```
+
+## Prompt Writing Guidelines
+
+When creating Wake AI workflows, follow the structured prompt design patterns documented in `prompt-writing.mdc`. Key elements include:
+
+- **Task-First Architecture**: Start with a clear `<task>` declaration
+- **Structured Sections**: Use `<context>`, `<steps>`, `<validation_requirements>`, and `<output_format>`
+- **Progressive Refinement**: Follow the Discovery → Analysis → Documentation pattern
+- **Explicit Examples**: Include complete YAML/code examples in output specifications
+
+See existing workflows in `flows/` for reference implementations.
