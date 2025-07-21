@@ -46,8 +46,6 @@ class AITask(ABC):
         path.write_text(json.dumps(data, indent=2))
 
 
-
-
 class DetectionTask(AITask):
     """Base class for AI tasks that produce detection-style results.
 
@@ -59,6 +57,10 @@ class DetectionTask(AITask):
         self.detections = detections
         self.working_dir = working_dir
 
+    def get_task_type(self) -> str:
+        """Return the task type identifier."""
+        return "detection-task"
+
     def pretty_print(self, console: "Console") -> None:
         """Print detections using the detection printer."""
         from .detections import print_ai_detection
@@ -68,7 +70,7 @@ class DetectionTask(AITask):
             for detector_name, detection in self.detections:
                 print_ai_detection(detector_name, detection, console)
         else:
-            console.print(f"\n[yellow]{self.get_no_detections_message()}[/yellow]")
+            console.print(f"\n[yellow]No detections found[/yellow]")
 
         # Always show where full results are
         console.print(f"\n[dim]Full results available in:[/dim] {self.working_dir}")
@@ -92,35 +94,3 @@ class DetectionTask(AITask):
         """Use the existing export function for detection consistency."""
         from .detections import export_ai_detections_json
         export_ai_detections_json(self.detections, path)
-
-    @abstractmethod
-    def get_no_detections_message(self) -> str:
-        """Return the message to display when no detections are found."""
-        return "No detections found"
-
-    @classmethod
-    @abstractmethod
-    def parse_results(cls, working_dir: Path) -> List[Tuple[str, 'AIDetection']]:
-        """Parse task results from the working directory.
-
-        Args:
-            working_dir: Path to the task's working directory
-
-        Returns:
-            List of (detector_name, AIDetection) tuples
-        """
-        ...
-
-    @classmethod
-    def from_workflow_results(cls, workflow_results: Dict[str, Any], working_dir: Path):
-        """Create instance from workflow execution results.
-
-        Args:
-            workflow_results: Raw results from workflow.execute() (for future use)
-            working_dir: Path to the workflow's working directory
-
-        Returns:
-            Instance of the detection task result
-        """
-        detections = cls.parse_results(working_dir)
-        return cls(detections, working_dir)

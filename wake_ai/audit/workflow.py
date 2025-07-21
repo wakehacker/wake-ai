@@ -4,8 +4,9 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any, Tuple, Union
 import yaml
 
-from wake.ai.claude import ClaudeCodeSession
-from wake.ai.flow import AIWorkflow, ClaudeCodeResponse, AIResult
+from wake.ai.framework.claude import ClaudeCodeSession
+from wake.ai.framework.flow import AIWorkflow, ClaudeCodeResponse
+from wake.ai.results import AIResult
 
 
 class AuditWorkflow(AIWorkflow):
@@ -345,6 +346,16 @@ class AuditWorkflow(AIWorkflow):
         }
     
     def format_results(self, results: Dict[str, Any]) -> AIResult:
-        """Convert audit results to AuditDetectionResults."""
-        from .results import AuditDetectionResults
-        return AuditDetectionResults.from_workflow_results(results, self.working_dir)
+        """Convert audit results to DetectionTask."""
+        from wake.ai.tasks import DetectionTask
+        from wake.ai.detections import AuditResultParser
+        
+        # Parse audit results directly
+        detections = AuditResultParser.parse_audit_results(self.working_dir)
+        
+        # Create a custom DetectionTask for security audits
+        class SecurityAuditTask(DetectionTask):
+            def get_task_type(self) -> str:
+                return "security-audit"
+        
+        return SecurityAuditTask(detections, self.working_dir)

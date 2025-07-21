@@ -4,14 +4,15 @@ import logging
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Union
 
-from .workflows import AVAILABLE_WORKFLOWS
+# Workflows are passed from CLI, not imported here
 from .framework import ClaudeNotAvailableError, WorkflowExecutionError
 
 logger = logging.getLogger(__name__)
 
 
 def run_ai_workflow(
-    workflow_name: str,
+    workflow_class,
+    workflow_name: Optional[str] = None,
     model: str = "sonnet",
     working_dir: Optional[Union[str, Path]] = None,
     resume: bool = False,
@@ -20,7 +21,8 @@ def run_ai_workflow(
     """Run an AI workflow programmatically.
 
     Args:
-        workflow_name: Name of the workflow to run (e.g., "audit", "test")
+        workflow_class: The workflow class to instantiate and run
+        workflow_name: Optional name for logging (defaults to workflow_class.name)
         model: Claude model to use (default: "sonnet")
         working_dir: Working directory for Claude session
         resume: Whether to resume from previous state
@@ -31,34 +33,27 @@ def run_ai_workflow(
 
     Raises:
         RuntimeError: If Claude CLI is not available
-        ValueError: If workflow name is not found
+        ValueError: If workflow class is invalid
         Exception: Any exception from workflow execution
 
     Example:
+        >>> from wake_ai import TestWorkflow, AuditWorkflow
+        >>> 
         >>> # Run a simple test workflow
-        >>> results = run_ai_workflow("test")
+        >>> results = run_ai_workflow(TestWorkflow)
 
         >>> # Run an audit workflow with specific parameters
         >>> results = run_ai_workflow(
-        ...     "audit",
+        ...     AuditWorkflow,
         ...     model="opus",
         ...     scope_files=["contracts/Token.sol", "contracts/Vault.sol"],
         ...     context_docs=["docs/spec.md"],
         ...     focus_areas=["reentrancy", "access-control"]
         ... )
-
-        >>> # Run a custom workflow with its own parameters
-        >>> results = run_ai_workflow(
-        ...     "custom_workflow",
-        ...     custom_param1="value1",
-        ...     custom_param2=["list", "of", "values"]
-        ... )
     """
-    # Get workflow class
-    workflow_class = AVAILABLE_WORKFLOWS.get(workflow_name)
-    if not workflow_class:
-        available = ", ".join(AVAILABLE_WORKFLOWS.keys())
-        raise ValueError(f"Unknown workflow: {workflow_name}. Available workflows: {available}")
+    # Get workflow name
+    if workflow_name is None:
+        workflow_name = getattr(workflow_class, 'name', workflow_class.__name__)
 
     # Set up working directory
     if working_dir is None:
@@ -109,3 +104,41 @@ def run_ai_workflow(
     except Exception as e:
         logger.error(f"Workflow {workflow_name} failed: {e}")
         raise WorkflowExecutionError(workflow_name, str(e), e)
+
+
+def run_ai_workflow_by_name(
+    workflow_name: str,
+    workflows_dict: Dict[str, Any],
+    model: str = "sonnet",
+    working_dir: Optional[Union[str, Path]] = None,
+    resume: bool = False,
+    **kwargs
+) -> Dict[str, Any]:
+    """Run an AI workflow by name using a workflows dictionary.
+    
+    This is a convenience function for CLI usage where workflows are looked up by name.
+    
+    Args:
+        workflow_name: Name of the workflow to run
+        workflows_dict: Dictionary mapping workflow names to workflow classes
+        model: Claude model to use (default: "sonnet")
+        working_dir: Working directory for Claude session  
+        resume: Whether to resume from previous state
+        **kwargs: Workflow-specific arguments
+        
+    Returns:
+        Dict containing workflow results
+    """
+    workflow_class = workflows_dict.get(workflow_name)
+    if not workflow_class:
+        available = ", ".join(workflows_dict.keys())
+        raise ValueError(f"Unknown workflow: {workflow_name}. Available workflows: {available}")
+    
+    return run_ai_workflow(
+        workflow_class,
+        workflow_name=workflow_name,
+        model=model,
+        working_dir=working_dir,
+        resume=resume,
+        **kwargs
+    )

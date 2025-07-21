@@ -1,7 +1,7 @@
 """Simple test workflow implementation."""
 
 from typing import Dict, Any
-from wake.ai.flow import AIWorkflow
+from wake.ai.framework.flow import AIWorkflow
 
 
 class TestWorkflow(AIWorkflow):

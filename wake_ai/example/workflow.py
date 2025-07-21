@@ -2,8 +2,8 @@
 
 from typing import Dict, Any
 
-from wake.ai.flow import AIWorkflow, AIResult
-from wake.ai.results import SimpleResult
+from wake.ai.framework.flow import AIWorkflow
+from wake.ai.results import AIResult, SimpleResult
 
 
 class ExampleWorkflow(AIWorkflow):

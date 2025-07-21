@@ -35,3 +35,27 @@ class AIResult(ABC):
         data = self.to_dict()
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(data, indent=2))
+
+
+class SimpleResult(AIResult):
+    """Simple key-value result implementation."""
+    
+    def __init__(self, data: Dict[str, Any]):
+        self.data = data
+    
+    def pretty_print(self, console: "Console") -> None:
+        """Print as a formatted table."""
+        from rich.table import Table
+        
+        table = Table(title="Result", show_header=True)
+        table.add_column("Key", style="cyan")
+        table.add_column("Value")
+        
+        for key, value in self.data.items():
+            table.add_row(key, str(value))
+        
+        console.print(table)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Return the data as-is."""
+        return self.data

@@ -1,6 +1,6 @@
 """AI workflows for Wake framework."""
 
-from .audit import AuditWorkflow, AuditDetectionResults
+from .audit import AuditWorkflow
 from .example import ExampleWorkflow
 from .test import TestWorkflow
 from .validation_test import ValidationTestWorkflow
@@ -14,7 +14,6 @@ AVAILABLE_WORKFLOWS = {
 
 __all__ = [
     "AuditWorkflow",
-    "AuditDetectionResults", 
     "ExampleWorkflow",
     "TestWorkflow",
     "ValidationTestWorkflow",
