@@ -1,64 +1,94 @@
-# Wake AI Architecture
+# Wake AI
 
-The core component of Wake AI are workflows which consist of a set of steps. Each step has a prompt (with available tools) and a step validator. Options such as `max_cost_limit` or `max_retries` can be set for each step.
+AI-powered smart contract security analysis framework powered by Claude.
 
-## Folder Structure
+## Overview
 
-```
-wake/
-├── wake/cli/ai.py              # `wake ai` command implementation
-├── wake/ai/                    # Core AI module
-│   ├── framework/              # Core framework components
-│   │   ├── claude.py           # Claude Code wrapper
-│   │   ├── flow.py             # Base workflow infrastructure
-│   │   ├── exceptions.py       # Framework exceptions
-│   │   └── utils.py            # Framework utility functions
-│   ├── detections.py           # Detection-specific classes and utilities
-│   ├── results.py              # Result system (AIResult, SimpleResult, DetectionResult)
-│   ├── runner.py               # Workflow execution helper
-│   └── utils.py                # Shared utility functions
-│
-└── wake_ai/                    # AI workflow implementations
-    ├── audit/                  # Security audit workflow
-    │   ├── workflow.py         # AuditWorkflow implementation
-    │   └── prompts/            # Audit-specific prompts
-    │       ├── 0-initialize.md
-    │       ├── 1-analyze-and-plan.md
-    │       ├── 2-manual-review.md
-    │       └── 3-executive-summary.md
-    └── ...                     # More workflows
-```
+Wake AI is a standalone Python framework for running AI-powered workflows on smart contract codebases. It provides a flexible architecture for creating custom AI workflows that can analyze, audit, and detect issues in Solidity smart contracts.
 
-## Execution Paths
+## Installation
 
-Workflows can be implemented in 2 ways:
-
-`wake ai --flow <name> <args>` - new CLI commands for running workflows
-
-or
-
-`wake detect <ai-detector-name> <args>` - standard detector wrapper for workflows
-
-Both have their own advantages and disadvantages.
-
-### 1. CLI Command: `wake ai`
+### Using pip
 
 ```bash
-wake ai --flow audit --scope contracts/Token.sol --model opus
+pip install wake-ai
 ```
 
-This makes more (intuitive) sense, BUT:
-- Wake is opensource and thus the prompts will be open-sourced too (at least at this point)
-
-### 2. Detector Command: `wake detect`
-AI workflow wrapped as a Wake detector.
+### From source
 
 ```bash
-wake detect ai-audit --scope contracts/Token.sol --model opus
+git clone https://github.com/Ackee-Blockchain/wake-ai
+cd wake-ai
+pip install -e .
 ```
 
-Less intuitive for implementation, BUT:
-- Can be created as a private detector, distributed within `wake-private`
+### Development installation
+
+```bash
+# Clone the repository
+git clone https://github.com/Ackee-Blockchain/wake-ai
+cd wake-ai
+
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install in development mode
+pip install -e ".[dev]"
+# or using requirements files
+pip install -r requirements-dev.txt
+```
+
+## Quick Start
+
+```bash
+# Run security audit on your codebase
+wake-ai --flow audit
+
+# Audit specific files
+wake-ai --flow audit -s contracts/Token.sol -s contracts/Vault.sol
+
+# Export results to JSON
+wake-ai --flow audit --export results.json
+
+# Resume a previous session
+wake-ai --resume
+```
+
+## Architecture
+
+Wake AI consists of two main components:
+
+### 1. Core Framework (`wake_ai/`)
+
+```
+wake_ai/
+├── __init__.py                 # Package initialization
+├── framework/                  # Core framework components
+│   ├── claude.py              # Claude Code wrapper
+│   ├── flow.py                # Base workflow infrastructure
+│   ├── exceptions.py          # Framework exceptions
+│   └── utils.py               # Framework utilities
+├── detections.py              # Detection classes and utilities
+├── results.py                 # Result system (AIResult, SimpleResult, etc.)
+├── runner.py                  # Workflow execution helper
+├── utils.py                   # Shared utilities
+└── cli.py                     # CLI interface
+```
+
+### 2. Workflows (`flows/`)
+
+```
+flows/
+├── audit/                      # Security audit workflow
+│   ├── workflow.py            # AuditWorkflow implementation
+│   └── prompts/               # Audit-specific prompts
+│       ├── 0-initialize.md
+│       ├── 1-analyze-and-plan.md
+│       ├── 2-manual-review.md
+│       └── 3-executive-summary.md
+└── ...                         # More workflows
+```
 
 ## Workflow Core Concepts
 
@@ -411,7 +441,7 @@ class AIDetectionResult(AIResult):
 
     def parse_audit_results(self, working_dir: Path) -> List[Tuple[str, AIDetection]]:
         """Parse audit workflow results into AIDetection format.
-        
+
         (Implementation details omitted for brevity)
         """
         # Parse YAML files, AsciiDoc files, etc.
@@ -463,6 +493,7 @@ This flexible architecture allows us to define new result types (e.g., fuzzing r
 - [ ] Sandbox Claude Code
 - [ ] Enable defining AI flows in `wake_ai` folder under private repo
 - [ ] Reach consensus on AI framework name
+    - ***Wai*** – "W(ake) AI"
     - ***Trace*** – simple, clean, post-hoc or live path tracking; modern and very product-ready.
     - ***Tasks*** - simple, could also be well marketed, i.e. we are introducing wake tasks
       - alternatively we could just swap `wake ai` for `wake task`, looks nice
@@ -472,6 +503,8 @@ This flexible architecture allows us to define new result types (e.g., fuzzing r
     - ***Kōro*** – technical, directional, navigating dynamic environments; feels advanced and system-level.
     - ***Sendō*** (先導) –  "Guidance / Leading the way" Suggests an agent that leads or follows intelligently.
 - [ ] Reach consensus on AI detector output structure
+- [ ] Add Multistep vs SingleStep (for simple detectors) helper classes
+- [ ] Standardize claude wrapper for possibly other AI providers
 
 1. Pure YAML with structured content blocks
 ```yaml
@@ -530,5 +563,20 @@ catcoin-missing-approval-event/
 - YAML files could be a good candidate for storing results, as they are human readable and can be easily parsed.
 - Sandboxing Claude Code is not implemented atm, but should be added before running on servers.
 
+## Requirements
 
+- Python 3.8 or higher
+- Claude Code CLI (`claude-code`) installed and authenticated
+- Valid Claude API access
 
+### Claude Code Setup
+
+Wake AI requires Claude Code CLI to be installed and authenticated:
+
+```bash
+# Install Claude Code (if not already installed)
+pip install claude-code
+
+# Authenticate with your API key
+claude-code auth
+```
