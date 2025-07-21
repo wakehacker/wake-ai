@@ -16,9 +16,8 @@ allowed_tools list to be used. Tools not requiring permission (Read, Grep, etc.)
 are always available unless explicitly disallowed.
 """
 
-from typing import List, Tuple, Type, Dict, Any
+from typing import List, Tuple
 from wake.ai.framework.flow import AIWorkflow, ClaudeCodeResponse
-from wake.ai.results import AIResult, MessageResult
 
 
 class ValidationTestWorkflow(AIWorkflow):
@@ -97,6 +96,3 @@ class ValidationTestWorkflow(AIWorkflow):
             max_retries=1
         )
     
-    def get_result_class(self) -> Type[AIResult]:
-        """Return MessageResult for simple status output."""
-        return MessageResult

@@ -12,11 +12,9 @@ from .framework import (
 
 # Result imports
 from .results import (
-    AIResult, 
-    SimpleResult, 
-    MessageResult, 
-    DetectionResult, 
-    AuditDetectionResult
+    AIResult,
+    SimpleResult,
+    MessageResult,
 )
 from .detections import (
     AIDetection,
@@ -24,7 +22,7 @@ from .detections import (
     Severity,
     print_ai_detection,
     export_ai_detections_json,
-    AuditResultParser,
+    AIDetectionResult,
 )
 
 # Runner imports
@@ -42,15 +40,13 @@ __all__ = [
     "AIResult",
     "SimpleResult",
     "MessageResult",
-    "DetectionResult",
-    "AuditDetectionResult",
     # Detections
     "AIDetection",
     "AILocation",
     "Severity",
     "print_ai_detection",
     "export_ai_detections_json",
-    "AuditResultParser",
+    "AIDetectionResult",
     # Runner
     "run_ai_workflow",
 ]

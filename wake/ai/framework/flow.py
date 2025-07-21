@@ -120,6 +120,7 @@ class AIWorkflow(ABC):
     def __init__(
         self,
         name: str,
+        result_class: Optional[Type[AIResult]] = None,
         session: Optional[ClaudeCodeSession] = None,
         model: Optional[str] = None,
         working_dir: Optional[Union[str, Path]] = None,
@@ -131,6 +132,7 @@ class AIWorkflow(ABC):
 
         Args:
             name: Workflow name
+            result_class: Result class to use for formatting output (default: MessageResult)
             session: Claude session to use (optional)
             model: Model name to create session with (ignored if session provided)
             working_dir: Directory for AI to work in (default: .wake/ai/<session-id>/)
@@ -139,6 +141,7 @@ class AIWorkflow(ABC):
             disallowed_tools: Override default disallowed tools
         """
         self.name = name
+        self.result_class = result_class
 
         # Set up working directory
         if working_dir is not None:
@@ -442,22 +445,10 @@ class AIWorkflow(ABC):
         """Get all context keys."""
         return list(self.state.context.keys())
     
-    @abstractmethod
-    def get_result_class(self) -> Type[AIResult]:
-        """Return the result class that can parse this workflow's output.
-        
-        The returned class must implement the AIResult interface and know how
-        to parse the specific output format of this workflow.
-        
-        Returns:
-            A class (not instance) that extends AIResult
-        """
-        ...
-    
     def format_results(self, results: Dict[str, Any]) -> AIResult:
         """Convert workflow results to an AIResult object.
         
-        This method uses the result class returned by get_result_class()
+        This method uses the result class specified in the constructor
         to parse the working directory and create the appropriate result object.
         
         Args:
@@ -466,5 +457,9 @@ class AIWorkflow(ABC):
         Returns:
             AIResult object that can be printed or exported
         """
-        result_class = self.get_result_class()
-        return result_class.from_working_dir(self.working_dir, results)
+        if self.result_class is None:
+            # Default to MessageResult if no result class specified
+            from ..results import MessageResult
+            self.result_class = MessageResult
+            
+        return self.result_class.from_working_dir(self.working_dir, results)
