@@ -44,12 +44,12 @@ class AuditWorkflow(AIWorkflow):
         self._load_prompts()
 
         # Import result class
-        from wake_ai.detections import AIDetectionResult
+        from wake_ai.utils.audit import AuditResult
 
         # Now call parent init which will call _setup_steps
         super().__init__(
             name=self.name,
-            result_class=AIDetectionResult,
+            result_class=AuditResult,
             session=session,
             model=model,
             working_dir=working_dir,

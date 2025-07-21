@@ -1,10 +1,8 @@
-"""Utility functions for AI workflows."""
+"""Workflow-related utility functions."""
 
 import json
 from pathlib import Path
 from typing import Dict, Any, Union, List
-import enum
-import sys
 
 try:
     import yaml
@@ -12,16 +10,7 @@ try:
 except ImportError:
     HAS_YAML = False
 
-from .core import AIWorkflow
-
-
-
-if sys.version_info < (3, 11):
-    class StrEnum(str, enum.Enum):
-        pass
-else:
-    class StrEnum(enum.StrEnum):
-        pass
+from ..core import AIWorkflow
 
 
 def load_workflow_from_file(workflow_file: Union[str, Path]) -> AIWorkflow:
@@ -170,5 +159,3 @@ def format_workflow_results(results: Dict[str, Any], output_format: str = "text"
             lines.append(f"Errors: {len(results['errors'])}")
 
         return "\n".join(lines)
-
-

@@ -7,13 +7,14 @@ from typing import Dict, Any, Optional, List, Tuple, Union
 import yaml
 
 from ..core.flow import AIWorkflow, ClaudeCodeResponse
-from ..detections import AIDetection, AIDetectionResult, AILocation, Severity
+from ..detections import Detection, Location, Severity
+from ..utils.audit import AuditResult
 
 logger = logging.getLogger(__name__)
 
 
-class MarkdownDetectorResult(AIDetectionResult):
-    """Result class for markdown detector workflows that reuses AIDetectionResult."""
+class MarkdownDetectorResult(AuditResult):
+    """Result class for markdown detector workflows that reuses AuditResult."""
     
     @classmethod
     def from_working_dir(cls, working_dir: Path, raw_results: Dict[str, Any]) -> "MarkdownDetectorResult":
@@ -37,7 +38,7 @@ class MarkdownDetectorResult(AIDetectionResult):
                     location = None
                     if 'location' in detection_data:
                         loc = detection_data['location']
-                        location = AILocation(
+                        location = Location(
                             target=loc.get('target', 'Unknown'),
                             file_path=Path(loc['file']) if 'file' in loc else None,
                             start_line=loc.get('start_line'),
@@ -57,7 +58,7 @@ class MarkdownDetectorResult(AIDetectionResult):
                     }
                     severity = severity_map.get(severity_str, Severity.MEDIUM)
                     
-                    detection = AIDetection(
+                    detection = Detection(
                         name=detection_data.get('title', 'Unnamed Detection'),
                         severity=severity,
                         detection_type=detection_data.get('type', 'vulnerability'),
@@ -78,7 +79,7 @@ class MarkdownDetectorResult(AIDetectionResult):
     
     def pretty_print(self, console):
         """Pretty print the detections to console."""
-        from ..detections import print_ai_detection
+        from ..utils.formatters import print_detection
         
         if not self.detections:
             console.print("[yellow]No detections found.[/yellow]")
@@ -87,7 +88,7 @@ class MarkdownDetectorResult(AIDetectionResult):
         console.print(f"\n[bold]Found {len(self.detections)} detection(s):[/bold]")
         
         for detector_name, detection in self.detections:
-            print_ai_detection(
+            print_detection(
                 detector_name=detector_name,
                 detection=detection,
                 console=console
@@ -109,8 +110,8 @@ class MarkdownDetectorResult(AIDetectionResult):
     
     def export_json(self, output_path: Path):
         """Export detections to JSON using the standard format."""
-        from ..detections import export_ai_detections_json
-        export_ai_detections_json(self.detections, output_path)
+        from ..utils.formatters import export_detections_json
+        export_detections_json(self.detections, output_path)
 
 
 class MarkdownDetector(AIWorkflow):
