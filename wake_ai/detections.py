@@ -158,113 +158,103 @@ class AIDetectionResult:
             List of (detector_name, AIDetection) tuples
         """
         results = []
-        audit_dir = working_dir / "audit"
-
-        if not audit_dir.exists():
+        
+        # Look for issues directory directly in working_dir
+        issues_dir = working_dir / "issues"
+        if not issues_dir.exists():
             return results
 
-        # Read the plan.yaml file
-        plan_file = audit_dir / "plan.yaml"
-        if not plan_file.exists():
-            return results
-
-        try:
-            with open(plan_file, 'r') as f:
-                plan_data = yaml.safe_load(f)
-        except Exception:
-            return results
-
-        # Convert true positive issues to AIDetectorResult
-        for contract in plan_data.get('contracts', []):
-            contract_name = contract.get('name', 'Unknown')
-
-            for issue in contract.get('issues', []):
-                if issue.get('status') != 'true_positive':
-                    continue
-
-                # Map severity
-                severity_map = {
-                    'critical': Severity.CRITICAL,
-                    'high': Severity.HIGH,
-                    'medium': Severity.MEDIUM,
-                    'low': Severity.LOW,
-                    'info': Severity.INFO,
-                    'warning': Severity.WARNING
-                }
-                severity = severity_map.get(issue.get('severity', 'medium').lower(), Severity.MEDIUM)
-
-                # Build location
+        # Parse each issue file
+        for issue_file in issues_dir.glob("*.adoc"):
+            try:
+                # Parse the AsciiDoc file
+                sections = self._parse_adoc_file(issue_file)
+                
+                # Extract metadata from the file content
+                content = issue_file.read_text()
+                
+                # Extract title from first line (= Title)
+                title_match = re.search(r'^=\s+(.+)$', content, re.MULTILINE)
+                title = title_match.group(1) if title_match else issue_file.stem
+                
+                # Extract metadata section if present
+                metadata = {}
+                severity = Severity.MEDIUM  # default
+                contract_name = "Unknown"
                 location = None
-                if 'location' in issue:
-                    loc_data = issue['location']
-                    location = AILocation(
-                        target=f"{contract_name}.{loc_data.get('function', 'contract')}",
-                        file_path=Path(loc_data['file']) if 'file' in loc_data else None,
-                        start_line=loc_data.get('lines', {}).get('start'),
-                        end_line=loc_data.get('lines', {}).get('end'),
-                        source_snippet=loc_data.get('code_snippet')
-                    )
-
-                # Get issue details from the issue file if it exists
-                detection_text = issue.get('description', '')
-                recommendation = issue.get('recommendation', '')
-                exploit = issue.get('exploit', '')
-
-                # Try to find the detailed issue file
-                issues_dir = audit_dir / "issues"
-                if issues_dir.exists():
-                    issue_file = self._find_issue_file(issues_dir, issue, contract_name)
-
-                    if issue_file:
-                        sections = self._parse_adoc_file(issue_file)
-
-                        # Use parsed sections
-                        if 'Description' in sections:
-                            detection_text = sections['Description']
-                        if 'Recommendation' in sections:
-                            recommendation = sections['Recommendation']
-                        if 'Proof of Concept' in sections or 'Exploit Scenario' in sections:
-                            exploit = sections.get('Proof of Concept', sections.get('Exploit Scenario', ''))
-
+                
+                # Look for metadata in the file (could be in comments or a dedicated section)
+                if 'Metadata' in sections:
+                    metadata_text = sections['Metadata']
+                    # Parse YAML-like metadata
+                    try:
+                        metadata_dict = yaml.safe_load(metadata_text)
+                        if isinstance(metadata_dict, dict):
+                            severity = self._parse_severity(metadata_dict.get('severity', 'medium'))
+                            contract_name = metadata_dict.get('contract', 'Unknown')
+                            
+                            # Parse location if present
+                            if 'location' in metadata_dict:
+                                loc_data = metadata_dict['location']
+                                location = AILocation(
+                                    target=f"{contract_name}.{loc_data.get('function', 'contract')}",
+                                    file_path=Path(loc_data['file']) if 'file' in loc_data else None,
+                                    start_line=loc_data.get('start_line'),
+                                    end_line=loc_data.get('end_line'),
+                                    source_snippet=loc_data.get('code_snippet')
+                                )
+                    except:
+                        pass
+                
+                # Alternative: Try to extract severity from the title or content
+                if not location:
+                    # Look for severity indicators in the content
+                    severity_match = re.search(r'\b(CRITICAL|HIGH|MEDIUM|LOW|INFO|WARNING)\b', content, re.IGNORECASE)
+                    if severity_match:
+                        severity = self._parse_severity(severity_match.group(1))
+                    
+                    # Try to extract contract name from title or content
+                    contract_match = re.search(r'\b([A-Z][a-zA-Z0-9]+)\s*[:.\-]', title)
+                    if contract_match:
+                        contract_name = contract_match.group(1)
+                
+                # Get the main content sections
+                detection_text = sections.get('Description', '')
+                recommendation = sections.get('Recommendation', '')
+                exploit = sections.get('Proof of Concept', sections.get('Exploit Scenario', ''))
+                
                 # Create the detection
                 detection = AIDetection(
-                    name=issue.get('title', 'Unnamed Issue'),
+                    name=title,
                     severity=severity,
                     detection_type="vulnerability",
                     location=location,
                     detection=detection_text,
                     recommendation=recommendation,
                     exploit=exploit,
-                    metadata={
-                        "contract": contract_name,
-                        "validation_comment": issue.get('comment', '')
-                    }
+                    metadata=metadata
                 )
-
+                
                 results.append(("ai-audit", detection))
+                
+            except Exception as e:
+                # Skip files that can't be parsed
+                continue
 
         return results
+    
+    def _parse_severity(self, severity_str: str) -> Severity:
+        """Parse severity string to Severity enum."""
+        severity_map = {
+            'critical': Severity.CRITICAL,
+            'high': Severity.HIGH,
+            'medium': Severity.MEDIUM,
+            'low': Severity.LOW,
+            'info': Severity.INFO,
+            'warning': Severity.WARNING
+        }
+        return severity_map.get(severity_str.lower(), Severity.MEDIUM)
 
-    def _find_issue_file(self, issues_dir: Path, issue: Dict[str, Any], contract_name: str) -> Optional[Path]:
-        """Find the detailed issue file for a given issue."""
-        # Create a safe filename from the issue title
-        safe_title = re.sub(r'[^a-zA-Z0-9_-]', '_', issue.get('title', 'issue'))
-        possible_files = [
-            issues_dir / f"{safe_title}.adoc",
-            issues_dir / f"{contract_name}_{safe_title}.adoc"
-        ]
-
-        for pf in possible_files:
-            if pf.exists():
-                return pf
-
-        # If still not found, try to match by content
-        for adoc_file in issues_dir.glob("*.adoc"):
-            content = adoc_file.read_text()
-            if issue.get('title', '') in content:
-                return adoc_file
-
-        return None
 
     def _parse_adoc_file(self, file_path: Path) -> Dict[str, str]:
         """Parse an AsciiDoc file and extract sections."""
