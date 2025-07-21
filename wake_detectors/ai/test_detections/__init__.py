@@ -1,1 +1,0 @@
-"""Test detector that reads findings from a predefined directory."""

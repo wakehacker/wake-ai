@@ -1,2 +1,0 @@
-class SolcCompilationError(Exception):
-    pass

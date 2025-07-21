@@ -88,3 +88,21 @@ ENV/
 # Test results
 test_artifacts/
 wake_rs/
+
+# Wake AI specific
+.wake/
+*.log
+*.tmp
+.cache/
+wake-venv/
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# Poetry
+poetry.lock
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+*.ipynb

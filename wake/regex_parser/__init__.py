@@ -1,1 +1,0 @@
-from .solidity_parser import SoliditySourceParser
