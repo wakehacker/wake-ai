@@ -442,11 +442,23 @@ class AIWorkflow(ABC):
         """Get all context keys."""
         return list(self.state.context.keys())
     
+    @abstractmethod
+    def get_result_class(self) -> Type[AIResult]:
+        """Return the result class that can parse this workflow's output.
+        
+        The returned class must implement the AIResult interface and know how
+        to parse the specific output format of this workflow.
+        
+        Returns:
+            A class (not instance) that extends AIResult
+        """
+        ...
+    
     def format_results(self, results: Dict[str, Any]) -> AIResult:
         """Convert workflow results to an AIResult object.
         
-        Override this method to provide custom result formatting for your workflow.
-        Default implementation returns a simple message.
+        This method uses the result class returned by get_result_class()
+        to parse the working directory and create the appropriate result object.
         
         Args:
             results: Raw results from workflow execution
@@ -454,8 +466,5 @@ class AIWorkflow(ABC):
         Returns:
             AIResult object that can be printed or exported
         """
-        from .results import MessageResult
-        return MessageResult(
-            f"Workflow '{self.name}' completed successfully. "
-            f"Results saved to: {self.working_dir}"
-        )
+        result_class = self.get_result_class()
+        return result_class.from_working_dir(self.working_dir, results)
