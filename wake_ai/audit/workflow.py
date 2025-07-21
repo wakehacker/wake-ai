@@ -5,8 +5,7 @@ from typing import List, Optional, Dict, Any, Tuple, Union
 import yaml
 
 from wake.ai.claude import ClaudeCodeSession
-
-from ..flow import AIWorkflow, WorkflowStep, ClaudeCodeResponse
+from wake.ai.flow import AIWorkflow, ClaudeCodeResponse, AIResult
 
 
 class AuditWorkflow(AIWorkflow):
@@ -52,7 +51,7 @@ class AuditWorkflow(AIWorkflow):
 
     def _load_prompts(self):
         """Load audit prompts from markdown files."""
-        prompts_dir = Path(__file__).parent.parent / "prompts"
+        prompts_dir = Path(__file__).parent / "prompts"
 
         self.prompts = {}
         # Updated prompt files matching new structure
@@ -344,3 +343,8 @@ class AuditWorkflow(AIWorkflow):
             "context_docs": list(kwargs.get("context", [])),
             "focus_areas": list(kwargs.get("focus", []))
         }
+    
+    def format_results(self, results: Dict[str, Any]) -> AIResult:
+        """Convert audit results to AuditDetectionResults."""
+        from .results import AuditDetectionResults
+        return AuditDetectionResults.from_workflow_results(results, self.working_dir)
