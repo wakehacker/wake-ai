@@ -26,11 +26,12 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Callable, Union, Tuple
+from typing import Dict, List, Optional, Any, Callable, Union, Tuple, Type
 from datetime import datetime
 import re
 
 from .claude import ClaudeCodeSession, ClaudeCodeResponse
+from ..results import AIResult
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -440,3 +441,21 @@ class AIWorkflow(ABC):
     def get_context_keys(self) -> List[str]:
         """Get all context keys."""
         return list(self.state.context.keys())
+    
+    def format_results(self, results: Dict[str, Any]) -> AIResult:
+        """Convert workflow results to an AIResult object.
+        
+        Override this method to provide custom result formatting for your workflow.
+        Default implementation returns a simple message.
+        
+        Args:
+            results: Raw results from workflow execution
+            
+        Returns:
+            AIResult object that can be printed or exported
+        """
+        from .results import MessageResult
+        return MessageResult(
+            f"Workflow '{self.name}' completed successfully. "
+            f"Results saved to: {self.working_dir}"
+        )
