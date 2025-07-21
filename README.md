@@ -563,6 +563,93 @@ catcoin-missing-approval-event/
 - YAML files could be a good candidate for storing results, as they are human readable and can be easily parsed.
 - Sandboxing Claude Code is not implemented atm, but should be added before running on servers.
 
+## Creating Custom Detectors
+
+Wake AI provides a `MarkdownDetector` template that makes it easy to create custom security detectors. You only need to define what to look for - the framework handles everything else.
+
+### Quick Example: Uniswap Detector
+
+```python
+from wake_ai.templates import MarkdownDetector
+
+class UniswapDetector(MarkdownDetector):
+    """Detector for Uniswap-specific vulnerabilities."""
+    
+    name = "uniswap"
+    
+    def get_detector_prompt(self) -> str:
+        """Define what vulnerabilities to detect."""
+        return """
+        Analyze this codebase for Uniswap integration vulnerabilities.
+        
+        Check for:
+        1. Incorrect reserve usage (token0/token1 order)
+        2. Missing slippage protection in swaps
+        3. Price oracle manipulation risks
+        4. Flash loan callback vulnerabilities
+        5. Hardcoded router/factory addresses
+        
+        For each issue found, provide:
+        - Clear explanation of the vulnerability
+        - Severity assessment (critical/high/medium/low)
+        - Recommended fix with code example
+        """
+```
+
+### Using Your Detector
+
+```bash
+# Run via CLI
+wake-ai uniswap
+
+# Export results
+wake-ai uniswap --export uniswap-findings.json
+```
+
+The detector automatically outputs findings to a structured `results.yaml` format that integrates with Wake AI's detection system. Results are parsed into `AIDetection` objects with proper formatting and export capabilities.
+
+See the [Uniswap detector implementation](flows/uniswap_detector/workflow.py) for a comprehensive example with CLI options and configuration.
+
+### Example: Reentrancy Detector
+
+The reentrancy detector demonstrates how to combine Wake's built-in static analysis with AI-powered verification:
+
+```python
+from wake_ai.templates import MarkdownDetector
+
+class ReentrancyDetector(MarkdownDetector):
+    """Enhanced reentrancy detector leveraging Wake's static analysis."""
+    
+    name = "reentrancy"
+    
+    def get_detector_prompt(self) -> str:
+        return """# Reentrancy Vulnerability Analysis
+
+<task>
+Perform comprehensive reentrancy analysis by combining Wake's static analysis with manual verification
+</task>
+
+<steps>
+1. **Initialize Wake and run built-in detection**
+   - Run: wake init
+   - Run: wake detect reentrancy
+   - Parse Wake's findings as baseline
+
+2. **Manual verification of each finding**
+   - Analyze complete function context
+   - Trace call flows and state changes
+   - Verify actual exploitability
+
+3. **Identify additional patterns**
+   - Cross-function reentrancy
+   - Read-only reentrancy
+   - ERC777/1155 callback vulnerabilities
+</steps>
+"""
+```
+
+This detector leverages Wake's powerful static analysis as a starting point, then uses AI to eliminate false positives and identify complex patterns that static analysis might miss.
+
 ## Requirements
 
 - Python 3.8 or higher
