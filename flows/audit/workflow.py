@@ -148,7 +148,7 @@ class AuditWorkflow(AIWorkflow):
         errors = []
 
         # Check for overview.md
-        overview_file = Path(self.working_dir) / "audit" / "overview.md"
+        overview_file = Path(self.working_dir) / "overview.md"
         if not overview_file.exists():
             errors.append(f"Overview file not created at {overview_file}")
         else:
@@ -159,7 +159,7 @@ class AuditWorkflow(AIWorkflow):
                     errors.append(f"Missing required section '{section}' in overview.md")
 
         # Check for plan.yaml
-        plan_file = Path(self.working_dir) / "audit" / "plan.yaml"
+        plan_file = Path(self.working_dir) / "plan.yaml"
         if not plan_file.exists():
             errors.append(f"Plan file not created at {plan_file}")
         else:
@@ -210,7 +210,7 @@ class AuditWorkflow(AIWorkflow):
         errors = []
 
         # Check that plan.yaml still exists and has been updated
-        plan_file = Path(self.working_dir) / "audit" / "plan.yaml"
+        plan_file = Path(self.working_dir) / "plan.yaml"
         if not plan_file.exists():
             errors.append(f"Plan file missing at {plan_file}")
         else:
@@ -239,7 +239,7 @@ class AuditWorkflow(AIWorkflow):
                     errors.append("No issues have been validated (all still pending)")
 
                 # Check for issue files for true positives
-                issues_dir = Path(self.working_dir) / "audit" / "issues"
+                issues_dir = Path(self.working_dir) / "issues"
                 if true_positives and not issues_dir.exists():
                     errors.append(f"Issues directory not created at {issues_dir}")
                 elif true_positives:
@@ -260,7 +260,7 @@ class AuditWorkflow(AIWorkflow):
         errors = []
 
         # Check for executive-summary.md
-        summary_file = Path(self.working_dir) / "audit" / "executive-summary.md"
+        summary_file = Path(self.working_dir) / "executive-summary.md"
         if not summary_file.exists():
             errors.append(f"Executive summary not created at {summary_file}")
         else:
