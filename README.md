@@ -310,9 +310,194 @@ class AuditWorkflow(AIWorkflow):
         }
 ```
 
+## Flows Location
+We can place AI flows into the:
+1. `wake/ai/flows` folder
+   - most straightforward option, but will require flows to be public so no
+2. `wake_detectors` folder
+   - private repo good
+   - detectors have a quite limited output + auto-compile before by default
+   - requires either updating the detector + its output classes or somehow mapping AI flow output to detector output (but then we are missing tructuring into description, epxloit, recommendation, etc.), too complex
+3. `wake_printers` folder
+    - private repo good
+    - more flexible than detectors since we can print anything to output, but lacking export options
+    - requires implementing export functionality
+4. new `wake_ai` folder, analogous to `wake_detectors` or `wake_printers`
+   - as flexible as we want
+   - requires implementing fetching from private repo
+
+### Structure
+
+To keep AI flows as flexible as possible, we avoid limiting the output structure by implementing a base `AITask` class that can be extended for specific task types.
+
+The base `AITask` class provides a foundation for any AI-powered task:
+
+```python
+class AITask(ABC):
+    """Base class for AI tasks that run autonomously and return results.
+
+    This class provides the foundation for various AI-powered tasks like:
+    - Security audits
+    - Code quality analysis
+    - Gas optimization
+    - Documentation generation
+    - Any custom analysis
+    """
+
+    @abstractmethod
+    def get_task_type(self) -> str:
+        """Return the task type identifier (e.g., 'security-audit', 'code-quality')."""
+        ...
+
+    @abstractmethod
+    def pretty_print(self, console: "Console") -> None:
+        """Print results in a human-readable format to the console."""
+        ...
+
+    @abstractmethod
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert results to dictionary format for serialization."""
+        ...
+
+    def export_json(self, path: Path) -> None:
+        """Export results to JSON file.
+
+        Default implementation uses to_dict(), but can be overridden.
+        """
+        import json
+
+        data = self.to_dict()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(data, indent=2))
+```
+
+By implementing the `to_dict()` and `pretty_print()` methods, tasks can easily export results to dictionaries and display them in the console.
+
+#### Example: Detection-Specific Task
+
+Here's an example of a specialized task mimicking detectors:
+
+```python
+
+class DetectionTask(AITask):
+    """Base class for AI tasks that produce detection-style results.
+
+    This is a specialized AITask for security audits, bug detection,
+    and similar tasks that produce a list of findings/detections.
+    """
+
+    def __init__(self, detections: List[Tuple[str, 'AIDetection']], working_dir: Path):
+        self.detections = detections
+        self.working_dir = working_dir
+
+    def get_task_type(self) -> str:
+        """Return the task type identifier."""
+        return "detection-task"
+
+    def pretty_print(self, console: "Console") -> None:
+        """Print detections using the detection printer."""
+        from .detections import print_ai_detection
+
+        if self.detections:
+            console.print(f"\n[bold]Found {len(self.detections)} detection(s):[/bold]")
+            for detector_name, detection in self.detections:
+                print_ai_detection(detector_name, detection, console)
+        else:
+            console.print(f"\n[yellow]No detections found[/yellow]")
+
+        # Always show where full results are
+        console.print(f"\n[dim]Full results available in:[/dim] {self.working_dir}")
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert all detections to dictionary format."""
+        return {
+            "task_type": self.get_task_type(),
+            "detections": [
+                {
+                    "detector": detector_name,
+                    **detection.to_dict()
+                }
+                for detector_name, detection in self.detections
+            ],
+            "working_directory": str(self.working_dir),
+            "total_detections": len(self.detections)
+        }
+
+    def export_json(self, path: Path) -> None:
+        """Use the existing export function for detection consistency."""
+        from .detections import export_ai_detections_json
+        export_ai_detections_json(self.detections, path)
+```
+
+The core runner handles output by calling either `pretty_print()` or `to_dict()` based on whether the user wants console output or has specified the `--export` flag.
+
+This flexible architecture allows us to define new task types (e.g., fuzzing) that can have different output formats. For example, `wake ai fuzz` could return specialized fuzzing results or simply print to the console, and export functionality can be customized or disabled for specific task types.
+
+
+## Todo
+- [ ] Extract `framework` into a separate module + repo
+- [ ] Add auto remove working folder option
+- [ ] Sandbox Claude Code
+- [ ] Enable defining AI flows in `wake_ai` folder under private repo
+- [ ] Reach consensus on AI framework name
+    - ***Trace*** – simple, clean, post-hoc or live path tracking; modern and very product-ready.
+    - ***Tasks*** - simple, could also bre well marketed, i.e. we are introducing wake tasks
+      - alternatively we could just swap `wake ai` for `wake task`, looks nice
+    - ***Shikoro*** – "reasoning in motion"; also sounds a bit like a stylized Japanese name.
+    - ***Michi*** – philosophical, elegant, the Way (道); perfect for a framework guiding agents.
+    - ***Shikō*** – internal reasoning, decision-making; evokes the "mind" of the agent.
+    - ***Kōro*** – technical, directional, navigating dynamic environments; feels advanced and system-level.
+    - ***Sendō*** (先導) –  "Guidance / Leading the way" Suggests an agent that leads or follows intelligently.
+- [ ] Reach consensus on AI detector output structure
+
+1. Pure YAML with structured content blocks
+```yaml
+- name: Reentrancy in approve()
+- severity: high
+- detection_type: vulnerability
+- location:
+    - file: contracts/Token.sol
+    - lines: 42-47
+    - function: approve
+description:
+  - type: text
+    content: |
+      The `approve()` function does not emit an Approval event.
+  - type: code
+    source: CatCoin.sol
+    language: solidity
+    linenums: "42-47"
+    content: |
+      function approve(...) { ... }
+```
+
+1. YAML with Markdown/ADOC
+```yaml
+- name: Reentrancy in approve()
+- severity: high
+- detection_type: vulnerability
+- location:
+    - file: contracts/Token.sol
+    - lines: 42-47
+    - function: approve
+description: |
+  The `approve()` function does not emit an Approval event.
+
+  ``solidity [CatCoin.sol:42-47]
+  function approve(...) { ... }
+  ``
+```
+
+3. Multi-file Structure (YAML + Markdown/ADOC Files)
+```
+catcoin-missing-approval-event/
+  ├── meta.yaml
+  ├── description.adoc
+  ├── exploit.adoc
+  └── recommendation.adoc
+```
 
 ## Notes
-
 - Steps can be dynamically added in between workflow steps by including a `after-step` hook
 - Sessions can be resumed in between sessions by using the `resume` flag, by default new ones are created
   - This makes it possible to create different agents for each step, i.e. audit agent, validation agent, etc.
@@ -321,4 +506,6 @@ class AuditWorkflow(AIWorkflow):
   - A potential solution could be to request the session to be finished quicker once we exceed a percentage (i.e. 80%) of the max cost limit
 - YAML files could be a good candidate for storing results, as they are human readable and can be easily parsed.
 - Sandboxing Claude Code is not implemented atm, but should be added before running on servers.
-- [] Add auto remove working folder option
+
+
+
