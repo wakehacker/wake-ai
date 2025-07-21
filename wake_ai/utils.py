@@ -3,6 +3,8 @@
 import json
 from pathlib import Path
 from typing import Dict, Any, Union, List
+import enum
+import sys
 
 try:
     import yaml
@@ -11,6 +13,15 @@ except ImportError:
     HAS_YAML = False
 
 from .core import AIWorkflow
+
+
+
+if sys.version_info < (3, 11):
+    class StrEnum(str, enum.Enum):
+        pass
+else:
+    class StrEnum(enum.StrEnum):
+        pass
 
 
 def load_workflow_from_file(workflow_file: Union[str, Path]) -> AIWorkflow:

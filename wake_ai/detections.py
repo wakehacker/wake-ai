@@ -7,10 +7,8 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
-
+from .utils import StrEnum
 import yaml
-
-from wake.utils import StrEnum
 
 if TYPE_CHECKING:
     from rich.console import Console

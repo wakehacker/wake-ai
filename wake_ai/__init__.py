@@ -33,9 +33,8 @@ from .runner import run_ai_workflow
 # Utils imports
 from .utils import (
     load_workflow_from_file,
-    validate_claude_cli,
-    query_with_cost,
 )
+
 
 __version__ = "0.1.0"
 
