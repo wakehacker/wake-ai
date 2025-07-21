@@ -9,6 +9,7 @@ from typing import List, Tuple, TYPE_CHECKING
 import rich_click as click
 from rich.console import Console
 
+from wake.ai.detector_result import AIDetectionResult, AILocation
 from wake.detectors import (
     Detector,
     DetectorResult,
@@ -40,7 +41,7 @@ class SimpleAIDetector(Detector):
     def detect(self) -> List[DetectorResult]:
         """Run the simple AI detection workflow and convert results to DetectorResults."""
         detector_results = []
-        
+
         try:
             # Import here to avoid circular imports and import errors
             try:
@@ -90,26 +91,30 @@ class SimpleAIDetector(Detector):
             findings_dir = Path(workflow.working_dir) / "findings"
             if findings_dir.exists():
                 console.print(f"\n[blue]Parsing findings from:[/blue] {findings_dir}")
-                
+
                 # Validate and load findings
                 valid_findings, errors = validate_all_findings(findings_dir)
-                
+
                 if errors:
                     console.print("[yellow]Validation errors:[/yellow]")
                     for error in errors:
                         console.print(f"  - {error}")
-                
+
                 if valid_findings:
-                    # Create DetectorResultFactory with build
-                    factory = DetectorResultFactory(self.build)
-                    
-                    # Convert findings to DetectorResults
-                    try:
-                        detector_results = factory.create_detector_results_batch(valid_findings)
-                        console.print(f"[green]Successfully parsed {len(detector_results)} findings[/green]")
-                    except Exception as e:
-                        logger.error(f"Failed to create DetectorResults: {e}")
-                        console.print(f"[red]Failed to create DetectorResults:[/red] {e}")
+                    # Create AIDetector findings
+                    for finding in valid_findings:
+                        detector_results.append(AIDetectionResult(
+                            name=finding["name"],
+                            location=AILocation(
+                                target=finding["target"],
+                            ),
+                            detection=finding["description"],
+                            recommendation=finding["recommendation"],
+                            exploit=finding["exploit"],
+                            subdetections=[]
+                        ))
+
+                    console.print(f"[green]Successfully parsed {len(detector_results)} findings[/green]")
                 else:
                     console.print("[yellow]No valid findings found[/yellow]")
             else:

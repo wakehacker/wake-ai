@@ -536,7 +536,11 @@ async def detect_(
         if export not in {None, "json", "json-html"}:
             console.record = True
 
-        all_detections: List[Tuple[str, DetectorResult]] = []
+        # Import AI types
+        from wake.ai import AIDetectorResult, print_ai_detection, AISeverity
+        
+        # Collect all detections (both regular and AI)
+        all_detections: List[Tuple[str, Union[DetectorResult, AIDetectorResult]]] = []
         for detector_name in detections.keys():
             for d in detections[detector_name][0]:
                 all_detections.append((detector_name, d))
@@ -544,49 +548,104 @@ async def detect_(
                 for d in detections[detector_name][1]:
                     all_detections.append((detector_name, d))
 
-        all_detections.sort(
-            key=lambda d: (
-                severity_map[d[1].impact][d[1].confidence],
-                d[1].detection.ir_node.source_unit.source_unit_name,
-                d[1].detection.ir_node.byte_location[0],
-                d[1].detection.ir_node.byte_location[1],
-            )
-        )
+        # Sort with a unified key function that handles both types
+        def get_sort_key(item):
+            detector_name, result = item
+            if isinstance(result, AIDetectorResult):
+                # Map AI severity to impact/confidence for sorting
+                severity_to_impact = {
+                    AISeverity.INFO: (0, 2),  # info, high
+                    AISeverity.WARNING: (1, 2),  # warning, high  
+                    AISeverity.LOW: (2, 2),  # low, high
+                    AISeverity.MEDIUM: (3, 2),  # medium, high
+                    AISeverity.HIGH: (4, 2),  # high, high
+                    AISeverity.CRITICAL: (4, 2),  # high, high
+                }
+                impact_idx, conf_idx = severity_to_impact[result.severity]
+                
+                # Use location info if available
+                if result.detection.location:
+                    loc = result.detection.location
+                    source_unit_name = loc.source_unit_name or str(loc.file_path or "")
+                    start_offset = loc.start_offset or 0
+                    end_offset = loc.end_offset or 0
+                else:
+                    source_unit_name = ""
+                    start_offset = 0
+                    end_offset = 0
+                    
+                return (impact_idx * 3 + conf_idx, source_unit_name, start_offset, end_offset)
+            else:
+                # Regular DetectorResult
+                impact_idx = ["info", "warning", "low", "medium", "high"].index(result.impact.value)
+                conf_idx = ["low", "medium", "high"].index(result.confidence.value)
+                return (
+                    impact_idx * 3 + conf_idx,
+                    result.detection.ir_node.source_unit.source_unit_name,
+                    result.detection.ir_node.byte_location[0],
+                    result.detection.ir_node.byte_location[1],
+                )
+        
+        all_detections.sort(key=get_sort_key)
 
+        # Print detections (handle both types)
         for detector_name, detection in all_detections:
-            print_detection(
-                detector_name,
-                detection,
-                config,
-                console,
-                "monokai" if theme == "dark" else "default",
-            )
+            if isinstance(detection, AIDetectorResult):
+                print_ai_detection(
+                    detector_name,
+                    detection,
+                    console,
+                    "monokai" if theme == "dark" else "default",
+                )
+            else:
+                print_detection(
+                    detector_name,
+                    detection,
+                    config,
+                    console,
+                    "monokai" if theme == "dark" else "default",
+                )
 
         if len(all_detections) == 0:
             console.print("No detections found")
 
+        # Check if there are any AI detections
+        has_ai_detections = any(isinstance(d[1], AIDetectorResult) for d in all_detections)
+        
         if export == "html":
+            if has_ai_detections:
+                console.print("[yellow]Note: AI detector results may not display correctly in HTML export. Use JSON export instead.[/yellow]")
             console.save_html(
                 str(config.project_root_path / "wake-detections.html"),
                 theme=SVG_EXPORT_THEME if theme == "dark" else DEFAULT_TERMINAL_THEME,
             )
         elif export == "svg":
+            if has_ai_detections:
+                console.print("[yellow]Note: AI detector results may not display correctly in SVG export. Use JSON export instead.[/yellow]")
             console.save_svg(
                 str(config.project_root_path / "wake-detections.svg"),
                 title=f"wake detect {ctx.invoked_subcommand}",
                 theme=SVG_EXPORT_THEME if theme == "dark" else DEFAULT_TERMINAL_THEME,
             )
         elif export == "text":
+            if has_ai_detections:
+                console.print("[yellow]Note: AI detector results may not display correctly in text export. Use JSON export instead.[/yellow]")
             console.save_text(
                 str(config.project_root_path / "wake-detections.txt"),
             )
         elif export == "ansi":
+            if has_ai_detections:
+                console.print("[yellow]Note: AI detector results may not display correctly in ANSI export. Use JSON export instead.[/yellow]")
             console.save_text(
                 str(config.project_root_path / "wake-detections.ansi"),
                 styles=True,
             )
         elif export == "sarif":
-            log = create_sarif_log(used_detectors, all_detections)
+            # Filter out AI detections for SARIF export (not supported yet)
+            regular_detections = [(name, d) for name, d in all_detections if not isinstance(d, AIDetectorResult)]
+            if len(regular_detections) < len(all_detections):
+                console.print("[yellow]Note: AI detector results are not included in SARIF export[/yellow]")
+            log = create_sarif_log(used_detectors, regular_detections)
             (config.project_root_path / "wake-detections.sarif").write_text(
                 to_json(log)
             )
@@ -645,28 +704,56 @@ async def detect_(
 
             data = []
             for i, (detector_name, detection) in enumerate(all_detections):
-                info = {
-                    "detector_name": detector_name,
-                    "impact": detection.impact.value,
-                    "confidence": detection.confidence.value,
-                    "uri": detection.uri,
-                    "detection": process_detection(detection.detection),
-                }
+                if isinstance(detection, AIDetectorResult):
+                    # Handle AI detection
+                    info = detection.to_dict()
+                    info["detector_name"] = detector_name
+                    
+                    # Add impact/confidence for compatibility
+                    severity_to_impact = {
+                        AISeverity.INFO: ("info", "high"),
+                        AISeverity.WARNING: ("warning", "high"),
+                        AISeverity.LOW: ("low", "high"),
+                        AISeverity.MEDIUM: ("medium", "high"),
+                        AISeverity.HIGH: ("high", "high"),
+                        AISeverity.CRITICAL: ("high", "high"),
+                    }
+                    impact, confidence = severity_to_impact[detection.severity]
+                    info["impact"] = impact
+                    info["confidence"] = confidence
+                else:
+                    # Regular detection
+                    info = {
+                        "detector_name": detector_name,
+                        "impact": detection.impact.value,
+                        "confidence": detection.confidence.value,
+                        "uri": detection.uri,
+                        "detection": process_detection(detection.detection),
+                    }
 
-                if relevant_locations is not None:
+                if relevant_locations is not None and not isinstance(detection, AIDetectorResult):
                     info["in_scope"] = is_detection_relevant(
                         detection, relevant_locations
                     )
 
                 if export == "json-html":
-                    print_detection(
-                        detector_name,
-                        detection,
-                        config,
-                        console,
-                        "monokai",
-                        file_link=False,
-                    )
+                    if isinstance(detection, AIDetectorResult):
+                        print_ai_detection(
+                            detector_name,
+                            detection,
+                            console,
+                            "monokai",
+                            file_link=False,
+                        )
+                    else:
+                        print_detection(
+                            detector_name,
+                            detection,
+                            config,
+                            console,
+                            "monokai",
+                            file_link=False,
+                        )
                     (config.project_root_path / ".wake" / "detections").mkdir(
                         parents=True, exist_ok=True
                     )

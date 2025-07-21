@@ -645,7 +645,6 @@ def detect(
             command.callback
         )  # pyright: ignore reportGeneralTypeIssues
         if cls is not None:
-
             def _callback(  # pyright: ignore reportGeneralTypeIssues
                 detector_name: str, instance: Detector, *args, **kwargs
             ):
@@ -850,16 +849,27 @@ def detect(
             lsp_provider._current_sort_tag = detector_name
 
         try:
-            detections[detector_name] = _filter_detections(
-                detector_name,
-                detector.detect(),
-                min_impact_by_detector[detector_name],
-                min_confidence_by_detector[detector_name],
-                strip_in_known_contracts,
-                config,
-                wake_comments,
-                build.source_units,
-            )
+            results = detector.detect()
+            # Check if this is an AI detector returning AIDetectorResult objects
+            if results and len(results) > 0:
+                from wake.ai import AIDetectorResult, AIDetector
+                if isinstance(detector, AIDetector) or isinstance(results[0], AIDetectorResult):
+                    # For AI detectors, we don't filter through _filter_detections
+                    # as it expects DetectorResult objects with IR nodes
+                    detections[detector_name] = (results, [])
+                else:
+                    detections[detector_name] = _filter_detections(
+                        detector_name,
+                        results,
+                        min_impact_by_detector[detector_name],
+                        min_confidence_by_detector[detector_name],
+                        strip_in_known_contracts,
+                        config,
+                        wake_comments,
+                        build.source_units,
+                    )
+            else:
+                detections[detector_name] = ([], [])
         except Exception as e:
             if not capture_exceptions:
                 raise
