@@ -1,19 +1,28 @@
 """CLI interface for Wake AI."""
 
 import click
+import logging
 from pathlib import Path
 from typing import Optional
 
 from rich.console import Console
+from rich.logging import RichHandler
 
 # Import available workflows from flows module
-import flows
 from flows.audit import AuditWorkflow
 from flows.example import ExampleWorkflow
 from flows.test import TestWorkflow
 from flows.validation_test import ValidationTestWorkflow
 
 console = Console()
+
+# Configure logging to use rich handler for pretty console output
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(message)s",
+    datefmt="[%X]",
+    handlers=[RichHandler(console=console, rich_tracebacks=True)]
+)
 
 # Register available workflows
 AVAILABLE_WORKFLOWS = {
@@ -45,11 +54,10 @@ def all_workflow_options():
 
 
 @click.command()
-@click.option(
-    "--flow",
+@click.argument(
+    "workflow",
     type=click.Choice(list(AVAILABLE_WORKFLOWS.keys())),
-    default="audit",
-    help="Workflow to run"
+    required=True
 )
 @click.option(
     "--working-dir",
@@ -78,6 +86,12 @@ def all_workflow_options():
     type=click.Path(dir_okay=False, path_type=Path),
     help="Export detections to JSON file"
 )
+@click.option(
+    "--verbose",
+    "-v",
+    is_flag=True,
+    help="Enable verbose logging (debug level)"
+)
 @all_workflow_options()
 @click.pass_context
 def main(ctx: click.Context, **kwargs):
@@ -88,30 +102,35 @@ def main(ctx: click.Context, **kwargs):
 
     Examples:
         # Run audit workflow on entire codebase
-        wake-ai --flow audit
+        wake-ai audit
 
         # Audit specific files
-        wake-ai --flow audit -s contracts/Token.sol -s contracts/Vault.sol
+        wake-ai audit -s contracts/Token.sol -s contracts/Vault.sol
 
         # Add context and focus areas
-        wake-ai --flow audit -c docs/spec.md -f reentrancy -f "access control"
-        
+        wake-ai audit -c docs/spec.md -f reentrancy -f "access control"
+
         # Export results to JSON
-        wake-ai --flow audit --export results.json
+        wake-ai audit --export results.json
 
         # Run example workflow
-        wake-ai --flow example
+        wake-ai example
 
         # Resume previous session
         wake-ai --resume
     """
-    flow = kwargs["flow"]
-    console.print(f"[blue]Starting {flow} workflow[/blue]")
+    # Set logging level based on verbose flag
+    if kwargs.get("verbose"):
+        logging.getLogger().setLevel(logging.DEBUG)
+        console.print("[dim]Debug logging enabled[/dim]")
+    
+    workflow = kwargs["workflow"]
+    console.print(f"[blue]Starting {workflow} workflow[/blue]")
 
     # Get workflow class
-    workflow_class = AVAILABLE_WORKFLOWS.get(flow)
+    workflow_class = AVAILABLE_WORKFLOWS.get(workflow)
     if not workflow_class:
-        console.print(f"[red]Unknown workflow:[/red] {flow}")
+        console.print(f"[red]Unknown workflow:[/red] {workflow}")
         ctx.exit(1)
 
     # Process arguments using workflow's processor if available
@@ -140,13 +159,13 @@ def main(ctx: click.Context, **kwargs):
 
         # Display results
         console.print("\n[green]Workflow complete![/green]")
-        
+
         # Get formatted results from the workflow
         if hasattr(workflow, 'format_results'):
             formatted_results = workflow.format_results(results)
-            
+
             export_path = kwargs.get("export")
-            
+
             if export_path:
                 # Export to JSON
                 if hasattr(formatted_results, 'export_json'):
