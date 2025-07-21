@@ -335,71 +335,88 @@ We can place AI flows into the:
 
 ### Structure
 
-To keep AI flows as flexible as possible, we avoid limiting the output structure by implementing a base `AITask` class that can be extended for specific task types.
+To keep AI flows as flexible as possible, we avoid limiting the output structure by implementing a base `AIResult` class that can be extended for specific result types.
 
-The base `AITask` class provides a foundation for any AI-powered task:
+The base `AIResult` class provides a foundation for any AI workflow result:
 
 ```python
-class AITask(ABC):
-    """Base class for AI tasks that run autonomously and return results.
+class AIResult(ABC):
+    """Base class for AI workflow results.
 
-    This class provides the foundation for various AI-powered tasks like:
-    - Security audits
-    - Code quality analysis
-    - Gas optimization
-    - Documentation generation
-    - Any custom analysis
+    Any result type that implements these methods can be used by the AI CLI.
+    This allows each workflow to define its own result structure and formatting.
     """
 
+    @classmethod
     @abstractmethod
-    def get_task_type(self) -> str:
-        """Return the task type identifier (e.g., 'security-audit', 'code-quality')."""
+    def from_working_dir(cls, working_dir: Path, raw_results: Dict[str, Any]) -> "AIResult":
+        """Create a result instance by parsing the working directory.
+
+        Args:
+            working_dir: Path to the workflow's working directory
+            raw_results: Raw results dict from workflow execution
+
+        Returns:
+            An instance of the result class with parsed data
+        """
         ...
 
     @abstractmethod
     def pretty_print(self, console: "Console") -> None:
-        """Print results in a human-readable format to the console."""
+        """Print the result in a human-readable format to the console."""
         ...
 
     @abstractmethod
     def to_dict(self) -> Dict[str, Any]:
-        """Convert results to dictionary format for serialization."""
+        """Convert the result to a dictionary for JSON serialization."""
         ...
 
     def export_json(self, path: Path) -> None:
-        """Export results to JSON file.
+        """Export the result to a JSON file.
 
-        Default implementation uses to_dict(), but can be overridden.
+        Default implementation uses to_dict(), but can be overridden
+        for custom export formats.
         """
-        import json
-
         data = self.to_dict()
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(data, indent=2))
 ```
 
-By implementing the `to_dict()` and `pretty_print()` methods, tasks can easily export results to dictionaries and display them in the console.
+By implementing the `from_working_dir()`, `to_dict()` and `pretty_print()` methods, results can be parsed from workflow outputs, exported to dictionaries and displayed in the console.
 
-#### Example: Detection-Specific Task
+#### Example: Detection-Specific Result
 
-Here's an example of a specialized task mimicking detectors:
+Here's an example of a specialized result class for detection-style outputs:
 
 ```python
 
-class DetectionTask(AITask):
-    """Base class for AI tasks that produce detection-style results.
+class AIDetectionResult(AIResult):
+    """Detection result specifically for security audit workflows."""
 
-    This is a specialized AITask for security audits, bug detection,
-    and similar tasks that produce a list of findings/detections.
-    """
-
-    def __init__(self, detections: List[Tuple[str, 'AIDetection']], working_dir: Path):
+    def __init__(self, detections: List[Tuple[str, AIDetection]], working_dir: Path):
         self.detections = detections
         self.working_dir = working_dir
 
-    def get_task_type(self) -> str:
-        """Return the task type identifier."""
-        return "detection-task"
+    @classmethod
+    def from_working_dir(cls, working_dir: Path, raw_results: Dict[str, Any]) -> "AIDetectionResult":
+        """Parse audit workflow results from the working directory.
+
+        Looks for the standard audit output structure and parses YAML/AsciiDoc files.
+        """
+        # Create instance first
+        instance = cls([], working_dir)
+        # Then parse detections using instance method
+        instance.detections = instance.parse_audit_results(working_dir)
+        return instance
+
+    def parse_audit_results(self, working_dir: Path) -> List[Tuple[str, AIDetection]]:
+        """Parse audit workflow results into AIDetection format.
+        
+        (Implementation details omitted for brevity)
+        """
+        # Parse YAML files, AsciiDoc files, etc.
+        # Return list of (detector_name, AIDetection) tuples
+        ...
 
     def pretty_print(self, console: "Console") -> None:
         """Print detections using the detection printer."""
@@ -418,7 +435,6 @@ class DetectionTask(AITask):
     def to_dict(self) -> Dict[str, Any]:
         """Convert all detections to dictionary format."""
         return {
-            "task_type": self.get_task_type(),
             "detections": [
                 {
                     "detector": detector_name,
@@ -438,7 +454,7 @@ class DetectionTask(AITask):
 
 The core runner handles output by calling either `pretty_print()` or `to_dict()` based on whether the user wants console output or has specified the `--export` flag.
 
-This flexible architecture allows us to define new task types (e.g., fuzzing) that can have different output formats. For example, `wake ai fuzz` could return specialized fuzzing results or simply print to the console, and export functionality can be customized or disabled for specific task types.
+This flexible architecture allows us to define new result types (e.g., fuzzing results, optimization reports) that can have different output formats. For example, `wake ai fuzz` could return specialized fuzzing results with its own `FuzzingResult` class, and export functionality can be customized or disabled for specific result types.
 
 
 ## Todo
@@ -448,7 +464,7 @@ This flexible architecture allows us to define new task types (e.g., fuzzing) th
 - [ ] Enable defining AI flows in `wake_ai` folder under private repo
 - [ ] Reach consensus on AI framework name
     - ***Trace*** – simple, clean, post-hoc or live path tracking; modern and very product-ready.
-    - ***Tasks*** - simple, could also bre well marketed, i.e. we are introducing wake tasks
+    - ***Tasks*** - simple, could also be well marketed, i.e. we are introducing wake tasks
       - alternatively we could just swap `wake ai` for `wake task`, looks nice
     - ***Shikoro*** – "reasoning in motion"; also sounds a bit like a stylized Japanese name.
     - ***Michi*** – philosophical, elegant, the Way (道); perfect for a framework guiding agents.
