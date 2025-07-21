@@ -29,11 +29,11 @@ wake/ai/detections.py
 wake/ai/results.py
 wake/ai/runner.py
 wake/ai/utils.py
-wake/ai/framework/__init__.py
-wake/ai/framework/claude.py
-wake/ai/framework/exceptions.py
-wake/ai/framework/flow.py
-wake/ai/framework/utils.py
+wake/ai/core/__init__.py
+wake/ai/core/claude.py
+wake/ai/core/exceptions.py
+wake/ai/core/flow.py
+wake/ai/core/utils.py
 ```
 
 ### Workflows (from wake_ai/)
@@ -66,7 +66,7 @@ LICENSE                    # License file
 ```
 wake_ai_core/              # New package name
 ├── __init__.py           # Package init
-├── framework/            # Move wake/ai/framework here
+├── core/                 # Move wake/ai/core here
 ├── core/                 # Move wake/ai core files here
 ├── workflows/            # Move wake_ai workflows here
 ├── prompts/              # Consolidate all prompts
@@ -79,7 +79,7 @@ wake_ai_core/              # New package name
 ```
 tests/
 ├── __init__.py
-├── test_framework.py
+├── test_core.py
 ├── test_workflows.py
 └── test_integration.py
 ```
@@ -119,7 +119,7 @@ tests/
 
 ### Phase 1: Package Structure
 - [ ] Create new package directory structure
-- [ ] Copy core framework files
+- [ ] Copy core files
 - [ ] Copy workflow implementations
 - [ ] Consolidate duplicate prompts
 

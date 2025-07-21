@@ -4,8 +4,8 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any, Tuple, Union
 import yaml
 
-from wake.ai.framework.claude import ClaudeCodeSession
-from wake.ai.framework.flow import AIWorkflow, ClaudeCodeResponse
+from wake_ai.core.claude import ClaudeCodeSession
+from wake_ai.core.flow import AIWorkflow, ClaudeCodeResponse
 
 
 class AuditWorkflow(AIWorkflow):
@@ -42,7 +42,7 @@ class AuditWorkflow(AIWorkflow):
         self._load_prompts()
 
         # Import result class
-        from wake.ai.detections import AIDetectionResult
+        from wake_ai.detections import AIDetectionResult
 
         # Now call parent init which will call _setup_steps
         super().__init__(
