@@ -228,3 +228,20 @@ from wake_ai.audit import AuditWorkflow
 from wake_ai import AIWorkflow
 from flows.audit import AuditWorkflow
 ```
+
+## Prompt Writing Guidelines
+
+When creating Wake AI workflow prompts, follow the guidelines in `prompt-writing.mdc`. Key principles:
+
+### Structure
+- Use Task-First Architecture with `<task>`, `<context>`, `<steps>` structure
+- Include explicit `<validation_requirements>` sections
+- Provide complete `<output_format>` examples with YAML/code
+- Follow the three-phase pattern: Discovery → Analysis → Documentation
+
+### Best Practices
+- Start with a concise one-sentence `<task>` declaration
+- Use numbered steps with **bold headings**
+- Include sub-steps (a, b, c) for complex operations
+- Reference specific Wake tools and commands
+- Provide real-world code examples in output formats
