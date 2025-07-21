@@ -17,7 +17,7 @@ are always available unless explicitly disallowed.
 """
 
 from typing import List, Tuple
-from wake.ai.flow import AIWorkflow, ClaudeCodeResponse
+from wake.ai.framework.flow import AIWorkflow, ClaudeCodeResponse
 
 
 class ValidationTestWorkflow(AIWorkflow):

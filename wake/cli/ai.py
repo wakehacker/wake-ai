@@ -5,8 +5,10 @@ from pathlib import Path
 from typing import Optional, List, Tuple
 
 from wake.cli.console import console
-from wake.ai.workflows import AVAILABLE_WORKFLOWS
+import wake_ai
 from wake.ai.utils import validate_claude_cli
+
+AVAILABLE_WORKFLOWS = wake_ai.AVAILABLE_WORKFLOWS
 
 
 def all_workflow_options():
