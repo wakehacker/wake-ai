@@ -35,6 +35,12 @@ from .utils import (
     load_workflow_from_file,
 )
 
+# Template imports
+from .templates import (
+    MarkdownDetector,
+    MarkdownDetectorResult,
+)
+
 
 __version__ = "0.1.0"
 
@@ -63,6 +69,9 @@ __all__ = [
     "load_workflow_from_file",
     "validate_claude_cli",
     "query_with_cost",
+    # Templates
+    "MarkdownDetector",
+    "MarkdownDetectorResult",
     # Version
     "__version__",
 ]

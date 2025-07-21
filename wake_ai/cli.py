@@ -13,6 +13,8 @@ from flows.audit import AuditWorkflow
 from flows.example import ExampleWorkflow
 from flows.test import TestWorkflow
 from flows.validation_test import ValidationTestWorkflow
+from flows.uniswap_detector import UniswapDetector
+from flows.reentrancy_detector import ReentrancyDetector
 
 console = Console()
 
@@ -30,6 +32,8 @@ AVAILABLE_WORKFLOWS = {
     "example": ExampleWorkflow,
     "test": TestWorkflow,
     "validation-test": ValidationTestWorkflow,
+    "uniswap": UniswapDetector,
+    "reentrancy": ReentrancyDetector,
 }
 
 
@@ -128,7 +132,7 @@ def main(ctx: click.Context, **kwargs):
     if kwargs.get("verbose"):
         logging.getLogger().setLevel(logging.DEBUG)
         console.print("[dim]Debug logging enabled[/dim]")
-    
+
     workflow = kwargs["workflow"]
     console.print(f"[blue]Starting {workflow} workflow[/blue]")
 
