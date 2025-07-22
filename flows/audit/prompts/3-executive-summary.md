@@ -5,27 +5,27 @@ Create a comprehensive executive summary of the audit findings based on validate
 </task>
 
 <context>
-Scope: {scope_files}
-Context: {context_docs}
-Focus: {focus_areas}
-Overview: `{working_dir}/overview.md`
-Validated Plan: `{working_dir}/plan.yaml`
-Issues Directory: `{working_dir}/issues/`
+Scope: {{scope_files}}
+Context: {{context_docs}}
+Focus: {{focus_areas}}
+Overview: `{{working_dir}}/overview.md`
+Validated Plan: `{{working_dir}}/plan.yaml`
+Issues Directory: `{{working_dir}}/issues/`
 </context>
 
 <working_dir>
-Work in the assigned directory `{working_dir}` where all audit artifacts are stored.
+Work in the assigned directory `{{working_dir}}` where all audit artifacts are stored.
 </working_dir>
 
 <steps>
 
 1. **Gather validated audit results**
-   - Read `{working_dir}/overview.md` for codebase architecture understanding
-   - Read `{working_dir}/plan.yaml` for complete validation results and status
-   - Read all issue files in `{working_dir}/issues/` for detailed true positive findings
+   - Read `{{working_dir}}/overview.md` for codebase architecture understanding
+   - Read `{{working_dir}}/plan.yaml` for complete validation results and status
+   - Read all issue files in `{{working_dir}}/issues/` for detailed true positive findings
    - Extract severity counts and key technical details from validated issues
 
-2. **Create comprehensive executive summary** (`{working_dir}/executive-summary.md`)
+2. **Create comprehensive executive summary** (`{{working_dir}}/executive-summary.md`)
    Structure:
    ```markdown
    # Executive Summary

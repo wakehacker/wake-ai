@@ -531,6 +531,7 @@ This flexible architecture allows us to define new result types (e.g., fuzzing r
     - Requires modifying base workflow to reuse ClaudeCodeSession across steps
     - However, a single well-crafted prompt often achieves similar results with less complexity
 - [ ] Standardize claude wrapper for possibly other AI providers
+- [x] Migrate to Jinja for prompt templating
 
 1. Pure YAML with structured content blocks
 ```yaml

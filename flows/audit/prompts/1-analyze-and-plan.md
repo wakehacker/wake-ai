@@ -5,13 +5,13 @@ Analyze the project and create an initial audit plan
 </task>
 
 <context>
-Scope: {scope_files}
-Context: {context_docs}
-Focus: {focus_areas}
+Scope: {{scope_files}}
+Context: {{context_docs}}
+Focus: {{focus_areas}}
 </context>
 
 <working_dir>
-You have access to the whole codebase, but have assigned a working directory to work in `{working_dir}`.
+You have access to the whole codebase, but have assigned a working directory to work in `{{working_dir}}`.
 </working_dir>
 
 <steps>
@@ -21,7 +21,7 @@ You have access to the whole codebase, but have assigned a working directory to 
    - Otherwise, identify core contracsts (main business logic, not libraries/interfaces)
    - Read key files to understand architecture and relationships
 
-2. **Generate codebase overview** (`{working_dir}/overview.md`)
+2. **Generate codebase overview** (`{{working_dir}}/overview.md`)
    Structure:
    ```markdown
    # Codebase Overview
@@ -41,7 +41,7 @@ You have access to the whole codebase, but have assigned a working directory to 
    - Actor Name: [permissions and interactions]
    ```
 
-3. **Create vulnerability checklist** (`{working_dir}/plan.yaml`)
+3. **Create vulnerability checklist** (`{{working_dir}}/plan.yaml`)
    - Split the plan by contracts
    - For each contract, create a list of issues to check for
    - For each issue, add the following fields:

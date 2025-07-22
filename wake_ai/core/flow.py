@@ -31,6 +31,8 @@ from datetime import datetime
 import re
 import shutil
 
+from jinja2 import Template, Environment, StrictUndefined, meta
+
 from .claude import ClaudeCodeSession, ClaudeCodeResponse
 from ..results import AIResult
 
@@ -65,16 +67,24 @@ class WorkflowStep:
     continue_session: bool = False
 
     def format_prompt(self, context: Dict[str, Any]) -> str:
-        """Format the prompt template with context."""
+        """Format the prompt template with context using Jinja2."""
         logger.debug(f"Formatting prompt for step '{self.name}' with context keys: {list(context.keys())}")
 
+        # Create Jinja2 environment with strict undefined to catch missing variables
+        env = Environment(undefined=StrictUndefined)
+        
+        # Parse the template to find all variables
+        ast = env.parse(self.prompt_template)
+        prompt_context_keys = meta.find_undeclared_variables(ast)
+        
         # Warn if there are context keys that are not in the context
-        prompt_context_keys = re.findall(r"\{([^}]+)\}", self.prompt_template)
         for key in prompt_context_keys:
             if key not in context:
                 logger.warning(f"Context key '{key}' used in step '{self.name}' not provided")
 
-        return self.prompt_template.format(**context)
+        # Render the template
+        template = env.from_string(self.prompt_template)
+        return template.render(**context)
 
     def validate_response(self, response: ClaudeCodeResponse) -> Tuple[bool, List[str]]:
         """Validate the response meets success criteria.

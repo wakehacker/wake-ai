@@ -36,7 +36,7 @@ class HookExampleWorkflow(AIWorkflow):
         # Step 1: Analyze project structure
         self.add_step(
             name="analyze_structure",
-            prompt_template="""Analyze the project structure in {working_dir}.
+            prompt_template="""Analyze the project structure in {{working_dir}}.
             List all files and directories and create a summary in structure.txt""",
             tools=["LS", "Write"],
             max_cost=2.0
@@ -57,9 +57,9 @@ class HookExampleWorkflow(AIWorkflow):
             prompt_template="""Generate a final report in report.md that includes:
             - Project structure summary
             - File count statistics
-            - Timestamp: {report_timestamp}
-            - Total workflow cost so far: ${total_cost:.4f}
-            - Step number: {step_number} of {total_steps}""",
+            - Timestamp: {{report_timestamp}}
+            - Total workflow cost so far: ${{total_cost:.4f}}
+            - Step number: {{step_number}} of {{total_steps}}""",
             tools=["Read", "Write"],
             max_cost=2.0
         )

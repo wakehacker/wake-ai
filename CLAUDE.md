@@ -98,10 +98,17 @@ wake-ai --export results.json           # Export results
 
 ### Context Management
 - Each step has access to:
-  - `{working_dir}` - Session working directory
-  - `{execution_dir}` - Where workflow was launched
-  - Previous step outputs as `{step_name}_output`
+  - `{{working_dir}}` - Session working directory
+  - `{{execution_dir}}` - Where workflow was launched
+  - Previous step outputs as `{{step_name}_output}}`
   - Custom context from workflow initialization
+
+### Template Syntax
+Wake AI uses Jinja2 templating for prompt templates:
+- Variables are referenced with double curly braces: `{{variable_name}}`
+- Code examples with curly braces no longer need escaping
+- Supports Jinja2 features like conditionals and loops (if needed)
+- Missing variables will raise errors to catch typos early
 
 ## Working Directory Structure
 
@@ -123,7 +130,7 @@ Each workflow session creates an isolated working directory:
 - **Session ID Format**: `YYYYMMDD_HHMMSS_random` (e.g., `20250121_143022_abc123`)
 - **Path Template**: `.wake/ai/<session-id>/`
 - **Automatic Creation**: Directory created on workflow initialization
-- **Context Access**: Available as `{working_dir}` in all prompts
+- **Context Access**: Available as `{{working_dir}}` in all prompts
 - **Automatic Cleanup**: Working directories can be automatically cleaned up after successful completion
   - Base AIWorkflow default: `cleanup_working_dir = False` (preserves working directory)
   - Individual workflows can override this default (e.g., some workflows might set `cleanup_working_dir = True`)
