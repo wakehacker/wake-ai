@@ -1,3 +1,0 @@
-[submodule "wake/utils/known_contracts"]
-	path = wake/utils/known_contracts
-	url = https://github.com/Ackee-Blockchain/known-contracts.git
