@@ -118,6 +118,27 @@ The working directory is also used to store the result of the workflow.
 └── <ai-results>.json      # Results can be stored in json files for easy parsing after the workflow is finished
 ```
 
+#### Working Directory Cleanup
+
+By default, workflows are configured to automatically clean up their working directories after successful completion. This behavior can be controlled at three levels:
+
+1. **Workflow class default**: Set `cleanup_working_dir` class attribute (default: `False`)
+   ```python
+   class MyWorkflow(AIWorkflow):
+       cleanup_working_dir = True  # This workflow cleans up by default
+   ```
+
+2. **Constructor override**: Pass `cleanup_working_dir` parameter when creating workflow instance
+   ```python
+   workflow = MyWorkflow(cleanup_working_dir=False)  # Keep working dir for this instance
+   ```
+
+3. **CLI override**: Use `--no-cleanup` or `--cleanup` flags
+   ```bash
+   wake-ai audit --no-cleanup  # Preserve working directory
+   wake-ai example --cleanup   # Force cleanup even if workflow default is False
+   ```
+
 ### Workflow Execution Flow
 
 This diagram shows how workflows execute with multiple steps, validation, and retry logic:

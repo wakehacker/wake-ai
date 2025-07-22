@@ -165,8 +165,12 @@ def main(ctx: click.Context, **kwargs):
         # Create workflow instance
         workflow = workflow_class(**init_args)
 
-        # Display working directory
+        # Display working directory and cleanup info
         console.print(f"[blue]Working directory:[/blue] {workflow.working_dir}")
+        if workflow.cleanup_working_dir:
+            console.print(f"[dim]Working directory will be cleaned up after completion. Use --no-cleanup to preserve it.[/dim]")
+        else:
+            console.print(f"[dim]Working directory will be preserved after completion.[/dim]")
 
         # Execute workflow
         results = workflow.execute(resume=kwargs["resume"])
