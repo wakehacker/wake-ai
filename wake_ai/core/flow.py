@@ -284,6 +284,9 @@ class AIWorkflow(ABC):
 
                     # Execute query
                     if retry_count == 0:
+                        # Call pre-step hook on first attempt only
+                        self._pre_step_hook(step)
+                        
                         # First attempt - use original prompt
                         prompt = step.format_prompt(self.state.context)
                         logger.debug(f"Executing query for step '{step.name}'")
@@ -331,6 +334,10 @@ class AIWorkflow(ABC):
                         self.state.responses[step.name] = response
                         self.state.context[f"{step.name}_output"] = response.content
                         self._custom_context_update(step.name, response)
+                        
+                        # Call post-step hook
+                        self._post_step_hook(step, response)
+                        
                         self.state.current_step += 1
                         self._save_state()
                         # Step completion already logged above with retry info
@@ -381,6 +388,28 @@ class AIWorkflow(ABC):
 
     def _custom_context_update(self, step_name: str, response: ClaudeCodeResponse):
         """Hook for subclasses to update context."""
+        pass
+
+    def _pre_step_hook(self, step: WorkflowStep) -> None:
+        """Hook called before each step execution.
+        
+        Override in subclasses to implement workflow-level pre-step logic.
+        Can modify self.state.context directly if needed.
+        
+        Args:
+            step: The step about to be executed
+        """
+        pass
+
+    def _post_step_hook(self, step: WorkflowStep, response: ClaudeCodeResponse) -> None:
+        """Hook called after each step execution.
+        
+        Override in subclasses to implement workflow-level post-step logic.
+        
+        Args:
+            step: The step that was executed
+            response: Response from Claude
+        """
         pass
 
     def _prepare_results(self) -> Dict[str, Any]:

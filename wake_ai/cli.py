@@ -15,6 +15,7 @@ from flows.test import TestWorkflow
 from flows.validation_test import ValidationTestWorkflow
 from flows.uniswap_detector import UniswapDetector
 from flows.reentrancy_detector import ReentrancyDetector
+from flows.hook_example import HookExampleWorkflow
 
 console = Console()
 
@@ -34,6 +35,7 @@ AVAILABLE_WORKFLOWS = {
     "validation-test": ValidationTestWorkflow,
     "uniswap": UniswapDetector,
     "reentrancy": ReentrancyDetector,
+    "hook-example": HookExampleWorkflow,
 }
 
 
