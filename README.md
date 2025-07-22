@@ -533,6 +533,8 @@ This flexible architecture allows us to define new result types (e.g., fuzzing r
 - [ ] Standardize claude wrapper for possibly other AI providers
 - [x] Migrate to Jinja for prompt templating
 
+### Output Formats
+
 1. Pure YAML with structured content blocks
 ```yaml
 - name: Reentrancy in approve()
@@ -554,7 +556,7 @@ description:
       function approve(...) { ... }
 ```
 
-1. YAML with Markdown/ADOC
+2. YAML with Markdown/ADOC (default, used by `MarkdownDetector`)
 ```yaml
 - name: Reentrancy in approve()
 - severity: high
