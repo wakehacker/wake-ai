@@ -524,7 +524,7 @@ This flexible architecture allows us to define new result types (e.g., fuzzing r
     - ***Shikō*** – internal reasoning, decision-making; evokes the "mind" of the agent.
     - ***Kōro*** – technical, directional, navigating dynamic environments; feels advanced and system-level.
     - ***Sendō*** (先導) –  "Guidance / Leading the way" Suggests an agent that leads or follows intelligently.
-- [ ] Reach consensus on AI detector output structure
+- [x] Reach consensus on AI detector output structure
 - [x] Add SingleStep helper class for simple detectors (implemented as `MarkdownDetector`)
   - [ ] Consider multi-step MarkdownDetector variant with shared session context
     - Would allow breaking complex detectors into phases (e.g., understanding → analysis → verification)
@@ -637,7 +637,7 @@ allowed_tools = ["Read", "Write", "Bash(git *)", "Bash(npm *)", "Bash(wake *)"]
 class MyWorkflow(AIWorkflow):
     # Default tools for all steps
     allowed_tools = ["Read", "Write", "Grep", "Bash(wake *)"]
-    
+
     def _setup_steps(self):
         # Step with custom tools
         self.add_step(
