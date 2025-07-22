@@ -6,6 +6,7 @@ from typing import Dict, Any, Optional, List, Union
 
 # Workflows are passed from CLI, not imported here
 from .core import ClaudeNotAvailableError, WorkflowExecutionError
+from wake_ai.core.flow import AIWorkflow
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,9 @@ def run_ai_workflow(
         **kwargs: Workflow-specific arguments passed to workflow constructor
 
     Returns:
-        Dict containing workflow results
+        Dict containing both raw and formatted results:
+        - "raw": Raw workflow results dict
+        - "formatted": Formatted AIResult object
 
     Raises:
         RuntimeError: If Claude CLI is not available
@@ -38,9 +41,10 @@ def run_ai_workflow(
 
     Example:
         >>> from wake_ai import TestWorkflow, AuditWorkflow
-        >>> 
+        >>>
         >>> # Run a simple test workflow
         >>> results = run_ai_workflow(TestWorkflow)
+        >>> print(results["formatted"])
 
         >>> # Run an audit workflow with specific parameters
         >>> results = run_ai_workflow(
@@ -50,56 +54,39 @@ def run_ai_workflow(
         ...     context_docs=["docs/spec.md"],
         ...     focus_areas=["reentrancy", "access-control"]
         ... )
+        >>> results["formatted"].export_json("audit_results.json")
     """
     # Get workflow name
     if workflow_name is None:
         workflow_name = getattr(workflow_class, 'name', workflow_class.__name__)
 
-    # Set up working directory
-    if working_dir is None:
-        working_dir = Path.cwd()
+    # Process arguments using workflow's processor if available
+    if hasattr(workflow_class, 'process_cli_args'):
+        init_args = workflow_class.process_cli_args(**kwargs)
     else:
-        working_dir = Path(working_dir)
+        init_args = {}
 
-    # Extract tool configuration
-    allowed_tools = kwargs.pop("allowed_tools", None)
-    disallowed_tools = kwargs.pop("disallowed_tools", None)
-    execution_dir = kwargs.pop("execution_dir", None)
-    cleanup_working_dir = kwargs.pop("cleanup_working_dir", None)
+    # Add common parameters
+    if model:
+        init_args["model"] = model
+    if working_dir:
+        init_args["working_dir"] = working_dir
+    for key in ["execution_dir", "allowed_tools", "disallowed_tools", "cleanup_working_dir"]:
+        if key in kwargs:
+            init_args[key] = kwargs[key]
 
-    # All remaining kwargs go to the workflow
-    init_args = {
-        "model": model,
-        "working_dir": working_dir,
-        "execution_dir": execution_dir,
-        "allowed_tools": allowed_tools,
-        "disallowed_tools": disallowed_tools,
-        "cleanup_working_dir": cleanup_working_dir
-    }
-    init_args.update(kwargs)
-
-    # Initialize workflow with all provided arguments
-    try:
-        workflow = workflow_class(**init_args)
-    except TypeError as e:
-        # If workflow doesn't accept some arguments, try with minimal args
-        logger.warning(f"Workflow initialization with full args failed: {e}")
-        logger.warning(f"Attempting with minimal args. Unused args: {list(kwargs.keys())}")
-        workflow = workflow_class(model=model, working_dir=working_dir)
+    # Initialize workflow
+    workflow: AIWorkflow = workflow_class(**init_args)
 
     logger.info(f"Running {workflow_name} workflow with model {model}, working_dir: {workflow.working_dir}")
-
-    # Override state directory if provided
-    if working_dir:
-        workflow.working_dir = Path(working_dir)
-        workflow.working_dir.mkdir(parents=True, exist_ok=True)
 
     # Execute workflow
     logger.debug(f"Executing {workflow_name} workflow (resume={resume})")
     try:
-        results = workflow.execute(resume=resume)
+        results, formatted_results = workflow.execute(resume=resume)
         logger.debug(f"Workflow {workflow_name} completed successfully")
-        return results
+        # Return both raw and formatted results
+        return {"raw": results, "formatted": formatted_results}
     except ClaudeNotAvailableError:
         # Re-raise as is for clear error message
         raise
@@ -117,17 +104,17 @@ def run_ai_workflow_by_name(
     **kwargs
 ) -> Dict[str, Any]:
     """Run an AI workflow by name using a workflows dictionary.
-    
+
     This is a convenience function for CLI usage where workflows are looked up by name.
-    
+
     Args:
         workflow_name: Name of the workflow to run
         workflows_dict: Dictionary mapping workflow names to workflow classes
         model: Claude model to use (default: "sonnet")
-        working_dir: Working directory for Claude session  
+        working_dir: Working directory for Claude session
         resume: Whether to resume from previous state
         **kwargs: Workflow-specific arguments
-        
+
     Returns:
         Dict containing workflow results
     """
@@ -135,7 +122,7 @@ def run_ai_workflow_by_name(
     if not workflow_class:
         available = ", ".join(workflows_dict.keys())
         raise ValueError(f"Unknown workflow: {workflow_name}. Available workflows: {available}")
-    
+
     return run_ai_workflow(
         workflow_class,
         workflow_name=workflow_name,

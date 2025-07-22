@@ -16,6 +16,7 @@ from flows.validation_test import ValidationTestWorkflow
 from flows.uniswap_detector import UniswapDetector
 from flows.examples.reentrancy import ReentrancyDetector
 from flows.examples.hooks import HookExampleWorkflow
+from wake_ai.core.flow import AIWorkflow
 
 console = Console()
 
@@ -163,7 +164,7 @@ def main(ctx: click.Context, **kwargs):
 
     try:
         # Create workflow instance
-        workflow = workflow_class(**init_args)
+        workflow: AIWorkflow = workflow_class(**init_args)
 
         # Display working directory and cleanup info
         console.print(f"[blue]Working directory:[/blue] {workflow.working_dir}")
@@ -173,28 +174,24 @@ def main(ctx: click.Context, **kwargs):
             console.print(f"[dim]Working directory will be preserved after completion.[/dim]")
 
         # Execute workflow
-        results = workflow.execute(resume=kwargs["resume"])
+        results, formatted_results = workflow.execute(resume=kwargs["resume"])
 
         # Display results
         console.print("\n[green]Workflow complete![/green]")
 
-        # Get formatted results from the workflow
-        if hasattr(workflow, 'format_results'):
-            formatted_results = workflow.format_results(results)
+        export_path = kwargs.get("export")
 
-            export_path = kwargs.get("export")
-
-            if export_path:
-                # Export to JSON
-                if hasattr(formatted_results, 'export_json'):
-                    formatted_results.export_json(export_path)
-                    console.print(f"[green]Results exported to:[/green] {export_path}")
+        if export_path:
+            # Export to JSON
+            if hasattr(formatted_results, 'export_json'):
+                formatted_results.export_json(export_path)
+                console.print(f"[green]Results exported to:[/green] {export_path}")
+        else:
+            # Pretty print to console
+            if hasattr(formatted_results, 'pretty_print'):
+                formatted_results.pretty_print(console)
             else:
-                # Pretty print to console
-                if hasattr(formatted_results, 'pretty_print'):
-                    formatted_results.pretty_print(console)
-                else:
-                    console.print(formatted_results)
+                console.print(formatted_results)
 
     except KeyboardInterrupt:
         console.print("\n[yellow]Workflow interrupted. Use --resume to continue.[/yellow]")
