@@ -5,6 +5,17 @@ alwaysApply: false
 ---
 # High-Performance Prompt Design Guidelines
 
+## Preservation of Intent Principle
+
+**When Improving Existing Prompts**: These guidelines are designed to enhance prompt structure and clarity, NOT to alter the fundamental purpose or behavior of existing prompts. When applying these patterns to improve an existing prompt:
+
+- **Core Functionality Must Remain**: The original prompt's primary objective, scope, and intended outcomes must be preserved exactly
+- **Information Fidelity**: All original requirements, constraints, and behavioral specifications must be retained
+- **Enhancement, Not Replacement**: Changes should improve organization, clarity, and execution efficiency without modifying what the prompt accomplishes
+- **Domain Expertise Preservation**: Technical details, specific instructions, and domain knowledge from the original prompt must be transferred intact
+
+The goal is structural optimization while maintaining functional equivalence. Think of it as refactoring code - the external behavior remains identical while internal organization improves.
+
 ## Core Structural Principles
 
 **Task-First Architecture**: Modern prompts lead with a concise `<task>` declaration that states the primary objective in one clear sentence. This is followed by context, not preceded by it. The task acts as an anchor that all subsequent instructions reference.
@@ -44,8 +55,6 @@ alwaysApply: false
 
 ## Context Integration Strategies
 
-**Multi-Modal Context Awareness**: Acknowledges that context may come from multiple sources ("files they have open, where their cursor is, recently viewed files") and provides frameworks for relevance assessment.
-
 **Dynamic Context Adaptation**: Instructions scale based on available information rather than assuming fixed input patterns. The AI is taught to assess context quality and act accordingly.
 
 **Feedback Loop Integration**: Builds in self-correction mechanisms ("After receiving tool results, carefully reflect on their quality") that allow for adaptive behavior based on intermediate outcomes.
@@ -64,7 +73,7 @@ alwaysApply: false
 
 **Step-Based Execution Model**: Wake AI prompts structure work as numbered steps with:
 - **Bold headings** for major steps
-- Letter-indexed (a, b, c) sub-steps for complex operations  
+- Letter-indexed (a, b, c) sub-steps for complex operations
 - Bullet points for specific checks within sub-steps
 - Inline code examples and tool commands where relevant
 
@@ -87,7 +96,7 @@ wake print storage-layout <file>
 - Real-world code examples
 - File naming conventions
 
-**Progressive Refinement Pattern**: Wake AI workflows follow a three-phase pattern:
+**Progressive Refinement Pattern**: Wake AI workflows scoped for static analysis follow a three-phase pattern:
 1. **Discovery Phase**: Initial scanning and identification
 2. **Analysis Phase**: Deep validation and verification
 3. **Documentation Phase**: Structured output generation
