@@ -590,6 +590,64 @@ catcoin-missing-approval-event/
 - YAML files could be a good candidate for storing results, as they are human readable and can be easily parsed.
 - Sandboxing Claude Code is not implemented atm, but should be added before running on servers.
 
+## Tools Configuration
+
+Wake AI workflows can configure which tools Claude has access to. Tools are managed through the `allowed_tools` and `disallowed_tools` parameters.
+
+### Tool Permission Modes
+
+According to [Claude Code's IAM documentation](https://docs.anthropic.com/en/docs/claude-code/iam#permission-modes), tools fall into two categories:
+
+**Tools requiring permission** (must be explicitly allowed):
+- `Bash` - Execute shell commands
+- `Edit` - Make targeted edits to files
+- `MultiEdit` - Perform multiple edits atomically
+- `Write` - Create or overwrite files
+- `NotebookEdit` - Modify Jupyter notebooks
+- `WebFetch` - Fetch content from URLs
+- `WebSearch` - Perform web searches
+
+**Tools not requiring permission** (always available unless explicitly disallowed):
+- `Read` - Read file contents
+- `Grep` - Search patterns in files
+- `Glob` - Find files by pattern
+- `LS` - List directories
+- `Task` - Run sub-agents
+- `TodoWrite` - Manage task lists
+- `NotebookRead` - Read Jupyter notebooks
+
+### Restricting Bash Commands
+
+The Bash tool can be restricted to specific commands using parentheses syntax:
+
+```python
+# Allow only git commands
+allowed_tools = ["Read", "Write", "Bash(git *)"]
+
+# Allow only specific commands
+allowed_tools = ["Read", "Write", "Bash(npm install)", "Bash(npm test)"]
+
+# Multiple command patterns
+allowed_tools = ["Read", "Write", "Bash(git *)", "Bash(npm *)", "Bash(wake *)"]
+```
+
+### Example: Workflow with Restricted Tools
+
+```python
+class MyWorkflow(AIWorkflow):
+    # Default tools for all steps
+    allowed_tools = ["Read", "Write", "Grep", "Bash(wake *)"]
+    
+    def _setup_steps(self):
+        # Step with custom tools
+        self.add_step(
+            name="analyze",
+            prompt_template="...",
+            tools=["Read", "Grep", "Bash(wake detect *)", "Write"],
+            max_cost=5.0
+        )
+```
+
 ## Creating Custom Detectors
 
 Wake AI provides a `MarkdownDetector` template that makes it easy to create custom security detectors. You only need to define what to look for - the framework handles everything else.

@@ -4,6 +4,8 @@ Available tools for Claude Code (from https://docs.anthropic.com/en/docs/claude-
 
 Tools requiring permission (must be explicitly allowed):
 - Bash: Executes shell commands in your environment
+  - Can be restricted to specific commands using syntax: "Bash(command *)"
+  - Examples: "Bash(git *)", "Bash(npm install)", "Bash(wake *)"
 - Edit: Makes targeted edits to specific files
 - MultiEdit: Performs multiple edits on a single file atomically
 - NotebookEdit: Modifies Jupyter notebook cells
@@ -47,7 +49,8 @@ class WorkflowStep:
     Args:
         name: Step name
         prompt_template: Prompt template with {context_var} placeholders
-        tools: List of allowed tools for this step (overrides session defaults)
+        allowed_tools: List of allowed tools for this step (overrides session defaults)
+                       Can restrict Bash to specific commands: ["Bash(git *)", "Bash(npm install)"]
         disallowed_tools: List of disallowed tools for this step (overrides session defaults)
         validator: Optional validation function returning (success, errors)
         max_cost: Maximum cost allowed for initial attempt
@@ -58,7 +61,7 @@ class WorkflowStep:
 
     name: str
     prompt_template: str
-    tools: Optional[List[str]] = None
+    allowed_tools: Optional[List[str]] = None
     disallowed_tools: Optional[List[str]] = None
     validator: Optional[Callable[[ClaudeCodeResponse], Tuple[bool, List[str]]]] = None
     max_cost: Optional[float] = None
@@ -152,6 +155,7 @@ class AIWorkflow(ABC):
             working_dir: Directory for AI to work in (default: .wake/ai/<session-id>/)
             execution_dir: Directory where Claude CLI is executed (default: current directory)
             allowed_tools: Override default allowed tools
+                          Can restrict Bash to specific commands: ["Bash(git *)", "Bash(wake *)"]
             disallowed_tools: Override default disallowed tools
             cleanup_working_dir: Whether to remove working_dir after completion (default: True)
         """
@@ -218,7 +222,7 @@ class AIWorkflow(ABC):
         """Setup workflow steps. Must be implemented by subclasses."""
         pass
 
-    def add_step(self, name: str, prompt_template: str, tools: Optional[List[str]] = None,
+    def add_step(self, name: str, prompt_template: str, allowed_tools: Optional[List[str]] = None,
                  disallowed_tools: Optional[List[str]] = None,
                  max_cost: Optional[float] = None,
                  validator: Optional[Callable[[ClaudeCodeResponse], Tuple[bool, List[str]]]] = None,
@@ -230,7 +234,8 @@ class AIWorkflow(ABC):
         Args:
             name: Step name
             prompt_template: Prompt template with {context_var} placeholders
-            tools: List of allowed tools for this step (overrides session defaults)
+            allowed_tools: List of allowed tools for this step (overrides session defaults)
+                       Can restrict Bash to specific commands: ["Bash(git *)", "Bash(npm install)"]
             disallowed_tools: List of disallowed tools for this step
             max_cost: Maximum cost allowed for initial attempt
             validator: Optional validation function returning (success, errors)
@@ -241,7 +246,7 @@ class AIWorkflow(ABC):
         step = WorkflowStep(
             name=name,
             prompt_template=prompt_template,
-            tools=tools,
+            allowed_tools=allowed_tools,
             disallowed_tools=disallowed_tools,
             max_cost=max_cost,
             validator=validator,
@@ -250,7 +255,7 @@ class AIWorkflow(ABC):
             continue_session=continue_session
         )
         self.steps.append(step)
-        logger.debug(f"Added step '{name}' to workflow (tools: {tools}, max_cost: {max_cost})")
+        logger.debug(f"Added step '{name}' to workflow (allowed_tools: {allowed_tools}, max_cost: {max_cost})")
 
     def execute(self, context: Optional[Dict[str, Any]] = None, resume: bool = False) -> Dict[str, Any]:
         """Execute the workflow."""
@@ -287,9 +292,9 @@ class AIWorkflow(ABC):
 
                 while retry_count <= step.max_retries:
                     # Set tools if specified (step overrides workflow defaults)
-                    if step.tools is not None:
-                        self.session.allowed_tools = step.tools
-                        logger.debug(f"Set allowed tools for step '{step.name}': {step.tools}")
+                    if step.allowed_tools is not None:
+                        self.session.allowed_tools = step.allowed_tools
+                        logger.debug(f"Set allowed tools for step '{step.name}': {step.allowed_tools}")
 
                     if step.disallowed_tools is not None:
                         self.session.disallowed_tools = step.disallowed_tools

@@ -5,9 +5,9 @@ This workflow demonstrates:
 2. Tool configuration (allowed and disallowed tools)
 
 Tool configuration examples:
-- tools=[]: Empty list means no tools are allowed for this step
-- tools=["Read", "Grep"]: Only these specific tools are allowed
-- tools=None: Use session default allowed tools
+- allowed_tools=[]: Empty list means no tools are allowed for this step
+- allowed_tools=["Read", "Grep"]: Only these specific tools are allowed
+- allowed_tools=None: Use session default allowed tools
 - disallowed_tools=["Bash", "Write"]: These tools are explicitly forbidden
 - disallowed_tools=None: Use session default disallowed tools
 
@@ -68,7 +68,7 @@ class ValidationTestWorkflow(AIWorkflow):
             The file must be comprehensive (at least 100 characters total).
 
             Use the Write tool to create the file.""",
-            tools=["Read", "Grep", "TodoWrite", "Edit", "Write"],  # Tools that don't require permission
+            allowed_tools=["Read", "Grep", "TodoWrite", "Edit", "Write"],  # Tools that don't require permission
             validator=check_analysis_validator,
             max_retries=2
         )

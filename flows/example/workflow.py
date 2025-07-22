@@ -32,7 +32,7 @@ You are analyzing a codebase. Please:
 
 Working directory: {{working_dir}}
 """,
-            tools=["bash", "grep", "read"],
+            allowed_tools=["bash", "grep", "read"],
             max_cost=5.0
         )
     
