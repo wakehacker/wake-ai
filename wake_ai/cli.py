@@ -8,15 +8,13 @@ from typing import Optional
 from rich.console import Console
 from rich.logging import RichHandler
 
+from wake_ai import AIWorkflow
+
 # Import available workflows from flows module
 from flows.audit import AuditWorkflow
-from flows.example import ExampleWorkflow
-from flows.test import TestWorkflow
-from flows.validation_test import ValidationTestWorkflow
 from flows.uniswap_detector import UniswapDetector
-from flows.examples.reentrancy import ReentrancyDetector
-from flows.examples.hooks import HookExampleWorkflow
-from wake_ai.core.flow import AIWorkflow
+from examples.reentrancy import ReentrancyDetector
+from examples.reentrancy_test import ReentrancyTestWorkflow
 
 console = Console()
 
@@ -31,14 +29,10 @@ logging.basicConfig(
 # Register available workflows
 AVAILABLE_WORKFLOWS = {
     "audit": AuditWorkflow,
-    "example": ExampleWorkflow,
-    "test": TestWorkflow,
-    "validation-test": ValidationTestWorkflow,
     "uniswap": UniswapDetector,
     "reentrancy": ReentrancyDetector,
-    "hook-example": HookExampleWorkflow,
+    "reentrancy-test": ReentrancyTestWorkflow,
 }
-
 
 def all_workflow_options():
     """Decorator to add all workflow-specific options to a Click command."""

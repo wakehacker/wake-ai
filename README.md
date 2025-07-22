@@ -43,13 +43,13 @@ pip install -r requirements-dev.txt
 
 ```bash
 # Run security audit on your codebase
-wake-ai --flow audit
+wake-ai audit
 
 # Audit specific files
-wake-ai --flow audit -s contracts/Token.sol -s contracts/Vault.sol
+wake-ai audit -s contracts/Token.sol -s contracts/Vault.sol
 
 # Export results to JSON
-wake-ai --flow audit --export results.json
+wake-ai audit --export results.json
 
 # Resume a previous session
 wake-ai --resume
@@ -254,13 +254,13 @@ The audit workflow demonstrates the full capabilities of the Wake AI framework:
 
 ```bash
 # Run a new audit
-wake ai --flow audit -s contracts/Token.sol -s contracts/Vault.sol --model opus
+wake-ai audit -s contracts/Token.sol -s contracts/Vault.sol --model opus
 
 # Resume a previous audit if it was interrupted
-wake ai --flow audit --resume
+wake-ai audit --resume
 
 # With specific focus areas
-wake ai --flow audit -f reentrancy -f "access control" --model sonnet
+wake-ai audit -f reentrancy -f "access control" --model sonnet
 ```
 
 ### Implementation Example
@@ -739,11 +739,11 @@ This detector leverages Wake's powerful static analysis as a starting point, the
 
 ## Examples
 
-The `flows/examples/` directory contains examples demonstrating various Wake AI features and patterns:
+The `examples/` directory contains examples demonstrating various Wake AI features and patterns:
 
 ### Security Detector Example: Reentrancy
 
-The [reentrancy example](flows/examples/reentrancy/) demonstrates how to build a security detector using the `MarkdownDetector` template, which:
+The [reentrancy example](examples/reentrancy/) demonstrates how to build a security detector using the `MarkdownDetector` template, which:
 - Integrates with Wake's built-in static analysis tools
 - Performs AI-powered verification to eliminate false positives
 - Follows structured prompt patterns for consistent results
@@ -751,13 +751,13 @@ The [reentrancy example](flows/examples/reentrancy/) demonstrates how to build a
 
 ### Workflow Hooks Example
 
-The [hooks example](flows/examples/hooks/) shows how to use workflow-level hooks for:
+The [hooks example](examples/hooks/) shows how to use workflow-level hooks for:
 - Logging and monitoring step execution
 - Collecting performance metrics
 - Dynamically modifying context between steps
 - Creating custom telemetry and debugging tools
 
-See the [examples README](flows/examples/README.md) for a complete guide to all examples.
+See the [examples README](examples/README.md) for a complete guide to all examples.
 
 ## Requirements
 
