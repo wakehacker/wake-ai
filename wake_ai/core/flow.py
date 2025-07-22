@@ -257,8 +257,12 @@ class AIWorkflow(ABC):
         self.steps.append(step)
         logger.debug(f"Added step '{name}' to workflow (allowed_tools: {allowed_tools}, max_cost: {max_cost})")
 
-    def execute(self, context: Optional[Dict[str, Any]] = None, resume: bool = False) -> Dict[str, Any]:
-        """Execute the workflow."""
+    def execute(self, context: Optional[Dict[str, Any]] = None, resume: bool = False) -> Tuple[Dict[str, Any], AIResult]:
+        """Execute the workflow.
+        
+        Returns:
+            Tuple of (raw results dict, formatted AIResult object)
+        """
         logger.debug(f"Starting workflow '{self.name}' execution (resume={resume})")
 
         if resume and (self.working_dir / f"{self.name}_state.json").exists():
@@ -391,6 +395,9 @@ class AIWorkflow(ABC):
         results = self._prepare_results()
         logger.info(f"Workflow '{self.name}' completed successfully in {results.get('duration', 0):.2f} seconds")
 
+        # Format results before cleanup
+        formatted_results = self.format_results(results)
+
         # Clean up working directory if configured
         if self.cleanup_working_dir and self.working_dir.exists():
             try:
@@ -401,7 +408,7 @@ class AIWorkflow(ABC):
         elif not self.cleanup_working_dir:
             logger.debug(f"Preserving working directory: {self.working_dir}")
 
-        return results
+        return results, formatted_results
 
     def _custom_context_update(self, step_name: str, response: ClaudeCodeResponse):
         """Hook for subclasses to update context."""
