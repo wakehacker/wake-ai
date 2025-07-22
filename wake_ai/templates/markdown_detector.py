@@ -124,7 +124,7 @@ class MarkdownDetector(AIWorkflow):
     """
 
     # Default tools for detector workflows
-    allowed_tools = ["Read", "Write", "Grep", "Glob", "LS", "Task", "TodoWrite"]
+    allowed_tools = ["Read", "Write", "Grep", "Glob", "LS", "Task", "TodoWrite", "Bash(mv *)", "Bash(wake *)"]
 
     def __init__(
         self,
@@ -171,7 +171,7 @@ class MarkdownDetector(AIWorkflow):
         self.add_step(
             name="analyze",
             prompt_template=full_prompt,
-            tools=["Read", "Write", "Grep", "Glob", "LS", "Task", "TodoWrite"],
+            tools=["Read", "Write", "Grep", "Glob", "LS", "Task", "TodoWrite", "Bash(mv *)", "Bash(wake *)"],
             max_cost=20.0,
             validator=self._validate_results,
             max_retries=3,
@@ -186,11 +186,11 @@ You are a security auditor performing targeted vulnerability analysis. Your role
 </context>
 
 <task>
-{{detector_prompt}}
+{detector_prompt}
 </task>
 
 <working_dir>
-{{working_dir}}
+{{{{working_dir}}}}
 </working_dir>
 
 <steps>
@@ -198,6 +198,7 @@ You are a security auditor performing targeted vulnerability analysis. Your role
    a. Map the codebase structure using `Glob` and `LS` tools
    b. Identify key contracts, interfaces, and dependencies
    c. Note architectural patterns and security-critical components
+   d. Use Wake commands when helpful (e.g., `wake detect reentrancy`, `wake print`)
 
 ## 2. **Analysis Phase**
    a. Search for vulnerability patterns using `Grep` with regex patterns
@@ -231,7 +232,7 @@ You are a security auditor performing targeted vulnerability analysis. Your role
 </validation_requirements>
 
 <output_format>
-Create `{{working_dir}}/results.yaml` with this structure:
+Create `{{{{working_dir}}}}/results.yaml` with this structure:
 
 ```yaml
 detections:
