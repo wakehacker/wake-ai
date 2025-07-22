@@ -67,7 +67,6 @@ class Detection:
     recommendation: Optional[str] = None
     exploit: Optional[str] = None
     uri: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -87,8 +86,6 @@ class Detection:
             data["exploit"] = self.exploit
         if self.uri:
             data["uri"] = self.uri
-        if self.metadata:
-            data["metadata"] = self.metadata
 
         return data
 
@@ -119,5 +116,4 @@ class Detection:
             recommendation=data.get("recommendation"),
             exploit=data.get("exploit"),
             uri=data.get("uri"),
-            metadata=data.get("metadata", {}),
         )

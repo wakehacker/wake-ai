@@ -65,8 +65,7 @@ class MarkdownDetectorResult(AuditResult):
                         location=location,
                         detection=detection_data.get('description', ''),
                         recommendation=detection_data.get('recommendation'),
-                        exploit=detection_data.get('exploit'),
-                        metadata=detection_data.get('metadata', {})
+                        exploit=detection_data.get('exploit')
                     )
                     detections.append((detector_name, detection))
 
@@ -280,10 +279,6 @@ detections:
               }}
           }}
       }}
-    metadata:
-      cwe_id: "CWE-841"
-      owasp_category: "Broken Access Control"
-      affected_funds: "All contract balance"
 
   # Additional detections follow the same structure...
 ```
@@ -296,7 +291,6 @@ detections:
 - `recommendation`: Step-by-step remediation guidance
 - `location`: Required fields: target, file; Optional: start_line, end_line, snippet
 - `exploit`: (Optional) Proof of concept code or attack scenario
-- `metadata`: (Optional) Additional context like CWE IDs, affected amounts
 
 If no vulnerabilities are found, create the file with:
 ```yaml

@@ -107,7 +107,7 @@ The detector is implemented as a single file inheriting from `MarkdownDetector`:
 ```python
 class ReentrancyDetector(MarkdownDetector):
     name = "reentrancy"
-    
+
     def get_detector_prompt(self) -> str:
         return """..."""  # Full structured prompt
 ```

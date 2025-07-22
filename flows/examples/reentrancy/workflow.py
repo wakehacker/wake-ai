@@ -24,10 +24,6 @@ Perform comprehensive reentrancy vulnerability analysis by combining Wake's stat
 This detector focuses on identifying reentrancy vulnerabilities using Wake's built-in detection capabilities as a starting point, then performing deeper analysis to eliminate false positives and identify complex patterns.
 </context>
 
-<working_dir>
-Work in the assigned directory `{{working_dir}}` to store analysis results.
-</working_dir>
-
 <steps>
 
 1. **Initialize Wake and run built-in reentrancy detection**
@@ -112,70 +108,4 @@ Work in the assigned directory `{{working_dir}}` to store analysis results.
 - Wake may flag safe patterns (e.g., transfers to EOAs) - verify each one
 - Look for patterns Wake might miss in complex multi-contract systems
 
-</validation_requirements>
-
-<output_format>
-Create results.yaml with findings structured as:
-
-```yaml
-detections:
-  - title: "Reentrancy in withdraw() allows draining contract"
-    severity: "critical"
-    type: "vulnerability"
-    description: |
-      The withdraw() function updates user balance after transferring ETH,
-      allowing an attacker to re-enter and withdraw multiple times.
-      
-      Wake detector initially flagged this on line 45. Manual analysis confirmed
-      the vulnerability with the following attack flow:
-      1. Attacker calls withdraw() with malicious contract
-      2. Contract receives ETH and its fallback function executes
-      3. Fallback function calls withdraw() again before balance update
-      4. Process repeats until contract is drained
-    
-    location:
-      target: "Vault.withdraw"
-      file: "contracts/Vault.sol"
-      start_line: 43
-      end_line: 48
-      snippet: |
-        function withdraw(uint256 amount) external {
-            require(balances[msg.sender] >= amount, "Insufficient balance");
-            
-            (bool success, ) = msg.sender.call{value: amount}(""); // External call
-            require(success, "Transfer failed");
-            
-            balances[msg.sender] -= amount; // State update after call - VULNERABLE!
-        }
-    
-    recommendation: |
-      Apply the Checks-Effects-Interactions pattern:
-      
-      ```solidity
-      function withdraw(uint256 amount) external {
-          require(balances[msg.sender] >= amount, "Insufficient balance");
-          
-          balances[msg.sender] -= amount; // Update state first
-          
-          (bool success, ) = msg.sender.call{value: amount}("");
-          require(success, "Transfer failed");
-      }
-      ```
-      
-      Alternatively, use OpenZeppelin's ReentrancyGuard modifier.
-    
-    metadata:
-      wake_detected: true
-      wake_confidence: "high"
-      pattern_type: "classic_reentrancy"
-```
-</output_format>"""
-
-
-# Example usage
-if __name__ == "__main__":
-    detector = ReentrancyDetector()
-    results = detector.execute()
-
-    formatted_results = detector.format_results(results)
-    formatted_results.pretty_print(console=None)
+</validation_requirements>"""

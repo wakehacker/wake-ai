@@ -75,11 +75,11 @@ class WorkflowStep:
 
         # Create Jinja2 environment with strict undefined to catch missing variables
         env = Environment(undefined=StrictUndefined)
-        
+
         # Parse the template to find all variables
         ast = env.parse(self.prompt_template)
         prompt_context_keys = meta.find_undeclared_variables(ast)
-        
+
         # Warn if there are context keys that are not in the context
         for key in prompt_context_keys:
             if key not in context:
