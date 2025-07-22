@@ -239,9 +239,7 @@ detections:
     severity: "critical"
     type: "vulnerability"
     description: |
-      The withdraw() function in Vault.sol performs an external call to msg.sender
-      before updating the user's balance, allowing reentrancy attacks. An attacker
-      can recursively call withdraw() to drain all funds from the contract.
+      The withdraw() function in Vault.sol performs an external call to msg.sender before updating the user's balance, allowing reentrancy attacks. An attacker can recursively call withdraw() to drain all funds from the contract.
     recommendation: |
       Apply the checks-effects-interactions pattern:
       1. Move the balance update before the external call
@@ -263,6 +261,9 @@ detections:
             balances[msg.sender] -= amount;  // State updated after call
         }}
     exploit: |
+        Consider the following exploit scenario:
+        1. Alice deploys the ReentrancyAttack contract and calls attack() with 100 ETH.
+      ```solidity
       contract ReentrancyAttack {{
           Vault public vault;
           uint256 public attackAmount;
@@ -279,6 +280,8 @@ detections:
               }}
           }}
       }}
+      ```
+      2. Bob deposits 100 ETH into the Vault.
 
   # Additional detections follow the same structure...
 ```
@@ -290,7 +293,7 @@ detections:
 - `description`: Detailed explanation with technical context
 - `recommendation`: Step-by-step remediation guidance
 - `location`: Required fields: target, file; Optional: start_line, end_line, snippet
-- `exploit`: (Optional) Proof of concept code or attack scenario
+- `exploit`: (Optional, must be included if severity is higher or equal to low) Proof of concept code or attack scenario
 
 If no vulnerabilities are found, create the file with:
 ```yaml
