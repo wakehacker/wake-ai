@@ -118,7 +118,7 @@ class AIWorkflow(ABC):
     allowed_tools: List[str] = []
     disallowed_tools: List[str] = []
     # Default cleanup behavior (can be overridden by subclasses)
-    cleanup_working_dir: bool = False
+    cleanup_working_dir: bool = True
 
     def __init__(
         self,
@@ -247,7 +247,7 @@ class AIWorkflow(ABC):
         logger.debug(f"Starting workflow '{self.name}' execution (resume={resume})")
 
         if resume and (self.working_dir / f"{self.name}_state.json").exists():
-            logger.debug(f"Resuming workflow from saved state")
+            logger.info(f"Resuming workflow from saved state in: {self.working_dir / f'{self.name}_state.json'}")
             self._load_state()
         else:
             self.state = WorkflowState()
@@ -255,7 +255,10 @@ class AIWorkflow(ABC):
             # Add working directory to context
             self.state.context["working_dir"] = str(self.working_dir)
             self.state.started_at = datetime.now()
-            logger.debug(f"Starting fresh workflow execution with working_dir: {self.working_dir}")
+            if resume:
+                logger.info(f"No saved state found, starting fresh workflow execution")
+            else:
+                logger.debug(f"Starting fresh workflow execution")
 
         # Execute steps
         while self.state.current_step < len(self.steps):
@@ -289,7 +292,6 @@ class AIWorkflow(ABC):
 
                         # First attempt - use original prompt
                         prompt = step.format_prompt(self.state.context)
-                        logger.debug(f"Executing query for step '{step.name}'")
 
                         # Continue session only if step explicitly requests it
                         should_continue = step.continue_session
@@ -378,7 +380,7 @@ class AIWorkflow(ABC):
         if self.cleanup_working_dir and self.working_dir.exists():
             try:
                 shutil.rmtree(self.working_dir)
-                logger.debug(f"Cleaned up working directory: {self.working_dir}")
+                logger.info(f"Cleaned up working directory: {self.working_dir}")
             except Exception as e:
                 logger.warning(f"Failed to clean up working directory {self.working_dir}: {e}")
         elif not self.cleanup_working_dir:
