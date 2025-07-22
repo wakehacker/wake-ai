@@ -489,7 +489,8 @@ This flexible architecture allows us to define new result types (e.g., fuzzing r
 
 ## Todo
 - [x] Extract `core` into a separate module + repo
-- [ ] Add auto remove working folder option
+- [x] Add auto remove working folder option (implemented with `cleanup_working_dir` flag)
+- [x] Implement pre/post step hooks for workflow customization
 - [ ] Sandbox Claude Code
 - [ ] Enable defining AI flows in `wake_ai` folder under private repo
 - [ ] Reach consensus on AI framework name
@@ -503,7 +504,11 @@ This flexible architecture allows us to define new result types (e.g., fuzzing r
     - ***Kōro*** – technical, directional, navigating dynamic environments; feels advanced and system-level.
     - ***Sendō*** (先導) –  "Guidance / Leading the way" Suggests an agent that leads or follows intelligently.
 - [ ] Reach consensus on AI detector output structure
-- [ ] Add Multistep vs SingleStep (for simple detectors) helper classes
+- [x] Add SingleStep helper class for simple detectors (implemented as `MarkdownDetector`)
+  - [ ] Consider multi-step MarkdownDetector variant with shared session context
+    - Would allow breaking complex detectors into phases (e.g., understanding → analysis → verification)
+    - Requires modifying base workflow to reuse ClaudeCodeSession across steps
+    - However, a single well-crafted prompt often achieves similar results with less complexity
 - [ ] Standardize claude wrapper for possibly other AI providers
 
 1. Pure YAML with structured content blocks
