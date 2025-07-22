@@ -62,7 +62,7 @@ class SimpleResult(AIResult):
     def from_working_dir(cls, working_dir: Path, raw_results: Dict[str, Any]) -> "SimpleResult":
         """Create a SimpleResult from raw results.
 
-        This implementation just packages the raw results with some metadata.
+        This implementation packages the raw results into a simple format.
         """
         return cls({
             "status": "completed",

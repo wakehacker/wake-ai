@@ -49,39 +49,37 @@ class AuditResult:
                 # Parse the AsciiDoc file
                 sections = self._parse_adoc_file(issue_file)
                 
-                # Extract metadata from the file content
+                # Extract severity and location from the file content
                 content = issue_file.read_text()
                 
                 # Extract title from first line (= Title)
                 title_match = re.search(r'^=\s+(.+)$', content, re.MULTILINE)
                 title = title_match.group(1) if title_match else issue_file.stem
                 
-                # Extract metadata section if present
-                metadata = {}
+                # Extract severity and location from file content
                 severity = Severity.MEDIUM  # default
                 contract_name = "Unknown"
                 location = None
                 
-                # Look for metadata in the file (could be in comments or a dedicated section)
-                if 'Metadata' in sections:
-                    metadata_text = sections['Metadata']
-                    # Parse YAML-like metadata
+                # Look for severity and location info in sections
+                if 'Severity' in sections:
+                    severity_text = sections['Severity'].strip()
+                    severity = self._parse_severity(severity_text)
+                
+                if 'Location' in sections:
+                    location_text = sections['Location']
+                    # Try to parse location info
                     try:
-                        metadata_dict = yaml.safe_load(metadata_text)
-                        if isinstance(metadata_dict, dict):
-                            severity = self._parse_severity(metadata_dict.get('severity', 'medium'))
-                            contract_name = metadata_dict.get('contract', 'Unknown')
-                            
-                            # Parse location if present
-                            if 'location' in metadata_dict:
-                                loc_data = metadata_dict['location']
-                                location = Location(
-                                    target=f"{contract_name}.{loc_data.get('function', 'contract')}",
-                                    file_path=Path(loc_data['file']) if 'file' in loc_data else None,
-                                    start_line=loc_data.get('start_line'),
-                                    end_line=loc_data.get('end_line'),
-                                    source_snippet=loc_data.get('code_snippet')
-                                )
+                        loc_dict = yaml.safe_load(location_text)
+                        if isinstance(loc_dict, dict):
+                            contract_name = loc_dict.get('contract', 'Unknown')
+                            location = Location(
+                                target=f"{contract_name}.{loc_dict.get('function', 'contract')}",
+                                file_path=Path(loc_dict['file']) if 'file' in loc_dict else None,
+                                start_line=loc_dict.get('start_line'),
+                                end_line=loc_dict.get('end_line'),
+                                source_snippet=loc_dict.get('code_snippet')
+                            )
                     except:
                         pass
                 
@@ -110,8 +108,7 @@ class AuditResult:
                     location=location,
                     detection=detection_text,
                     recommendation=recommendation,
-                    exploit=exploit,
-                    metadata=metadata
+                    exploit=exploit
                 )
                 
                 results.append(("ai-audit", detection))

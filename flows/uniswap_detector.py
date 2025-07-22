@@ -259,11 +259,6 @@ detections:
           );
       }
       ```
-    
-    metadata:
-      uniswap_version: "v2"
-      pattern_type: "missing_slippage_protection"
-      mev_vulnerable: true
 ```
 </output_format>"""
         
