@@ -14,8 +14,8 @@ from flows.example import ExampleWorkflow
 from flows.test import TestWorkflow
 from flows.validation_test import ValidationTestWorkflow
 from flows.uniswap_detector import UniswapDetector
-from flows.reentrancy_detector import ReentrancyDetector
-from flows.hook_example import HookExampleWorkflow
+from flows.examples.reentrancy import ReentrancyDetector
+from flows.examples.hooks import HookExampleWorkflow
 
 console = Console()
 

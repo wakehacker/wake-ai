@@ -118,7 +118,7 @@ class AIWorkflow(ABC):
     allowed_tools: List[str] = []
     disallowed_tools: List[str] = []
     # Default cleanup behavior (can be overridden by subclasses)
-    cleanup_working_dir: bool = True
+    cleanup_working_dir: bool = False
 
     def __init__(
         self,
@@ -147,7 +147,7 @@ class AIWorkflow(ABC):
         """
         self.name = name
         self.result_class = result_class
-        
+
         # Set cleanup behavior (use instance value if provided, else class default)
         self.cleanup_working_dir = cleanup_working_dir if cleanup_working_dir is not None else self.__class__.cleanup_working_dir
 
@@ -216,7 +216,7 @@ class AIWorkflow(ABC):
                  max_retry_cost: Optional[float] = None,
                  continue_session: bool = False):
         """Add a step to the workflow.
-        
+
         Args:
             name: Step name
             prompt_template: Prompt template with {context_var} placeholders
@@ -286,7 +286,7 @@ class AIWorkflow(ABC):
                     if retry_count == 0:
                         # Call pre-step hook on first attempt only
                         self._pre_step_hook(step)
-                        
+
                         # First attempt - use original prompt
                         prompt = step.format_prompt(self.state.context)
                         logger.debug(f"Executing query for step '{step.name}'")
@@ -334,10 +334,10 @@ class AIWorkflow(ABC):
                         self.state.responses[step.name] = response
                         self.state.context[f"{step.name}_output"] = response.content
                         self._custom_context_update(step.name, response)
-                        
+
                         # Call post-step hook
                         self._post_step_hook(step, response)
-                        
+
                         self.state.current_step += 1
                         self._save_state()
                         # Step completion already logged above with retry info
@@ -373,7 +373,7 @@ class AIWorkflow(ABC):
         self.state.completed_at = datetime.now()
         results = self._prepare_results()
         logger.info(f"Workflow '{self.name}' completed successfully in {results.get('duration', 0):.2f} seconds")
-        
+
         # Clean up working directory if configured
         if self.cleanup_working_dir and self.working_dir.exists():
             try:
@@ -383,7 +383,7 @@ class AIWorkflow(ABC):
                 logger.warning(f"Failed to clean up working directory {self.working_dir}: {e}")
         elif not self.cleanup_working_dir:
             logger.debug(f"Preserving working directory: {self.working_dir}")
-        
+
         return results
 
     def _custom_context_update(self, step_name: str, response: ClaudeCodeResponse):
@@ -392,10 +392,10 @@ class AIWorkflow(ABC):
 
     def _pre_step_hook(self, step: WorkflowStep) -> None:
         """Hook called before each step execution.
-        
+
         Override in subclasses to implement workflow-level pre-step logic.
         Can modify self.state.context directly if needed.
-        
+
         Args:
             step: The step about to be executed
         """
@@ -403,9 +403,9 @@ class AIWorkflow(ABC):
 
     def _post_step_hook(self, step: WorkflowStep, response: ClaudeCodeResponse) -> None:
         """Hook called after each step execution.
-        
+
         Override in subclasses to implement workflow-level post-step logic.
-        
+
         Args:
             step: The step that was executed
             response: Response from Claude
@@ -493,16 +493,16 @@ class AIWorkflow(ABC):
     def get_context_keys(self) -> List[str]:
         """Get all context keys."""
         return list(self.state.context.keys())
-    
+
     def format_results(self, results: Dict[str, Any]) -> AIResult:
         """Convert workflow results to an AIResult object.
-        
+
         This method uses the result class specified in the constructor
         to parse the working directory and create the appropriate result object.
-        
+
         Args:
             results: Raw results from workflow execution
-            
+
         Returns:
             AIResult object that can be printed or exported
         """
@@ -510,5 +510,5 @@ class AIWorkflow(ABC):
             # Default to MessageResult if no result class specified
             from ..results import MessageResult
             self.result_class = MessageResult
-            
+
         return self.result_class.from_working_dir(self.working_dir, results)

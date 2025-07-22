@@ -655,6 +655,28 @@ Perform comprehensive reentrancy analysis by combining Wake's static analysis wi
 
 This detector leverages Wake's powerful static analysis as a starting point, then uses AI to eliminate false positives and identify complex patterns that static analysis might miss.
 
+## Examples
+
+The `flows/examples/` directory contains examples demonstrating various Wake AI features and patterns:
+
+### Security Detector Example: Reentrancy
+
+The [reentrancy example](flows/examples/reentrancy/) demonstrates how to build a security detector using the `MarkdownDetector` template, which:
+- Integrates with Wake's built-in static analysis tools
+- Performs AI-powered verification to eliminate false positives
+- Follows structured prompt patterns for consistent results
+- Outputs findings in Wake AI's standard detection format
+
+### Workflow Hooks Example
+
+The [hooks example](flows/examples/hooks/) shows how to use workflow-level hooks for:
+- Logging and monitoring step execution
+- Collecting performance metrics
+- Dynamically modifying context between steps
+- Creating custom telemetry and debugging tools
+
+See the [examples README](flows/examples/README.md) for a complete guide to all examples.
+
 ## Requirements
 
 - Python 3.8 or higher
