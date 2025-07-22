@@ -5,9 +5,13 @@ from wake_ai.templates import MarkdownDetector
 
 class ReentrancyDetector(MarkdownDetector):
     """Enhanced reentrancy detector that leverages Wake's static analysis."""
-    
+
     name = "reentrancy"
-    
+
+    def __init__(self, **kwargs):
+        """Initialize the reentrancy detector."""
+        super().__init__(name=self.name, **kwargs)
+
     def get_detector_prompt(self) -> str:
         """Define the reentrancy detection workflow."""
         return """# Reentrancy Vulnerability Analysis
@@ -21,7 +25,7 @@ This detector focuses on identifying reentrancy vulnerabilities using Wake's bui
 </context>
 
 <working_dir>
-Work in the assigned directory `{working_dir}` to store analysis results.
+Work in the assigned directory `{{working_dir}}` to store analysis results.
 </working_dir>
 
 <steps>
@@ -47,19 +51,19 @@ Work in the assigned directory `{working_dir}` to store analysis results.
 
 3. **Manual verification of each finding**
    For each potential reentrancy issue identified by Wake:
-   
+
    a) **Analyze the complete function context**
       - Read the entire function implementation
       - Identify all external calls (call, delegatecall, transfer, send)
       - Map all state changes before and after external calls
       - Check for reentrancy guards (nonReentrant modifiers)
-   
+
    b) **Trace the call flow**
       - Identify what contracts/addresses are being called
       - Determine if calls are to trusted or untrusted contracts
       - Check if the called contract can callback into the vulnerable function
       - Analyze whether msg.sender checks would prevent exploitation
-   
+
    c) **Verify exploitability**
       - Can an attacker control the external call target?
       - Are there state changes after the external call that can be exploited?
@@ -68,7 +72,7 @@ Work in the assigned directory `{working_dir}` to store analysis results.
 
 4. **Identify additional reentrancy patterns**
    Look for complex reentrancy vulnerabilities that Wake might miss:
-   
+
    - **Cross-function reentrancy**: State shared between multiple functions
    - **Read-only reentrancy**: View functions called during state transitions
    - **Cross-contract reentrancy**: Reentrancy through multiple contract interactions
@@ -76,13 +80,13 @@ Work in the assigned directory `{working_dir}` to store analysis results.
 
 5. **Classify and document findings**
    For each confirmed reentrancy vulnerability:
-   
+
    - **Severity assessment**:
      - Critical: Direct loss of funds possible
      - High: Significant protocol manipulation or accounting errors
      - Medium: Limited impact or requires specific conditions
      - Low: Minimal impact or highly unlikely exploitation
-   
+
    - **Required documentation**:
      - Exact vulnerable code with line numbers
      - Step-by-step attack scenario
@@ -172,6 +176,6 @@ detections:
 if __name__ == "__main__":
     detector = ReentrancyDetector()
     results = detector.execute()
-    
+
     formatted_results = detector.format_results(results)
     formatted_results.pretty_print(console=None)

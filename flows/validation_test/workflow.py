@@ -61,7 +61,7 @@ class ValidationTestWorkflow(AIWorkflow):
         # Add a step with validation
         self.add_step(
             name="analysis",
-            prompt_template="""Analyze the topic of Python decorators and create a file named 'python_decorators_analysis.md' in the working directory {working_dir} with:
+            prompt_template="""Analyze the topic of Python decorators and create a file named 'python_decorators_analysis.md' in the working directory {{working_dir}} with:
             1. A section titled '## Summary'
             2. A section titled '## Details'
 
@@ -91,7 +91,7 @@ class ValidationTestWorkflow(AIWorkflow):
 
         self.add_step(
             name="fix_test",
-            prompt_template="Write a brief note about code quality to a file named 'code_quality_note.txt' in {working_dir}.",
+            prompt_template="Write a brief note about code quality to a file named 'code_quality_note.txt' in {{working_dir}}.",
             validator=always_fail_first_validator,
             max_retries=1
         )

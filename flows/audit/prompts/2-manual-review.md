@@ -5,17 +5,17 @@ Perform systematic manual review of the codebase following the audit plan with r
 </task>
 
 <context>
-Plan: `{working_dir}/plan.yaml`
+Plan: `{{working_dir}}/plan.yaml`
 </context>
 
 <working_dir>
-Work in the assigned directory `{working_dir}` where the audit plan and results will be stored.
+Work in the assigned directory `{{working_dir}}` where the audit plan and results will be stored.
 </working_dir>
 
 <steps>
 
 1. **Load and validate audit plan**
-   - Read `{working_dir}/plan.yaml`
+   - Read `{{working_dir}}/plan.yaml`
    - Verify all planned issues are technically sound and codebase-specific
    - Remove any generic findings that slipped through initial analysis
 
@@ -29,7 +29,7 @@ Work in the assigned directory `{working_dir}` where the audit plan and results 
      - Verify exploitability with concrete attack scenarios
      - Check for mitigating factors or protective mechanisms
 
-3. **Update plan with validation results** (`{working_dir}/plan.yaml`)
+3. **Update plan with validation results** (`{{working_dir}}/plan.yaml`)
    - Modify the YAML structure to include validation status
    - Update each issue with the `status` field, adding a `comment` field to explain the validation results
    - Consider updating the `severity` field based on the validation results if the issue is not a false positive
@@ -48,7 +48,7 @@ Work in the assigned directory `{working_dir}` where the audit plan and results 
            comment: "Confirmed: balance updated after external call on line 48, user.balance check on line 46 can be bypassed"
    ```
 4. **Create detailed issue files** (only for true positives)
-   - Create `{working_dir}/issues/` directory if needed
+   - Create `{{working_dir}}/issues/` directory if needed
    - File naming: `[severity]-[contract]-[brief-description].adoc`
    - Each issue file must contain:
      - Exact vulnerable code location with line numbers

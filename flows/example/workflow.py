@@ -30,7 +30,7 @@ You are analyzing a codebase. Please:
 2. List the main contracts
 3. Provide a brief summary
 
-Working directory: {working_dir}
+Working directory: {{working_dir}}
 """,
             tools=["bash", "grep", "read"],
             max_cost=5.0
