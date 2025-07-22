@@ -171,7 +171,7 @@ class MarkdownDetector(AIWorkflow):
         self.add_step(
             name="analyze",
             prompt_template=full_prompt,
-            tools=["Read", "Write", "Grep", "Glob", "LS", "Task", "TodoWrite", "Bash(mv *)", "Bash(wake *)"],
+            allowed_tools=["Read", "Write", "Grep", "Glob", "LS", "Task", "TodoWrite", "Bash(mv *)", "Bash(wake *)"],
             max_cost=20.0,
             validator=self._validate_results,
             max_retries=3,

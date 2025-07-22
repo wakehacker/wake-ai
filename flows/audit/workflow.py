@@ -89,7 +89,7 @@ class AuditWorkflow(AIWorkflow):
         self.add_step(
             name="initialize",
             prompt_template=self._build_prompt("initialize"),
-            tools=["Read", "Write", "Edit", "Bash", "Grep", "LS"],
+            allowed_tools=["Read", "Write", "Edit", "Bash", "Grep", "LS"],
             max_cost=5.0,
             validator=self._validate_initialize,
             max_retries=3,
@@ -100,7 +100,7 @@ class AuditWorkflow(AIWorkflow):
         self.add_step(
             name="analyze_and_plan",
             prompt_template=self._build_prompt("analyze_and_plan"),
-            tools=["Read", "Write", "Edit", "Bash", "Grep", "LS", "TodoWrite"],
+            allowed_tools=["Read", "Write", "Edit", "Bash", "Grep", "LS", "TodoWrite"],
             max_cost=15.0,
             validator=self._validate_analyze_and_plan,
             max_retries=3,
@@ -111,7 +111,7 @@ class AuditWorkflow(AIWorkflow):
         self.add_step(
             name="manual_review",
             prompt_template=self._build_prompt("manual_review"),
-            tools=["Read", "Write", "Edit", "Bash", "Grep", "LS"],
+            allowed_tools=["Read", "Write", "Edit", "Bash", "Grep", "LS"],
             max_cost=20.0,
             validator=self._validate_manual_review,
             max_retries=3,
@@ -122,7 +122,7 @@ class AuditWorkflow(AIWorkflow):
         self.add_step(
             name="executive_summary",
             prompt_template=self._build_prompt("executive_summary"),
-            tools=["Read", "Write", "Edit", "Bash"],
+            allowed_tools=["Read", "Write", "Edit", "Bash"],
             max_cost=10.0,
             validator=self._validate_executive_summary,
             max_retries=2,

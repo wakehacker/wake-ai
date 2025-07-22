@@ -30,7 +30,7 @@ class TestWorkflow(AIWorkflow):
         self.add_step(
             name="say_hi",
             prompt_template="Please respond with exactly 'Hi!' and nothing else.",
-            tools=[],  # No tools needed
+            allowed_tools=[],  # No tools needed
             max_cost=0.1  # Very low cost since it's simple
         )
 
@@ -38,7 +38,7 @@ class TestWorkflow(AIWorkflow):
         self.add_step(
             name="ask_how_are_you",
             prompt_template="Please respond with exactly 'How are you?' and nothing else.",
-            tools=[],  # No tools needed
+            allowed_tools=[],  # No tools needed
             max_cost=0.1
         )
 
