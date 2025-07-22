@@ -24,9 +24,13 @@ Contains the AI framework implementation:
 ### 2. Workflows (`flows/`)
 Contains pre-built workflow implementations:
 - **audit/** - Comprehensive security audit workflow
-- **example/** - Example workflow template
-- **test/** - Testing workflow
-- **validation_test/** - Validation testing workflow
+- **uniswap_detector.py** - Uniswap-specific detector
+
+### 3. Examples (`examples/`)
+Contains educational example workflows:
+- **reentrancy/** - Reentrancy detection workflow
+- **reentrancy_test/** - Reentrancy testing workflow
+- **hooks/** - Hook example workflow
 
 ## Key Features
 
