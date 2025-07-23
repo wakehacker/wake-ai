@@ -57,6 +57,7 @@ class WorkflowStep:
         max_retry_cost: Maximum cost for retry attempts (defaults to max_cost)
         max_retries: Maximum number of retries if validation fails
         continue_session: Whether to continue the Claude session from previous step (default: False)
+        condition: Optional function that takes context and returns bool. Step is skipped if False.
     """
 
     name: str
@@ -68,6 +69,7 @@ class WorkflowStep:
     max_retry_cost: Optional[float] = None
     max_retries: int = 3
     continue_session: bool = False
+    condition: Optional[Callable[[Dict[str, Any]], bool]] = None
 
     def format_prompt(self, context: Dict[str, Any]) -> str:
         """Format the prompt template with context using Jinja2."""
@@ -117,6 +119,7 @@ class WorkflowState:
 
     current_step: int = 0
     completed_steps: List[str] = field(default_factory=list)
+    skipped_steps: List[str] = field(default_factory=list)
     context: Dict[str, Any] = field(default_factory=dict)
     responses: Dict[str, ClaudeCodeResponse] = field(default_factory=dict)
     errors: List[Dict[str, Any]] = field(default_factory=list)
@@ -228,7 +231,8 @@ class AIWorkflow(ABC):
                  validator: Optional[Callable[[ClaudeCodeResponse], Tuple[bool, List[str]]]] = None,
                  max_retries: int = 3,
                  max_retry_cost: Optional[float] = None,
-                 continue_session: bool = False):
+                 continue_session: bool = False,
+                 condition: Optional[Callable[[Dict[str, Any]], bool]] = None):
         """Add a step to the workflow.
 
         Args:
@@ -242,6 +246,7 @@ class AIWorkflow(ABC):
             max_retries: Maximum number of retries if validation fails
             max_retry_cost: Maximum cost for retry attempts (defaults to max_cost)
             continue_session: Whether to continue the Claude session from previous step (default: False)
+            condition: Optional function that takes context and returns bool. Step is skipped if False.
         """
         step = WorkflowStep(
             name=name,
@@ -252,7 +257,8 @@ class AIWorkflow(ABC):
             validator=validator,
             max_retries=max_retries,
             max_retry_cost=max_retry_cost,
-            continue_session=continue_session
+            continue_session=continue_session,
+            condition=condition
         )
         self.steps.append(step)
         logger.debug(f"Added step '{name}' to workflow (allowed_tools: {allowed_tools}, max_cost: {max_cost})")
@@ -282,6 +288,17 @@ class AIWorkflow(ABC):
         # Execute steps
         while self.state.current_step < len(self.steps):
             step = self.steps[self.state.current_step]
+            
+            # Check if step should be skipped based on condition
+            if step.condition is not None:
+                should_execute = step.condition(self.state.context)
+                if not should_execute:
+                    logger.info(f"Skipping step {self.state.current_step + 1}/{len(self.steps)}: '{step.name}' (condition not met)")
+                    self.state.skipped_steps.append(step.name)
+                    self.state.current_step += 1
+                    self._save_state()
+                    continue
+            
             logger.info(f"Executing step {self.state.current_step + 1}/{len(self.steps)}: '{step.name}'")
 
             try:
@@ -442,6 +459,7 @@ class AIWorkflow(ABC):
             "workflow": self.name,
             "responses": {step_name: response.content for step_name, response in self.state.responses.items()},
             "completed_steps": self.state.completed_steps,
+            "skipped_steps": self.state.skipped_steps,
             "errors": self.state.errors,
             "duration": (
                 (self.state.completed_at - self.state.started_at).total_seconds()
@@ -488,6 +506,7 @@ class AIWorkflow(ABC):
         state_data = {
             "current_step": self.state.current_step,
             "completed_steps": self.state.completed_steps,
+            "skipped_steps": self.state.skipped_steps,
             "context": self.state.context,
             "errors": self.state.errors
         }
@@ -502,6 +521,7 @@ class AIWorkflow(ABC):
         data = json.loads(state_file.read_text())
         self.state.current_step = data["current_step"]
         self.state.completed_steps = data["completed_steps"]
+        self.state.skipped_steps = data.get("skipped_steps", [])  # Backwards compatibility
         self.state.context = data["context"]
         self.state.errors = data["errors"]
         logger.debug(f"Loaded state: step {self.state.current_step}/{len(self.steps)}, completed: {len(self.state.completed_steps)}")
