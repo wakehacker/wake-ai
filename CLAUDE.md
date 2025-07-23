@@ -257,3 +257,18 @@ When creating Wake AI workflow prompts, follow the guidelines in `prompt-writing
 - Include sub-steps (a, b, c) for complex operations
 - Reference specific Wake tools and commands
 - Provide real-world code examples in output formats
+
+## Development Notes
+
+### TODO Management
+The project maintains a TODO list at `.claude/TODO.md` which tracks:
+- In-progress features and enhancements
+- Prioritized backlog items (High/Medium/Low)
+- Future ideas and recently completed work
+
+**Important**: When implementing changes or completing features, please update the TODO file to reflect the current state. Mark completed items, add comment if needed.
+
+### Design Documentation
+Design discussions and specifications are stored in `.claude/thoughts/`.
+
+You have access to this directory for whenever you need to write down design notes, brainstorming, or other thoughts.
