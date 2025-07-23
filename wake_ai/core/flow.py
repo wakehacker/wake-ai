@@ -217,6 +217,7 @@ class AIWorkflow(ABC):
 
         self.steps: List[WorkflowStep] = []
         self.state = WorkflowState()
+        self._dynamic_generators: Dict[str, Callable[[ClaudeCodeResponse, Dict[str, Any]], List[WorkflowStep]]] = {}
 
         self._setup_steps()
         logger.debug(f"Workflow '{name}' initialized with {len(self.steps)} steps")
@@ -236,7 +237,8 @@ class AIWorkflow(ABC):
                  max_retries: int = 3,
                  max_retry_cost: Optional[float] = None,
                  continue_session: bool = False,
-                 condition: Optional[Callable[[Dict[str, Any]], bool]] = None):
+                 condition: Optional[Callable[[Dict[str, Any]], bool]] = None,
+                 after_step: Optional[str] = None):
         """Add a step to the workflow.
 
         Args:
@@ -251,6 +253,7 @@ class AIWorkflow(ABC):
             max_retry_cost: Maximum cost for retry attempts (defaults to max_cost)
             continue_session: Whether to continue the Claude session from previous step (default: False)
             condition: Optional function that takes context and returns bool. Step is skipped if False.
+            after_step: Optional step name after which to insert this step. If None, appends to end.
         """
         step = WorkflowStep(
             name=name,
@@ -264,8 +267,49 @@ class AIWorkflow(ABC):
             continue_session=continue_session,
             condition=condition
         )
-        self.steps.append(step)
-        logger.debug(f"Added step '{name}' to workflow (allowed_tools: {allowed_tools}, max_cost: {max_cost})")
+        
+        if after_step is None:
+            # Append to end (default behavior)
+            self.steps.append(step)
+        else:
+            # Find the step and insert after it
+            insert_pos = None
+            for i, existing_step in enumerate(self.steps):
+                if existing_step.name == after_step:
+                    insert_pos = i + 1
+                    break
+            
+            if insert_pos is None:
+                raise ValueError(f"Step '{after_step}' not found in workflow")
+            
+            self.steps.insert(insert_pos, step)
+        
+        logger.debug(f"Added step '{name}' to workflow (allowed_tools: {allowed_tools}, max_cost: {max_cost}, after: {after_step})")
+
+    def add_dynamic_steps(self, name: str, generator: Callable[[ClaudeCodeResponse, Dict[str, Any]], List[WorkflowStep]], 
+                         after_step: Optional[str] = None):
+        """Add a dynamic step generator that creates new steps at runtime.
+        
+        The generator function will be called after the specified step executes,
+        and should return a list of WorkflowStep objects to be inserted into the workflow.
+        
+        Args:
+            name: Name identifier for this dynamic step generator
+            generator: Function that takes (response, context) and returns list of WorkflowSteps
+            after_step: Step name after which to generate new steps. If None, generates after the last step.
+        """
+        # If no after_step specified, use the last step in the current list
+        if after_step is None and self.steps:
+            after_step = self.steps[-1].name
+        elif after_step is None and not self.steps:
+            raise ValueError("Cannot add dynamic steps to empty workflow. Add at least one regular step first.")
+        
+        # Verify the after_step exists
+        if after_step not in [s.name for s in self.steps]:
+            raise ValueError(f"Step '{after_step}' not found in workflow")
+        
+        self._dynamic_generators[after_step] = generator
+        logger.debug(f"Added dynamic step generator '{name}' after step '{after_step}'")
 
     def execute(self, context: Optional[Dict[str, Any]] = None, resume: bool = False) -> Tuple[Dict[str, Any], AIResult]:
         """Execute the workflow.
@@ -459,6 +503,37 @@ class AIWorkflow(ABC):
             step: The step that was executed
             response: Response from Claude
         """
+        # Check if this step has a dynamic generator
+        if hasattr(self, '_dynamic_generators') and step.name in self._dynamic_generators:
+            logger.info(f"Generating dynamic steps after '{step.name}'")
+            try:
+                # Call the generator function
+                generator = self._dynamic_generators[step.name]
+                new_steps = generator(response, self.state.context)
+                
+                if new_steps:
+                    # Insert new steps after the current step
+                    insert_pos = self.state.current_step + 1
+                    
+                    # Insert steps in order
+                    for i, new_step in enumerate(new_steps):
+                        self.steps.insert(insert_pos + i, new_step)
+                        logger.debug(f"Inserted dynamic step '{new_step.name}' at position {insert_pos + i}")
+                    
+                    logger.info(f"Added {len(new_steps)} dynamic steps. Total steps now: {len(self.steps)}")
+                else:
+                    logger.debug(f"Dynamic generator for '{step.name}' returned no new steps")
+                    
+            except Exception as e:
+                logger.error(f"Error generating dynamic steps after '{step.name}': {str(e)}")
+                self.state.errors.append({
+                    "timestamp": datetime.now().isoformat(),
+                    "step": step.name,
+                    "error": f"Dynamic step generation failed: {str(e)}"
+                })
+                # Continue execution despite error in dynamic generation
+        
+        # Call any subclass implementation
         pass
 
     def _prepare_results(self) -> Dict[str, Any]:
