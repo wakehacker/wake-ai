@@ -25,18 +25,19 @@ Tools not requiring permission (always available):
 
 import json
 import logging
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Dict, List, Optional, Any, Callable, Union, Tuple, Type
-from datetime import datetime
 import re
 import shutil
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
 
-from jinja2 import Template, Environment, StrictUndefined, meta
+from jinja2 import Environment, StrictUndefined, Template, meta
+from pydantic import BaseModel
 
-from .claude import ClaudeCodeSession, ClaudeCodeResponse
 from ..results import AIResult
+from .claude import ClaudeCodeResponse, ClaudeCodeSession
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -58,6 +59,7 @@ class WorkflowStep:
         max_retries: Maximum number of retries if validation fails
         continue_session: Whether to continue the Claude session from previous step (default: False)
         condition: Optional function that takes context and returns bool. Step is skipped if False.
+        _post_hook: Internal post-processing function (not exposed to users)
     """
 
     name: str
@@ -70,6 +72,7 @@ class WorkflowStep:
     max_retries: int = 3
     continue_session: bool = False
     condition: Optional[Callable[[Dict[str, Any]], bool]] = None
+    _post_hook: Optional[Callable[['AIWorkflow', ClaudeCodeResponse], None]] = field(default=None, repr=False)
 
     def format_prompt(self, context: Dict[str, Any]) -> str:
         """Format the prompt template with context using Jinja2."""
@@ -173,9 +176,9 @@ class AIWorkflow(ABC):
             self.working_dir = Path(working_dir).resolve()
         else:
             # Generate session ID for working directory
-            from datetime import datetime
             import random
             import string
+            from datetime import datetime
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
             session_id = f"{timestamp}_{suffix}"
@@ -214,11 +217,12 @@ class AIWorkflow(ABC):
 
         self.steps: List[WorkflowStep] = []
         self.state = WorkflowState()
+
         self._setup_steps()
         logger.debug(f"Workflow '{name}' initialized with {len(self.steps)} steps")
 
         # Add working directory to context
-        self.state.context["working_dir"] = str(self.working_dir)
+        self.add_context("working_dir", str(self.working_dir))
 
     @abstractmethod
     def _setup_steps(self):
@@ -265,7 +269,7 @@ class AIWorkflow(ABC):
 
     def execute(self, context: Optional[Dict[str, Any]] = None, resume: bool = False) -> Tuple[Dict[str, Any], AIResult]:
         """Execute the workflow.
-        
+
         Returns:
             Tuple of (raw results dict, formatted AIResult object)
         """
@@ -288,7 +292,7 @@ class AIWorkflow(ABC):
         # Execute steps
         while self.state.current_step < len(self.steps):
             step = self.steps[self.state.current_step]
-            
+
             # Check if step should be skipped based on condition
             if step.condition is not None:
                 should_execute = step.condition(self.state.context)
@@ -298,7 +302,7 @@ class AIWorkflow(ABC):
                     self.state.current_step += 1
                     self._save_state()
                     continue
-            
+
             logger.info(f"Executing step {self.state.current_step + 1}/{len(self.steps)}: '{step.name}'")
 
             try:
@@ -373,7 +377,11 @@ class AIWorkflow(ABC):
                         self.state.context[f"{step.name}_output"] = response.content
                         self._custom_context_update(step.name, response)
 
-                        # Call post-step hook
+                        # Call step-specific post-processing if defined (used internally)
+                        if step._post_hook:
+                            step._post_hook(self, response)
+
+                        # Call workflow-level post-step hook
                         self._post_step_hook(step, response)
 
                         self.state.current_step += 1
@@ -556,3 +564,130 @@ class AIWorkflow(ABC):
             self.result_class = MessageResult
 
         return self.result_class.from_working_dir(self.working_dir, results)
+
+    def _extract_json(self, content: str) -> str:
+        """Extract JSON from AI response, handling various formats.
+
+        Tries patterns in order:
+        1. JSON in code blocks: ```json\n{...}\n```
+        2. JSON in generic code blocks: ```\n{...}\n```
+        3. Raw JSON: {...} or [...]
+
+        Args:
+            content: The response content to extract JSON from
+
+        Returns:
+            The extracted JSON string
+        """
+        # Try JSON in code blocks first
+        code_block_match = re.search(r'```(?:json)?\s*\n([\s\S]*?)\n```', content)
+        if code_block_match:
+            return code_block_match.group(1).strip()
+
+        # Try raw JSON pattern
+        json_match = re.search(r'(\{[\s\S]*\}|\[[\s\S]*\])', content)
+        if json_match:
+            return json_match.group(1).strip()
+
+        # Fallback: assume entire content is JSON
+        return content.strip()
+
+    def _create_schema_validator(self, schema: Type[BaseModel]) -> Callable[[ClaudeCodeResponse], Tuple[bool, List[str]]]:
+        """Create a validator function for the given Pydantic schema.
+
+        Args:
+            schema: The Pydantic model to validate against
+
+        Returns:
+            A validator function that returns (success, errors)
+        """
+        def validator(response: ClaudeCodeResponse) -> Tuple[bool, List[str]]:
+            try:
+                # Extract JSON from response
+                json_str = self._extract_json(response.content)
+                # Parse and validate
+                schema.model_validate_json(json_str)
+                return (True, [])
+            except Exception as e:
+                return (False, [f"Schema validation failed: {str(e)}"])
+        return validator
+
+    def add_extraction_step(
+        self,
+        after_step: str,
+        output_schema: Type[BaseModel],
+        name: Optional[str] = None,
+        extract_prompt: Optional[str] = None,
+        max_cost: float = 0.5,
+        context_key: Optional[str] = None
+    ):
+        """Add an automatic extraction step after a given step.
+
+        This creates a new step that extracts structured data from the previous
+        step's output using the provided Pydantic schema.
+
+        Args:
+            after_step: Name of the step to extract data from
+            output_schema: Pydantic model defining the expected structure
+            name: Optional name for the extraction step (defaults to "{after_step}_extract")
+            extract_prompt: Optional custom extraction prompt
+            max_cost: Maximum cost for extraction (default: 0.5)
+            context_key: Optional key to store the extracted data in the context (defaults to "{after_step}_data")
+        """
+        # Generate default name if not provided
+        if name is None:
+            name = f"{after_step}_extract"
+
+        if context_key is None:
+            context_key = f"{after_step}_data"
+
+        # Generate extraction prompt if not provided
+        if extract_prompt is None:
+            schema_dict = output_schema.model_json_schema()
+            schema_json = json.dumps(schema_dict, indent=2)
+            extract_prompt = f"""Extract and format the relevant information from your previous responses as JSON.
+
+Required JSON Schema:
+```json
+{schema_json}
+```
+
+Output ONLY valid JSON matching the schema above. Do not include any additional text, markdown formatting, or code blocks."""
+
+        # Create post-process function for extraction parsing
+        def extraction_post_hook(workflow: 'AIWorkflow', response: ClaudeCodeResponse):
+            try:
+                json_str = workflow._extract_json(response.content)
+                parsed_data = output_schema.model_validate_json(json_str)
+
+                # Store parsed data with specified context key
+                workflow.state.context[context_key] = parsed_data
+                logger.debug(f"Stored parsed data in context as '{context_key}'")
+            except Exception as e:
+                # This shouldn't happen as validation should have caught it
+                logger.error(f"Failed to parse extraction step '{name}' after validation: {e}")
+
+        # Create extraction step with validator and post-process hook
+        extraction_step = WorkflowStep(
+            name=name,
+            prompt_template=extract_prompt,
+            continue_session=True,  # Always continue from previous step
+            validator=self._create_schema_validator(output_schema),
+            max_cost=max_cost,
+            max_retries=3,
+            _post_hook=extraction_post_hook
+        )
+
+        # Find position to insert (right after the target step)
+        insert_pos = None
+        for i, step in enumerate(self.steps):
+            if step.name == after_step:
+                insert_pos = i + 1
+                break
+
+        if insert_pos is None:
+            raise ValueError(f"Step '{after_step}' not found in workflow")
+
+        # Insert extraction step
+        self.steps.insert(insert_pos, extraction_step)
+        logger.debug(f"Added extraction step '{name}' after '{after_step}'")
