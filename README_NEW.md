@@ -17,7 +17,7 @@ Wake AI bridges the gap between AI's generalization capabilities and the need fo
 - **Predictable Execution**: Each step has clear inputs, outputs, and success criteria
 - **Progressive Validation**: Verify the AI completed necessary work before proceeding
 - **Multi-Agent Collaboration**: Different steps can use specialized agents
-- **Rapid Prototyping**: Test new detection ideas without building from scratch
+- **Rapid Prototyping**: Test new ideas without building from scratch
 
 ## Installation
 
@@ -87,7 +87,7 @@ class MyAuditWorkflow(AIWorkflow):
             validator=self.validate_analysis,
             max_cost=5.0
         )
-        
+
         # Step 2: Deep dive into findings
         self.add_step(
             name="investigate",
@@ -105,8 +105,8 @@ Each step can run in a fresh session, enabling specialized agents:
 # Auditor agent for initial analysis
 self.add_step(name="audit", prompt_template="You are a security auditor...")
 
-# Exploit developer agent for validation  
-self.add_step(name="exploit", prompt_template="You are an exploit developer...", 
+# Exploit developer agent for validation
+self.add_step(name="exploit", prompt_template="You are an exploit developer...",
               continue_session=False)  # Fresh agent
 
 # Report writer agent for documentation
@@ -122,12 +122,12 @@ def validate_findings(self, response):
     # Check if required files were created
     if not (self.working_dir / "findings.yaml").exists():
         return False, ["No findings file created"]
-    
+
     # Validate YAML structure
     findings = yaml.load(open(self.working_dir / "findings.yaml"))
     if not all(k in findings for k in ["vulnerabilities", "severity"]):
         return False, ["Invalid findings structure"]
-    
+
     return True, []
 ```
 
@@ -140,17 +140,17 @@ from wake_ai.templates import MarkdownDetector
 
 class FlashLoanDetector(MarkdownDetector):
     name = "flashloan"
-    
+
     def get_detector_prompt(self) -> str:
         return """
         Analyze this codebase for flash loan attack vectors.
-        
+
         Focus on:
         1. Price manipulation opportunities
         2. Unprotected external calls in loan callbacks
         3. Missing reentrancy guards
         4. Incorrect balance assumptions
-        
+
         For each issue, explain the attack scenario and impact.
         """
 ```
@@ -165,7 +165,7 @@ Generate steps based on runtime discoveries:
 def generate_file_reviews(response, context):
     # Parse discovered contracts
     contracts = parse_contracts(response.content)
-    
+
     # Create a review step for each contract
     return [
         WorkflowStep(
