@@ -532,6 +532,13 @@ This flexible architecture allows us to define new result types (e.g., fuzzing r
     - However, a single well-crafted prompt often achieves similar results with less complexity
 - [ ] Standardize claude wrapper for possibly other AI providers
 - [x] Migrate to Jinja for prompt templating
+- [ ] Add step timeout and max_turns options:
+  - `timeout`: Maximum execution time per step
+  - `max_turns`: Limit Claude turns (useful for cost control)
+- [ ] Add debug mode (`--debug` flag):
+  - Save all prompts/responses to `.wake/ai/session/debug/`
+  - Skip working_dir cleanup when debugging
+  - Enhanced logging with step timings
 
 ### Output Formats
 
