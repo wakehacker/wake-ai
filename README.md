@@ -1,23 +1,19 @@
 # Wake AI
 
-A deterministic framework for AI-powered smart contract security analysis.
+An LLM orchestration framework that wraps terminal-based AI agents (like Claude Code) to provide structured, multi-step workflows for (not only) smart contract security analysis, making agentic execution more predictable and reliable through validation and progressive task decomposition.
 
-## What is Wake AI?
-
-Wake AI is a wrapper framework for terminal-based AI agents (currently Claude Code, with future support for other CLI tools) that transforms how we approach smart contract analysis. Instead of relying on single prompts and hoping for the best, Wake AI introduces a systematic, multi-step approach to AI execution while preserving the reasoning capabilities that make LLMs powerful.
-
-### The Problem We're Solving
+## The Problem
 
 Traditional approaches to AI-powered code analysis suffer from unpredictability. You write a prompt, cross your fingers, and hope the AI completes all the work correctly in one go. When working with complex security audits or vulnerability detection, this approach is fundamentally flawed. AI agents are powerful but inherently non-deterministic – they might miss steps, produce inconsistent outputs, or fail partway through execution.
 
-### Our Solution: Deterministic AI Workflows
+### Our Solution
 
 Wake AI bridges the gap between AI's generalization capabilities and the need for reliable, reproducible results. By breaking complex tasks into discrete steps with validation between each one, we achieve:
 
-- **Predictable Execution**: Each step has clear inputs, outputs, and success criteria
-- **Progressive Validation**: Verify the AI completed necessary work before proceeding
-- **Multi-Agent Collaboration**: Different steps can use specialized agents
-- **Rapid Prototyping**: Test new detection ideas without building from scratch
+-   **Predictable Execution**: Each step has clear inputs, outputs, and success criteria
+-   **Progressive Validation**: Verify the AI completed necessary work before proceeding
+-   **Multi-Agent Collaboration**: Different steps can use specialized agents
+-   **Rapid Prototyping**: Test new ideas without building from scratch
 
 ## Installation
 
@@ -32,10 +28,7 @@ pip install wake-ai
 wake-ai audit
 
 # Detect Uniswap-specific vulnerabilities
-wake-ai uniswap
-
-# Resume an interrupted workflow
-wake-ai --resume
+wake-ai detect-reentrancy
 ```
 
 ## Why Wake AI?
@@ -47,28 +40,87 @@ We're entering a new era of vulnerability detection. While traditional detectors
 ### 2. **Structured Yet Flexible**
 
 The framework provides structure without sacrificing flexibility:
-- Define workflows as a series of steps
-- Each step can use different tools and prompts
-- Validation ensures quality before proceeding
-- Context flows seamlessly between steps
+
+-   Define workflows as a series of steps
+-   Each step can use different tools and prompts
+-   Validation ensures quality before proceeding
+-   Context flows seamlessly between steps
 
 ### 3. **Cost-Controlled Execution**
 
 Real-world AI usage requires cost management:
-- Set per-step cost limits
-- Automatic retry with feedback on failures
-- Efficient prompt optimization when approaching limits
-- Track total workflow costs
 
-### 4. **Built for Security Professionals**
+-   Set per-step cost limits
+-   Automatic retry with feedback on failures
+-   Efficient prompt optimization when approaching limits
+-   Track total workflow costs
 
-Designed specifically for smart contract security:
-- Pre-built audit workflows following industry best practices
-- Standardized detection output format
-- Integration with existing Wake tools
-- Export to common security report formats
+### 4. **Security Workflows Included**
 
-## Core Architecture
+-   Example audit and detector workflows to get you started
+-   Standardized detection output format with JSON export
+-   Build any workflow you need - security, testing, analysis, or beyond
+-   Easy to extend with your own custom workflows
+
+## Core Concepts
+
+### Working Directory
+
+Multi-step AI workflows face a fundamental problem: context sharing. Whether you're using a single agent across all steps or multiple specialized agents, data needs to flow between operations. How does an exploit developer agent access vulnerabilities found by an auditor agent? How does step three know what step one discovered? Traditional approaches would require complex state management or forcing the AI to re-analyze everything.
+
+Wake AI takes a straightforward approach: each workflow gets an isolated working directory where all agents and steps operate. This shared workspace becomes the workflow's persistent memory:
+
+```
+.wake/ai/<YYYYMMDD_HHMMSS_random>/
+├── state/                 # Workflow state metadata
+├── findings.yaml          # Discovered vulnerabilities
+├── analysis.md            # Detailed investigation notes
+└── report.json            # Final structured output
+```
+
+Communication happens through files. One agent writes findings, another reads and validates them. A security auditor documents vulnerabilities, an exploit developer tests them, a report writer consolidates everything. No state passing, no variable juggling - just a shared filesystem that persists across the entire workflow execution. Your project directory remains clean while each agent has full freedom to create, modify, and reference files in this sandbox.
+
+#### Post-Workflow Cleanup
+
+By default, workflows are configured to automatically clean up their working directories after successful completion. This behavior can be overridden either within the `Workflow` class for specific workflows, or on the command line:
+
+```bash
+wake-ai audit --working-dir .audit/ --no-cleanup  # Preserve working directory
+```
+
+Some workflows might not require structured outputs and instead provide results within the working directory. An example of this could be a specialized `audit` workflow, where the output is written to markdown files in the working directory, which a human auditor can then review after the workflow has finished.
+
+### Validation
+
+To ensure correct output from the whole workflow, each step must produce correct intermediate results. Without validation, AI responses might be unparseable, missing required fields, or contain errors that cascade through subsequent steps.
+
+Each workflow step can include validators to ensure outputs are correct before proceeding. When validation fails, the step automatically retries with error correction prompts until outputs meet requirements.
+
+Example validator:
+
+```python
+def validate_findings(self, response):
+    # Check if required files were created
+    if not (self.working_dir / "findings.yaml").exists():
+        return False, ["No findings file created"]
+
+    # Validate YAML structure
+    findings = yaml.load(open(self.working_dir / "findings.yaml"))
+    if not all(k in findings for k in ["vulnerabilities", "severity"]):
+        return False, ["Invalid findings structure"]
+
+    return True, []
+```
+
+_Benefits:_
+
+-   Self-correcting: AI fixes validation errors automatically
+-   Quality control: Outputs always meet specifications
+-   No cascading errors: Invalid outputs don't affect subsequent steps
+-   Cost-effective: Long-lasting workflow can be terminated early if validation fails
+-   Schema-based output: Validators can enforce specific output formats, enabling parsing of AI responses into structured data which can be exported and used by other tools
+
+## Architecture
 
 ### Workflows and Steps
 
@@ -79,81 +131,129 @@ from wake_ai import AIWorkflow
 
 class MyAuditWorkflow(AIWorkflow):
     def _setup_steps(self):
-        # Step 1: Understand the codebase
+        # Step 1: Map the codebase structure
         self.add_step(
-            name="analyze",
-            prompt_template="Analyze the smart contract architecture...",
-            tools=["Read", "Grep"],
-            validator=self.validate_analysis,
+            name="map_contracts",
+            prompt_template="Find all Solidity contracts and identify their relationships...",
+            validator=self.validate_mapping,
             max_cost=5.0
         )
-        
-        # Step 2: Deep dive into findings
+
+        # Step 2: Focus on critical contracts (continues session)
         self.add_step(
-            name="investigate",
-            prompt_template="Based on your analysis: {{analyze_output}}...",
-            tools=["Read", "Write"],
-            max_cost=10.0
+            name="analyze_critical",
+            prompt_template="Based on the contracts you just mapped, analyze the 3 most critical ones for vulnerabilities...",
+            max_cost=10.0,
+            continue_session=True  # Needs to remember which contracts were identified
         )
 ```
 
-### Multi-Agent Execution
+_Features:_
 
-Each step can run in a fresh session, enabling specialized agents:
+-   **Cost-control**: If `max_cost` is set, once reaching the limit, the agent will be prompted to quickly finish the step, useful for managing cost-intensive steps.
+-   **Session continuation**: `continue_session` controls whether the agent session is continued from the previous step or a new one is created, allowing to choose between single or multi-agent workflows.
+-   **Validator**: Each step can have a validator function which can be used to check if the step has been completed successfully.
+-   **Conditional execution**: `condition` can be used to skip the step based on a boolean expression.
+
+**Note**: Steps are executed sequentially. Wake AI does not currently support parallel step execution.
+
+### Context Sharing
+
+As mentioned, Wake AI's primary approach to context sharing is through the _working directory_. However, a helper function `get_extraction_step` is available to extract structured data based on a Pydantic model from the latest session.
 
 ```python
-# Auditor agent for initial analysis
-self.add_step(name="audit", prompt_template="You are a security auditor...")
+from pydantic import BaseModel
 
-# Exploit developer agent for validation  
-self.add_step(name="exploit", prompt_template="You are an exploit developer...", 
-              continue_session=False)  # Fresh agent
+class Vulnerability(BaseModel):
+    name: str
+    description: str
+    severity: str
+    file: str
+    line: int
 
-# Report writer agent for documentation
-self.add_step(name="report", prompt_template="You are a technical writer...")
+class VulnerabilitiesList(BaseModel):
+    vulnerabilities: List[Vulnerability]
+
+self.add_step(
+    name="analyze_critical",
+    prompt_template="Analyse the codebase for critical vulnerabilities...",
+)
+
+self.add_extraction_step(
+    after_step="analyze_critical",
+    output_schema=VulnerabilitiesList,
+    context_key="vulnerabilities",
+)
 ```
 
-### Validation and Quality Control
+The extracted data will be stored in the `context` state under the key specified in `context_key` (defaults to `<step_name>_data`).
 
-Ensure each step produces expected outputs:
+### Dynamic Prompt Templates
+
+To create dynamic prompt templates, Wake AI utilizes Jinja2 templates, which allows to pass in context variables in the `{{ context_key }}` format. Workflow classes keep track of their `context` state, where you can store any data you want to pass to the prompt template.
 
 ```python
-def validate_findings(self, response):
-    # Check if required files were created
-    if not (self.working_dir / "findings.yaml").exists():
-        return False, ["No findings file created"]
-    
-    # Validate YAML structure
-    findings = yaml.load(open(self.working_dir / "findings.yaml"))
-    if not all(k in findings for k in ["vulnerabilities", "severity"]):
-        return False, ["Invalid findings structure"]
-    
-    return True, []
+from pydantic import BaseModel
+
+class ContractList(BaseModel):
+    contracts: str
+
+class AuditWorkflow(AIWorkflow):
+    def __init__(self, **kwargs):
+        # List all files in the codebase
+        self.context["files"] = list(self.working_dir.glob("**/*.sol"))
+
+    def _setup_steps(self):
+        self.add_step(
+            name="map_contracts",
+            prompt_template="Find all Solidity contracts and identify their relationships. Here are the files in the codebase: {{files}}",
+        )
+
+        self.add_step(
+            name="determine_focus",
+            prompt_template="Determine the top 3 core contracts to focus on for analysis.",
+            continue_session=True  # Needs to remember which contracts were identified
+        )
+
+        self.add_extraction_step(
+            after_step="determine_focus",
+            output_schema=ContractList,
+            context_key="files_to_focus",
+        )
+
+        self.add_step(
+            name="analyze_focus",
+            prompt_template="Conduct a thorough analysis of the following contracts: {{files_to_focus}}",
+            max_cost=10.0,
+        )
+
 ```
 
 ## Creating Custom Detectors
 
-Wake AI makes it trivial to prototype new vulnerability detectors:
+Wake AI makes it trivial to prototype new vulnerability detectors with the `MarkdownDetector` helper class:
 
 ```python
 from wake_ai.templates import MarkdownDetector
 
 class FlashLoanDetector(MarkdownDetector):
     name = "flashloan"
-    
+
     def get_detector_prompt(self) -> str:
         return """
         Analyze this codebase for flash loan attack vectors.
-        
+
         Focus on:
         1. Price manipulation opportunities
         2. Unprotected external calls in loan callbacks
         3. Missing reentrancy guards
         4. Incorrect balance assumptions
-        
+
         For each issue, explain the attack scenario and impact.
         """
 ```
+
+The helper class will automatically parse the output of the detector into a standardized detection format, which can later be pretty-printed into the CLI or exported as a JSON file for subsequent processing.
 
 ## Advanced Features
 
@@ -165,7 +265,7 @@ Generate steps based on runtime discoveries:
 def generate_file_reviews(response, context):
     # Parse discovered contracts
     contracts = parse_contracts(response.content)
-    
+
     # Create a review step for each contract
     return [
         WorkflowStep(
@@ -214,8 +314,7 @@ Our production audit workflow demonstrates the framework's power:
 
 1. **Initial Analysis** - Map attack surface and identify focus areas
 2. **Vulnerability Hunting** - Deep dive with specialized prompts
-3. **Validation** - Verify findings aren't false positives
-4. **Report Generation** - Professional audit documentation
+3. **Report Generation** - Professional audit documentation
 
 Each step validates outputs, ensuring no critical checks are missed.
 
@@ -223,20 +322,21 @@ Each step validates outputs, ensuring no critical checks are missed.
 
 Wake AI represents a paradigm shift in how we approach smart contract security. By combining the pattern recognition of traditional tools with the reasoning capabilities of AI, we're able to:
 
-- Find novel vulnerability classes
-- Understand complex cross-contract interactions
-- Generate proof-of-concept exploits
-- Produce comprehensive audit reports
+-   Find novel vulnerability classes
+-   Understand complex cross-contract interactions
+-   Generate proof-of-concept exploits
+-   Produce comprehensive audit reports
 
 All while maintaining the reproducibility and reliability that security professionals demand.
 
 ## Documentation
 
 See [docs/README.md](docs/README.md) for:
-- Complete API reference
-- Step-by-step tutorials
-- Advanced workflow patterns
-- Integration guides
+
+-   Complete API reference
+-   Step-by-step tutorials
+-   Advanced workflow patterns
+-   Integration guides
 
 ## License
 
