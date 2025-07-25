@@ -8,13 +8,18 @@ import yaml
 
 from ..core.flow import AIWorkflow, ClaudeCodeResponse
 from ..detections import Detection, Location, Severity
-from ..utils.audit import AuditResult
+from ..results import AIResult
 
 logger = logging.getLogger(__name__)
 
 
-class MarkdownDetectorResult(AuditResult):
-    """Result class for markdown detector workflows that reuses AuditResult."""
+class MarkdownDetectorResult(AIResult):
+    """Result class for markdown detector workflows."""
+    
+    def __init__(self, detections: List[Tuple[str, Detection]], working_dir: Path):
+        """Initialize with detections and working directory."""
+        self.detections = detections
+        self.working_dir = working_dir
 
     @classmethod
     def from_working_dir(cls, working_dir: Path, raw_results: Dict[str, Any]) -> "MarkdownDetectorResult":
