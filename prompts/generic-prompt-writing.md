@@ -1,18 +1,13 @@
----
-description:
-globs:
-alwaysApply: false
----
 # High-Performance Prompt Design Guidelines
 
 ## Preservation of Intent Principle
 
 **When Improving Existing Prompts**: These guidelines are designed to enhance prompt structure and clarity, NOT to alter the fundamental purpose or behavior of existing prompts. When applying these patterns to improve an existing prompt:
 
-- **Core Functionality Must Remain**: The original prompt's primary objective, scope, and intended outcomes must be preserved exactly
-- **Information Fidelity**: All original requirements, constraints, and behavioral specifications must be retained
-- **Enhancement, Not Replacement**: Changes should improve organization, clarity, and execution efficiency without modifying what the prompt accomplishes
-- **Domain Expertise Preservation**: Technical details, specific instructions, and domain knowledge from the original prompt must be transferred intact
+-   **Core Functionality Must Remain**: The original prompt's primary objective, scope, and intended outcomes must be preserved exactly
+-   **Information Fidelity**: All original requirements, constraints, and behavioral specifications must be retained
+-   **Enhancement, Not Replacement**: Changes should improve organization, clarity, and execution efficiency without modifying what the prompt accomplishes
+-   **Domain Expertise Preservation**: Technical details, specific instructions, and domain knowledge from the original prompt must be transferred intact
 
 The goal is structural optimization while maintaining functional equivalence. Think of it as refactoring code - the external behavior remains identical while internal organization improves.
 
@@ -21,6 +16,7 @@ The goal is structural optimization while maintaining functional equivalence. Th
 **Task-First Architecture**: Modern prompts lead with a concise `<task>` declaration that states the primary objective in one clear sentence. This is followed by context, not preceded by it. The task acts as an anchor that all subsequent instructions reference.
 
 **Context-Task-Steps Flow**: The optimal structure follows this pattern:
+
 1. `<task>` - What needs to be done (one sentence)
 2. `<context>` - Situational awareness and background
 3. `<working_dir>` - Where to operate (if applicable)
@@ -35,11 +31,12 @@ The goal is structural optimization while maintaining functional equivalence. Th
 **XML-Style Section Headers**: Uses descriptive tags like `<communication>`, `<tool_calling>`, `<maximize_parallel_tool_calls>` to create clear cognitive boundaries. These act as both organizational tools and semantic anchors for different behavioral modes.
 
 **Graduated Emphasis Patterns**: Employs multiple levels of emphasis strategically:
-- **Bold for critical concepts** that must not be missed
-- *Italics for strong emphasis* on important but secondary points
-- CAPS for absolute imperatives that override other instructions
-- Numbered lists only for sequential processes
-- Bullet points sparingly, primarily for enumeration rather than instruction flow
+
+-   **Bold for critical concepts** that must not be missed
+-   _Italics for strong emphasis_ on important but secondary points
+-   CAPS for absolute imperatives that override other instructions
+-   Numbered lists only for sequential processes
+-   Bullet points sparingly, primarily for enumeration rather than instruction flow
 
 **Contextual Density Management**: Dense technical sections are broken up with concrete examples and practical applications, preventing cognitive overload while maintaining precision.
 
@@ -72,18 +69,21 @@ The goal is structural optimization while maintaining functional equivalence. Th
 ## Wake AI-Specific Patterns
 
 **Step-Based Execution Model**: Wake AI prompts structure work as numbered steps with:
-- **Bold headings** for major steps
-- Letter-indexed (a, b, c) sub-steps for complex operations
-- Bullet points for specific checks within sub-steps
-- Inline code examples and tool commands where relevant
+
+-   **Bold headings** for major steps
+-   Letter-indexed (a, b, c) sub-steps for complex operations
+-   Bullet points for specific checks within sub-steps
+-   Inline code examples and tool commands where relevant
 
 **Validation-Driven Workflow**: Every Wake AI prompt includes explicit validation sections:
-- `<validation_requirements>` or `<validation_practices>` blocks
-- Technical evidence standards
-- False positive elimination criteria
-- Severity classification guidelines
+
+-   `<validation_requirements>` or `<validation_practices>` blocks
+-   Technical evidence standards
+-   False positive elimination criteria
+-   Severity classification guidelines
 
 **Tool Integration Syntax**: Prompts explicitly reference command-line tools:
+
 ```bash
 wake init
 wake detect reentrancy
@@ -91,12 +91,14 @@ wake print storage-layout <file>
 ```
 
 **Structured Output Specifications**: The `<output_format>` section provides:
-- Complete YAML/Markdown structure examples
-- Field-by-field documentation
-- Real-world code examples
-- File naming conventions
+
+-   Complete YAML/Markdown structure examples
+-   Field-by-field documentation
+-   Real-world code examples
+-   File naming conventions
 
 **Progressive Refinement Pattern**: Wake AI workflows scoped for static analysis follow a three-phase pattern:
+
 1. **Discovery Phase**: Initial scanning and identification
 2. **Analysis Phase**: Deep validation and verification
 3. **Documentation Phase**: Structured output generation
