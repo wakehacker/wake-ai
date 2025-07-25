@@ -308,6 +308,13 @@ class AIWorkflow(ABC):
         if after_step not in [s.name for s in self.steps]:
             raise ValueError(f"Step '{after_step}' not found in workflow")
         
+        # Warn if this step already has a dynamic generator
+        if after_step in self._dynamic_generators:
+            logger.warning(
+                f"Step '{after_step}' already has a dynamic generator registered. "
+                f"The new generator '{name}' will override the previous one."
+            )
+        
         self._dynamic_generators[after_step] = generator
         logger.debug(f"Added dynamic step generator '{name}' after step '{after_step}'")
 
@@ -755,13 +762,23 @@ Output ONLY valid JSON matching the schema above. Do not include any additional 
 
         # Find position to insert (right after the target step)
         insert_pos = None
+        target_step = None
         for i, step in enumerate(self.steps):
             if step.name == after_step:
                 insert_pos = i + 1
+                target_step = step
                 break
 
         if insert_pos is None:
             raise ValueError(f"Step '{after_step}' not found in workflow")
+        
+        # Warn if target step already has a post hook
+        if target_step and target_step._post_hook is not None:
+            logger.warning(
+                f"Step '{after_step}' already has a _post_hook defined. "
+                f"The extraction step will run after '{after_step}', but the existing "
+                f"_post_hook on '{after_step}' will still execute. Consider if this is intended."
+            )
 
         # Insert extraction step
         self.steps.insert(insert_pos, extraction_step)
