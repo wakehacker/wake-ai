@@ -27,9 +27,6 @@ from .utils.formatters import (
     print_detection,
     export_detections_json,
 )
-from .utils.audit import (
-    AuditResult,
-)
 
 # Runner imports
 from .runner import run_ai_workflow
@@ -66,7 +63,6 @@ __all__ = [
     "Severity",
     "print_detection",
     "export_detections_json",
-    "AuditResult",
     # Runner
     "run_ai_workflow",
     # Utils
