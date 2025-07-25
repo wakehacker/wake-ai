@@ -127,9 +127,6 @@ class MarkdownDetector(AIWorkflow):
     3. Parsing results into standardized AIDetection format
     """
 
-    # Default tools for detector workflows
-    allowed_tools = ["Read", "Write", "Grep", "Glob", "LS", "Task", "TodoWrite", "Bash(mv *)", "Bash(wake *)"]
-
     def __init__(
         self,
         name: str,
@@ -172,10 +169,11 @@ class MarkdownDetector(AIWorkflow):
         full_prompt = self._build_analysis_prompt(detector_prompt)
 
         # Add single analysis step
+        # Using None for allowed_tools to inherit the secure defaults from AIWorkflow
         self.add_step(
             name="analyze",
             prompt_template=full_prompt,
-            allowed_tools=["Read", "Write", "Grep", "Glob", "LS", "Task", "TodoWrite", "Bash(mv *)", "Bash(wake *)"],
+            allowed_tools=None,  # Use parent class defaults which include all necessary tools
             max_cost=20.0,
             validator=self._validate_results,
             max_retries=3,

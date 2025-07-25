@@ -35,7 +35,7 @@ Format your response as a numbered list like:
 1. `path/to/file.py` - ClassName (line 42)
 2. `another/file.py` - AnotherClass (line 15)
 """,
-            allowed_tools=["Glob", "Grep", "Read"],
+            allowed_tools=None,  # Use default tools
             max_cost=3.0
         )
         
@@ -90,7 +90,7 @@ Provide:
 4. Potential improvements or issues
 
 Keep your analysis concise (3-5 sentences per section).""",
-                allowed_tools=["Read"],
+                allowed_tools=None,  # Use default tools
                 max_cost=1.5,
                 continue_session=False  # Each investigation gets fresh context
             ))
