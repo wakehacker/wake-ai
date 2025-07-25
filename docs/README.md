@@ -6,11 +6,36 @@
 -   [Installation](#installation)
 -   [Getting Started](#getting-started)
 -   [Core Concepts](#core-concepts)
+    -   [Workflows](#workflows)
+    -   [Steps](#steps)
+    -   [Context](#context)
+    -   [Working Directory vs Execution Directory](#working-directory-vs-execution-directory)
+    -   [Validation](#validation)
+    -   [Claude Session Management](#claude-session-management)
+    -   [Workflow Execution Flow](#workflow-execution-flow)
 -   [Creating Workflows](#creating-workflows)
+    -   [AI-Assisted Workflow Generation](#ai-assisted-workflow-generation)
+    -   [Multi-Step Workflow Example](#multi-step-workflow-example)
+    -   [Adding CLI Options](#adding-cli-options)
 -   [Advanced Features](#advanced-features)
+    -   [Dynamic Step Generation](#dynamic-step-generation)
+    -   [Conditional Step Execution](#conditional-step-execution)
+    -   [Structured Data Extraction](#structured-data-extraction)
+    -   [Cost Management](#cost-management)
+    -   [Session Management](#session-management)
+    -   [Technical Notes](#technical-notes)
+-   [Tools Configuration](#tools-configuration)
+    -   [Tool Permission Modes](#tool-permission-modes)
+    -   [Restricting Bash Commands](#restricting-bash-commands)
+-   [Result System Architecture](#result-system-architecture)
 -   [Examples](#examples)
 -   [API Reference](#api-reference)
 -   [Best Practices](#best-practices)
+    -   [Prompt Design](#prompt-design)
+    -   [Cost Optimization](#cost-optimization)
+    -   [Error Handling](#error-handling)
+    -   [Output and Storage](#output-and-storage)
+    -   [Security](#security)
 
 ## Introduction
 
@@ -151,6 +176,15 @@ Context is how data flows between steps:
 -   Step outputs available as `{{step_name}_output}}`
 -   Custom context via `add_context()`
 
+### Working Directory vs Execution Directory
+
+Wake AI distinguishes between two key directories:
+
+-   **Execution Directory** (`{{execution_dir}}`): The directory where the workflow is launched from
+-   **Working Directory** (`{{working_dir}}`): An isolated directory created for each workflow session at `.wake/ai/<session-id>/`
+
+The working directory serves as a shared scratchpad and results storage between steps. All steps within a workflow have access to this directory for reading and writing files, making it the primary mechanism for passing data between steps.
+
 ### Validation
 
 Steps can have validators that ensure output quality:
@@ -158,6 +192,15 @@ Steps can have validators that ensure output quality:
 -   Return `(success: bool, errors: List[str])`
 -   Failed validation triggers retry with error feedback
 -   Maximum retry attempts configurable per step
+
+### Claude Session Management
+
+Wake AI contains intelligent wrappers for the Claude Code API that provide:
+
+-   **Session Continuity**: Continue `claude code` sessions between steps
+-   **Cost Control**: Set cost limits for each step, where the wrapper automatically loops through `claude code` execution in configurable increments, monitoring accumulated costs after each increment
+-   **Smart Cost Management**: When approaching the specified `max_cost_limit` threshold, the wrapper prompts Claude to efficiently finish the task
+-   **Automatic Validation**: If a validation function is provided, the wrapper automatically retries the step, prompting `claude code` to fix errors returned by the validation function
 
 ### Workflow Execution Flow
 
@@ -206,11 +249,14 @@ flowchart TD
 
 ### AI-Assisted Workflow Generation
 
-Wake AI includes a powerful prompt template that helps generate new workflows from your ideas. The prompt guides AI through creating complete workflow implementations following Wake AI patterns and best practices.
+Wake AI includes powerful prompt templates in the `/prompts` folder that help with workflow development:
 
-**Location**: `prompts/wake-ai-flow-generation.md`
+**Available Prompts**:
 
-This prompt helps you:
+-   `prompts/wake-ai-flow-generation.md` - Generate new workflows from your ideas
+-   Additional prompts for guidelines on prompt writing and creating flows using AI
+
+The workflow generation prompt helps you:
 
 -   Transform security analysis ideas into working detectors
 -   Create multi-step audit workflows with proper validation
@@ -460,25 +506,6 @@ flowchart TD
     style NormalPath fill:transparent,stroke:#339af0,stroke-width:2px
 ```
 
-### Tool Restrictions
-
-Control which tools Claude can use:
-
-```python
-# Workflow-level defaults
-class SecureWorkflow(AIWorkflow):
-    allowed_tools = ["Read", "Write", "Grep"]
-    disallowed_tools = ["Bash", "WebFetch"]
-
-# Step-level overrides
-self.add_step(
-    name="verify",
-    prompt_template="...",
-    allowed_tools=["Read", "Bash(wake detect *)"],  # Only wake commands
-    disallowed_tools=["Write"]  # No file modifications
-)
-```
-
 ### Session Management
 
 Control session behavior:
@@ -508,6 +535,80 @@ workflow = MyWorkflow(
 **Multi-Agent Execution**: By default, each step creates a new agent session (`continue_session=False`), enabling multi-agent workflows with specialized agents. To maintain context within the same agent session, explicitly set `continue_session=True`.
 
 **Note**: Steps execute sequentially. Wake AI does not currently support parallel step execution.
+
+### Technical Notes
+
+-   **Dynamic Step Addition**: Steps can be dynamically added between workflow steps using the `after-step` hook
+-   **Session Resumption**: Sessions can be resumed between runs using the `resume` flag, enabling different agents for each step
+-   **Cost Limits as Guardrails**: Max costs serve as guardrails rather than hard limits - costs may slightly exceed the limit when finishing the current operation
+-   **YAML for Storage**: YAML files are recommended for storing results as they are human-readable and easily parsed
+-   **Sandboxing**: Sandboxing Claude Code should be considered when running with high tool privileges
+
+## Tools Configuration
+
+Wake AI workflows can configure which tools Claude has access to. Tools are managed through the `allowed_tools` and `disallowed_tools` parameters.
+
+### Tool Permission Modes
+
+According to [Claude Code's IAM documentation](https://docs.anthropic.com/en/docs/claude-code/iam#permission-modes), tools fall into two categories:
+
+**Tools requiring permission** (must be explicitly allowed):
+
+-   `Bash` - Execute shell commands
+-   `Edit` - Make targeted edits to files
+-   `MultiEdit` - Perform multiple edits atomically
+-   `Write` - Create or overwrite files
+-   `NotebookEdit` - Modify Jupyter notebooks
+-   `WebFetch` - Fetch content from URLs
+-   `WebSearch` - Perform web searches
+
+**Tools not requiring permission** (always available unless explicitly disallowed):
+
+-   `Read` - Read file contents
+-   `Grep` - Search patterns in files
+-   `Glob` - Find files by pattern
+-   `LS` - List directories
+-   `Task` - Run sub-agents
+-   `TodoWrite` - Manage task lists
+-   `NotebookRead` - Read Jupyter notebooks
+
+### Restricting Bash Commands
+
+The Bash tool can be restricted to specific commands using parentheses syntax:
+
+```python
+# Allow only git commands
+allowed_tools = ["Read", "Write", "Bash(git *)"]
+
+# Allow only specific commands
+allowed_tools = ["Read", "Write", "Bash(npm install)", "Bash(npm test)"]
+
+# Multiple command patterns
+allowed_tools = ["Read", "Write", "Bash(git *)", "Bash(npm *)", "Bash(wake *)"]
+```
+
+## Result System Architecture
+
+Wake AI provides a unified result system that enables consistent output handling across different workflow types. The core is the `AIResult` base class that all workflow results extend:
+
+```python
+class AIResult(ABC):
+    @abstractmethod
+    def pretty_print(self, console: "Console") -> None:
+        """Print the result in a human-readable format to the console."""
+
+    @abstractmethod
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert the result to a dictionary for JSON serialization."""
+```
+
+This architecture enables:
+
+-   **Consistent CLI Output**: All workflows can display formatted results via `pretty_print()`
+-   **JSON Export**: Results can be exported to JSON for further processing via `to_dict()`
+-   **Extensible Design**: Each workflow can define custom result types with specific formatting
+
+For example, `AIDetectionResult` extends this base class to provide security-specific formatting for vulnerability findings, allowing both human-readable console output and structured JSON export.
 
 ## Examples
 
@@ -549,6 +650,12 @@ Each example includes its own README with detailed explanations.
 2. **Set Retry Limits**: Balance quality vs cost
 3. **Log Progress**: Use working directory for debugging
 4. **Handle Interruptions**: Design for resumability
+
+### Output and Storage
+
+1. **Use YAML for Results**: YAML files are ideal for intermediate results and AI outputs - they're human-readable, easy to parse, and easy for AI to write correctly
+2. **Structure Working Directory**: Organize outputs in the working directory for easy access
+3. **Validate Outputs**: Use validators to ensure YAML/JSON outputs are well-formed
 
 ### Security
 
