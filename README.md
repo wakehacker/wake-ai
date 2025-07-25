@@ -1,14 +1,14 @@
 # Wake AI
 
-An LLM orchestration framework that wraps terminal-based AI agents (like Claude Code) to provide structured, multi-step workflows for (not only) smart contract security analysis, making agentic execution more predictable and reliable through validation and progressive task decomposition.
+An LLM orchestration framework that wraps terminal-based AI agents (like Claude Code) to provide structured, multi-step workflows for smart contract security analysis and beyond, making agentic execution more predictable and reliable through validation and progressive task decomposition.
 
 ## The Problem
 
 Traditional approaches to AI-powered code analysis suffer from unpredictability. You write a prompt, cross your fingers, and hope the AI completes all the work correctly in one go. When working with complex security audits or vulnerability detection, this approach is fundamentally flawed. AI agents are powerful but inherently non-deterministic – they might miss steps, produce inconsistent outputs, or fail partway through execution.
 
-### Our Solution
+## Our Solution
 
-Wake AI bridges the gap between AI's generalization capabilities and the need for reliable, reproducible results. By breaking complex tasks into discrete steps with validation between each one, we achieve:
+Wake AI bridges the gap between AI's generalization capabilities and the need for reliable, reproducible results. By breaking complex tasks into discrete steps with validation between each, we achieve:
 
 -   **Predictable Execution**: Each step has clear inputs, outputs, and success criteria
 -   **Progressive Validation**: Verify the AI completed necessary work before proceeding
@@ -27,7 +27,7 @@ pip install wake-ai
 # Run a comprehensive security audit
 wake-ai audit
 
-# Detect Uniswap-specific vulnerabilities
+# Detect reentrancy vulnerabilities
 wake-ai detect-reentrancy
 ```
 
@@ -57,7 +57,7 @@ Real-world AI usage requires cost management:
 
 ### 4. **Security Workflows Included**
 
--   Example audit and detector workflows to get you started
+-   Pre-built audit and detector workflows to get you started
 -   Standardized detection output format with JSON export
 -   Build any workflow you need - security, testing, analysis, or beyond
 -   Easy to extend with your own custom workflows
@@ -92,7 +92,7 @@ Some workflows might not require structured outputs and instead provide results 
 
 ### Validation
 
-To ensure correct output from the whole workflow, each step must produce correct intermediate results. Without validation, AI responses might be unparseable, missing required fields, or contain errors that cascade through subsequent steps.
+To ensure correct output from the entire workflow, each step must produce correct intermediate results. Without validation, AI responses might be unparseable, missing required fields, or contain errors that cascade through subsequent steps.
 
 Each workflow step can include validators to ensure outputs are correct before proceeding. When validation fails, the step automatically retries with error correction prompts until outputs meet requirements.
 
@@ -114,11 +114,11 @@ def validate_findings(self, response):
 
 _Benefits:_
 
--   Self-correcting: AI fixes validation errors automatically
--   Quality control: Outputs always meet specifications
--   No cascading errors: Invalid outputs don't affect subsequent steps
--   Cost-effective: Long-lasting workflow can be terminated early if validation fails
--   Schema-based output: Validators can enforce specific output formats, enabling parsing of AI responses into structured data which can be exported and used by other tools
+-   **Self-correcting**: AI fixes validation errors automatically
+-   **Quality control**: Outputs always meet specifications
+-   **No cascading errors**: Invalid outputs won't propagate to subsequent steps
+-   **Cost-effective**: Long-running workflows can be terminated early if validation fails
+-   **Schema-based output**: Validators enforce specific output formats, enabling parsing of AI responses into structured data for export and integration with other tools
 
 ## Architecture
 
@@ -150,8 +150,8 @@ class MyAuditWorkflow(AIWorkflow):
 
 _Features:_
 
--   **Cost-control**: If `max_cost` is set, once reaching the limit, the agent will be prompted to quickly finish the step, useful for managing cost-intensive steps.
--   **Session continuation**: `continue_session` controls whether the agent session is continued from the previous step or a new one is created, allowing to choose between single or multi-agent workflows.
+-   **Cost control**: If `max_cost` is set, once reaching the limit, the agent will be prompted to quickly finish the step, useful for managing cost-intensive steps.
+-   **Session continuation**: `continue_session` controls whether the agent session is continued from the previous step or a new one is created, allowing you to choose between single or multi-agent workflows.
 -   **Validator**: Each step can have a validator function which can be used to check if the step has been completed successfully.
 -   **Conditional execution**: `condition` can be used to skip the step based on a boolean expression.
 
@@ -159,7 +159,7 @@ _Features:_
 
 ### Context Sharing
 
-As mentioned, Wake AI's primary approach to context sharing is through the _working directory_. However, a helper function `get_extraction_step` is available to extract structured data based on a Pydantic model from the latest session.
+Wake AI's primary approach to context sharing is through the _working directory_. Additionally, the `add_extraction_step` helper function can extract structured data based on a Pydantic model from the latest session.
 
 ```python
 from pydantic import BaseModel
@@ -176,7 +176,7 @@ class VulnerabilitiesList(BaseModel):
 
 self.add_step(
     name="analyze_critical",
-    prompt_template="Analyse the codebase for critical vulnerabilities...",
+    prompt_template="Analyze the codebase for critical vulnerabilities...",
 )
 
 self.add_extraction_step(
@@ -190,7 +190,7 @@ The extracted data will be stored in the `context` state under the key specified
 
 ### Dynamic Prompt Templates
 
-To create dynamic prompt templates, Wake AI utilizes Jinja2 templates, which allows to pass in context variables in the `{{ context_key }}` format. Workflow classes keep track of their `context` state, where you can store any data you want to pass to the prompt template.
+To create dynamic prompt templates, Wake AI utilizes Jinja2 templates, which allow you to pass in context variables in the `{{ context_key }}` format. Workflow classes keep track of their `context` state, where you can store any data you want to pass to the prompt template.
 
 ```python
 from pydantic import BaseModel
@@ -253,7 +253,7 @@ class FlashLoanDetector(MarkdownDetector):
         """
 ```
 
-The helper class will automatically parse the output of the detector into a standardized detection format, which can later be pretty-printed into the CLI or exported as a JSON file for subsequent processing.
+The helper class automatically parses detector output into a standardized format for CLI display or JSON export.
 
 ## Advanced Features
 
@@ -281,7 +281,7 @@ self.add_dynamic_steps("reviews", generate_file_reviews, after_step="scan")
 
 ### Conditional Execution
 
-Skip expensive steps when not needed:
+Skip expensive steps based on runtime conditions:
 
 ```python
 self.add_step(
@@ -317,17 +317,6 @@ Our production audit workflow demonstrates the framework's power:
 3. **Report Generation** - Professional audit documentation
 
 Each step validates outputs, ensuring no critical checks are missed.
-
-## The Future of Security Analysis
-
-Wake AI represents a paradigm shift in how we approach smart contract security. By combining the pattern recognition of traditional tools with the reasoning capabilities of AI, we're able to:
-
--   Find novel vulnerability classes
--   Understand complex cross-contract interactions
--   Generate proof-of-concept exploits
--   Produce comprehensive audit reports
-
-All while maintaining the reproducibility and reliability that security professionals demand.
 
 ## Documentation
 
