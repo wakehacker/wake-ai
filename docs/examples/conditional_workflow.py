@@ -34,7 +34,7 @@ class ConditionalWorkflow(AIWorkflow):
             
             Save the count to 'file_count.txt' in {{working_dir}}.
             Report the exact number found.""",
-            allowed_tools=["Glob", "Write"]
+            allowed_tools=None  # Use default tools
         )
         
         # Step 2: Conditional using lambda - only runs if many files found
@@ -46,7 +46,7 @@ class ConditionalWorkflow(AIWorkflow):
             - Recommendations for organizing large codebases
             - Suggested project structure improvements
             """,
-            allowed_tools=["Write"],
+            allowed_tools=None,  # Use default tools
             condition=lambda ctx: int(ctx.get("file_count", 0)) > ctx.get("threshold", 5)
         )
         
@@ -59,7 +59,7 @@ class ConditionalWorkflow(AIWorkflow):
             - Quick wins for small projects
             - Suggested next steps for growth
             """,
-            allowed_tools=["Write"],
+            allowed_tools=None,  # Use default tools
             condition=self._is_small_project  # Using class method as condition
         )
         

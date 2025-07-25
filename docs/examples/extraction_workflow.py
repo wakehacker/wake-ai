@@ -57,7 +57,7 @@ Look for:
 - Best practice violations
 
 Provide a detailed analysis of what you find.""",
-            allowed_tools=["Read", "Grep"],
+            allowed_tools=None,  # Use default tools
             max_cost=2.0
         )
         

@@ -12,8 +12,6 @@ class AuditWorkflow(AIWorkflow):
     """Fixed security audit workflow following industry best practices."""
 
     name = "audit"
-    # Default tools for auditing - needs read, write, edit, and bash capabilities
-    allowed_tools = ["Read", "Write", "Edit", "Bash", "Grep", "Glob", "LS", "Task", "TodoWrite", "MultiEdit"]
     # Preserve audit results by default
     cleanup_working_dir = False
 
@@ -89,7 +87,7 @@ class AuditWorkflow(AIWorkflow):
         self.add_step(
             name="initialize",
             prompt_template=self._build_prompt("initialize"),
-            allowed_tools=["Read", "Write", "Edit", "Bash", "Grep", "LS"],
+            allowed_tools=None,  # Use secure defaults from parent class
             max_cost=5.0,
             validator=self._validate_initialize,
             max_retries=3,
@@ -100,7 +98,7 @@ class AuditWorkflow(AIWorkflow):
         self.add_step(
             name="analyze_and_plan",
             prompt_template=self._build_prompt("analyze_and_plan"),
-            allowed_tools=["Read", "Write", "Edit", "Bash", "Grep", "LS", "TodoWrite"],
+            allowed_tools=None,  # Use secure defaults from parent class (includes TodoWrite)
             max_cost=15.0,
             validator=self._validate_analyze_and_plan,
             max_retries=3,
@@ -111,7 +109,7 @@ class AuditWorkflow(AIWorkflow):
         self.add_step(
             name="manual_review",
             prompt_template=self._build_prompt("manual_review"),
-            allowed_tools=["Read", "Write", "Edit", "Bash", "Grep", "LS"],
+            allowed_tools=None,  # Use secure defaults from parent class
             max_cost=20.0,
             validator=self._validate_manual_review,
             max_retries=3,
@@ -122,7 +120,7 @@ class AuditWorkflow(AIWorkflow):
         self.add_step(
             name="executive_summary",
             prompt_template=self._build_prompt("executive_summary"),
-            allowed_tools=["Read", "Write", "Edit", "Bash"],
+            allowed_tools=None,  # Use secure defaults from parent class
             max_cost=10.0,
             validator=self._validate_executive_summary,
             max_retries=2,

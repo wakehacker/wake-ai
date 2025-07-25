@@ -16,7 +16,7 @@ class HookExampleWorkflow(AIWorkflow):
     """Example workflow that demonstrates pre/post step hooks for monitoring and logging."""
     
     name = "hook-example"
-    allowed_tools = ["Read", "Write", "Grep", "Glob", "LS"]
+    # Using default tools from parent class
     
     def __init__(self, **kwargs):
         """Initialize the hook example workflow."""
@@ -38,7 +38,7 @@ class HookExampleWorkflow(AIWorkflow):
             name="analyze_structure",
             prompt_template="""Analyze the project structure in {{working_dir}}.
             List all files and directories and create a summary in structure.txt""",
-            allowed_tools=["LS", "Write"],
+            allowed_tools=None,  # Use default tools
             max_cost=2.0
         )
         
@@ -47,7 +47,7 @@ class HookExampleWorkflow(AIWorkflow):
             name="count_files",
             prompt_template="""Count the number of files by extension in the project.
             Create a report in file_count.txt with the results.""",
-            allowed_tools=["Glob", "Write"],
+            allowed_tools=None,  # Use default tools
             max_cost=3.0
         )
         
@@ -60,7 +60,7 @@ class HookExampleWorkflow(AIWorkflow):
             - Timestamp: {{report_timestamp}}
             - Total workflow cost so far: ${{total_cost:.4f}}
             - Step number: {{step_number}} of {{total_steps}}""",
-            allowed_tools=["Read", "Write"],
+            allowed_tools=None,  # Use default tools
             max_cost=2.0
         )
     
@@ -70,7 +70,7 @@ class HookExampleWorkflow(AIWorkflow):
         """Called before each step execution."""
         logger.info(f"[PRE-STEP] Starting step '{step.name}'")
         logger.info(f"  - Max cost limit: ${step.max_cost or 'unlimited'}")
-        logger.info(f"  - Allowed tools: {step.allowed_tools or self.allowed_tools}")
+        logger.info(f"  - Allowed tools: {step.allowed_tools or 'default'}")
         
         # Track step start time
         self.step_start_times[step.name] = datetime.now()

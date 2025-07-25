@@ -133,9 +133,6 @@ class WorkflowState:
 class AIWorkflow(ABC):
     """Base class for fixed AI workflows."""
 
-    # Default tools for the workflow (can be overridden by subclasses)
-    allowed_tools: List[str] = []
-    disallowed_tools: List[str] = []
     # Default cleanup behavior (can be overridden by subclasses)
     cleanup_working_dir: bool = True
 
@@ -188,9 +185,37 @@ class AIWorkflow(ABC):
         self.working_dir.mkdir(parents=True, exist_ok=True)
         logger.debug(f"Created working directory: {self.working_dir}")
 
-        # Use provided tools or class defaults
-        tools_allowed = allowed_tools if allowed_tools is not None else self.allowed_tools
-        tools_disallowed = disallowed_tools if disallowed_tools is not None else self.disallowed_tools
+        # Define default allowed tools if not provided
+        # IMPORTANT: Claude Code's tool permissions have limitations:
+        # - Write/Edit/MultiEdit cannot be restricted to specific paths
+        # - Bash patterns only match command prefixes, not file paths
+        # - The AI is restricted to the launch directory by default
+        default_allowed_tools = [
+            # Read-only tools (always safe)
+            "Read", "Grep", "Glob", "LS", "Task", "TodoWrite",
+
+            # Write tools (needed for results - cannot be path-restricted)
+            "Write({working_dir}/**)", "Edit({working_dir}/**)", "MultiEdit({working_dir}/**)",
+
+            # Essential bash commands for codebase analysis
+            "Bash(wake:*)",      # Wake framework commands
+            "Bash(cd:*)",        # Directory navigation
+            "Bash(pwd)",         # Print working directory
+            "Bash(ls:*)",        # List files (though LS tool is preferred)
+            "Bash(find:*)",      # Find files by pattern
+            "Bash(tree:*)",      # Directory structure visualization
+            "Bash(diff:*)",      # Compare files
+            "Bash(mkdir:*)",     # Create directories
+            "Bash(mv:*)",        # Move/rename files
+            "Bash(cp:*)",        # Copy files
+        ]
+
+        # Default disallowed tools (subclasses can override)
+        default_disallowed_tools = []
+
+        # Use provided tools or defaults
+        tools_allowed = allowed_tools if allowed_tools is not None else default_allowed_tools
+        tools_disallowed = disallowed_tools if disallowed_tools is not None else default_disallowed_tools
 
         # Set execution directory
         self.execution_dir = Path(execution_dir) if execution_dir else Path.cwd()
