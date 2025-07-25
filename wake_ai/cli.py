@@ -11,10 +11,7 @@ from rich.logging import RichHandler
 from wake_ai import AIWorkflow
 
 # Import available workflows from flows module
-from flows.audit import AuditWorkflow
-from flows.uniswap_detector import UniswapDetector
-from examples.reentrancy import ReentrancyDetector
-from examples.reentrancy_test import ReentrancyTestWorkflow
+from flows import AuditWorkflow, ReentrancyDetector, UniswapDetector
 
 console = Console()
 
@@ -31,7 +28,6 @@ AVAILABLE_WORKFLOWS = {
     "audit": AuditWorkflow,
     "uniswap": UniswapDetector,
     "reentrancy": ReentrancyDetector,
-    "reentrancy-test": ReentrancyTestWorkflow,
 }
 
 def all_workflow_options():

@@ -4,56 +4,62 @@ This directory contains educational examples demonstrating various Wake AI featu
 
 ## Available Examples
 
-### 1. Reentrancy Detector (`reentrancy/`)
+### 1. Conditional Workflow (`conditional_workflow.py`)
 
-A comprehensive security detector that shows how to:
-- Build on top of Wake's static analysis capabilities
-- Structure prompts for complex analysis tasks
-- Validate and verify findings to eliminate false positives
-- Output results in Wake AI's standard detection format
+Shows how to use conditional step execution based on runtime state:
+- Skip expensive analysis steps when no issues are found
+- Dynamic workflow paths based on context
+- Efficient resource usage with conditional logic
 
-**Key Concepts Demonstrated:**
-- Integration with external tools (`wake detect`)
-- Multi-phase analysis workflow
-- Structured prompt design with validation requirements
-- Result formatting and severity classification
+**Key Concepts:**
+- `condition` parameter in `add_step()`
+- Lambda functions for runtime evaluation
+- Context-based decision making
 
-**Usage:**
-```bash
-# Run the detector
-wake-ai reentrancy
+### 2. Dynamic Workflow (`dynamic_workflow.py`)
 
-# Export findings
-wake-ai reentrancy --export reentrancy-findings.json
-```
+Demonstrates runtime step generation based on discoveries:
+- Generate analysis steps for each discovered contract
+- Dynamic workflow expansion
+- Adaptive analysis depth
 
-### 2. Workflow Hooks (`hooks/`)
+**Key Concepts:**
+- `add_dynamic_steps()` method
+- Generator functions that create steps at runtime
+- Context-aware step generation
+
+### 3. Extraction Workflow (`extraction_workflow.py`)
+
+Shows structured data extraction from AI responses:
+- Extract data into Pydantic models
+- Type-safe parsing and validation
+- Context storage of extracted data
+
+**Key Concepts:**
+- `add_extraction_step()` method
+- Pydantic schema integration
+- Automatic retry on validation failure
+
+### 4. Hooks Workflow (`hooks_workflow.py`)
 
 Demonstrates the workflow hook system for monitoring and customization:
 - Pre-step hooks for setup and context modification
 - Post-step hooks for metrics collection
-- Dynamic context injection based on workflow state
 - Performance tracking and telemetry
 
-**Key Concepts Demonstrated:**
+**Key Concepts:**
 - Workflow-level `_pre_step_hook()` and `_post_step_hook()`
 - Direct context modification via `self.state.context`
 - Metrics collection and persistence
-- Step execution tracking
-
-**Usage:**
-```bash
-# Run the example
-wake-ai hook-example
-```
 
 ## Learning Path
 
 For developers new to Wake AI, we recommend exploring the examples in this order:
 
-1. **Start with hooks example** - Understanding the execution model
-2. **Study the reentrancy detector** - Learn structured prompt design
-3. **Review the audit workflow** - See a production-ready implementation
+1. **Start with hooks workflow** - Understanding the execution model
+2. **Study conditional workflow** - Learn flow control
+3. **Explore extraction workflow** - Structured data parsing
+4. **Review dynamic workflow** - Advanced runtime adaptation
 
 ## Creating Your Own Detector
 
@@ -84,4 +90,18 @@ After studying these examples, you can create your own detector by:
 - Progressive refinement of findings
 - False positive elimination
 
-See individual example READMEs for detailed documentation.
+## Running the Examples
+
+These examples are for educational purposes. To run them in a real project:
+
+1. Copy the workflow class to your project
+2. Adapt the prompts and steps to your specific needs
+3. Register with Wake AI CLI or use programmatically:
+
+```python
+from docs.examples.conditional_workflow import ConditionalWorkflow
+
+# Create and execute
+workflow = ConditionalWorkflow(name="my_analysis")
+results, formatted = workflow.execute()
+```
