@@ -243,7 +243,7 @@ class AIWorkflow(ABC):
 
         Args:
             name: Step name
-            prompt_template: Prompt template with {context_var} placeholders
+            prompt_template: Prompt template with {{context_var}} placeholders
             allowed_tools: List of allowed tools for this step (overrides session defaults)
                        Can restrict Bash to specific commands: ["Bash(git *)", "Bash(npm install)"]
             disallowed_tools: List of disallowed tools for this step
@@ -267,7 +267,7 @@ class AIWorkflow(ABC):
             continue_session=continue_session,
             condition=condition
         )
-        
+
         if after_step is None:
             # Append to end (default behavior)
             self.steps.append(step)
@@ -278,21 +278,21 @@ class AIWorkflow(ABC):
                 if existing_step.name == after_step:
                     insert_pos = i + 1
                     break
-            
+
             if insert_pos is None:
                 raise ValueError(f"Step '{after_step}' not found in workflow")
-            
+
             self.steps.insert(insert_pos, step)
-        
+
         logger.debug(f"Added step '{name}' to workflow (allowed_tools: {allowed_tools}, max_cost: {max_cost}, after: {after_step})")
 
-    def add_dynamic_steps(self, name: str, generator: Callable[[ClaudeCodeResponse, Dict[str, Any]], List[WorkflowStep]], 
+    def add_dynamic_steps(self, name: str, generator: Callable[[ClaudeCodeResponse, Dict[str, Any]], List[WorkflowStep]],
                          after_step: Optional[str] = None):
         """Add a dynamic step generator that creates new steps at runtime.
-        
+
         The generator function will be called after the specified step executes,
         and should return a list of WorkflowStep objects to be inserted into the workflow.
-        
+
         Args:
             name: Name identifier for this dynamic step generator
             generator: Function that takes (response, context) and returns list of WorkflowSteps
@@ -303,18 +303,18 @@ class AIWorkflow(ABC):
             after_step = self.steps[-1].name
         elif after_step is None and not self.steps:
             raise ValueError("Cannot add dynamic steps to empty workflow. Add at least one regular step first.")
-        
+
         # Verify the after_step exists
         if after_step not in [s.name for s in self.steps]:
             raise ValueError(f"Step '{after_step}' not found in workflow")
-        
+
         # Warn if this step already has a dynamic generator
         if after_step in self._dynamic_generators:
             logger.warning(
                 f"Step '{after_step}' already has a dynamic generator registered. "
                 f"The new generator '{name}' will override the previous one."
             )
-        
+
         self._dynamic_generators[after_step] = generator
         logger.debug(f"Added dynamic step generator '{name}' after step '{after_step}'")
 
@@ -517,20 +517,20 @@ class AIWorkflow(ABC):
                 # Call the generator function
                 generator = self._dynamic_generators[step.name]
                 new_steps = generator(response, self.state.context)
-                
+
                 if new_steps:
                     # Insert new steps after the current step
                     insert_pos = self.state.current_step + 1
-                    
+
                     # Insert steps in order
                     for i, new_step in enumerate(new_steps):
                         self.steps.insert(insert_pos + i, new_step)
                         logger.debug(f"Inserted dynamic step '{new_step.name}' at position {insert_pos + i}")
-                    
+
                     logger.info(f"Added {len(new_steps)} dynamic steps. Total steps now: {len(self.steps)}")
                 else:
                     logger.debug(f"Dynamic generator for '{step.name}' returned no new steps")
-                    
+
             except Exception as e:
                 logger.error(f"Error generating dynamic steps after '{step.name}': {str(e)}")
                 self.state.errors.append({
@@ -539,7 +539,7 @@ class AIWorkflow(ABC):
                     "error": f"Dynamic step generation failed: {str(e)}"
                 })
                 # Continue execution despite error in dynamic generation
-        
+
         # Call any subclass implementation
         pass
 
@@ -771,7 +771,7 @@ Output ONLY valid JSON matching the schema above. Do not include any additional 
 
         if insert_pos is None:
             raise ValueError(f"Step '{after_step}' not found in workflow")
-        
+
         # Warn if target step already has a post hook
         if target_step and target_step._post_hook is not None:
             logger.warning(
