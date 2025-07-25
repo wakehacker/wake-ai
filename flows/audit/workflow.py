@@ -44,7 +44,7 @@ class AuditWorkflow(AIWorkflow):
         self._load_prompts()
 
         # Import result class
-        from wake_ai.utils.audit import AuditResult
+        from .result import AuditResult
 
         # Now call parent init which will call _setup_steps
         super().__init__(
@@ -179,7 +179,7 @@ class AuditWorkflow(AIWorkflow):
                             errors.append(f"Contract {i} missing 'issues' field")
                         else:
                             for j, issue in enumerate(contract['issues']):
-                                required_fields = ['title', 'status', 'location', 'description', 'severity']
+                                required_fields = ['title', 'status', 'location', 'description', 'impact', 'confidence']
                                 for field in required_fields:
                                     if field not in issue:
                                         errors.append(f"Contract {contract.get('name', i)} issue {j} missing '{field}' field")
@@ -190,9 +190,13 @@ class AuditWorkflow(AIWorkflow):
                                     if 'lines' not in loc and 'function' not in loc:
                                         errors.append(f"Contract {contract.get('name', i)} issue {j} location missing 'lines' or 'function'")
 
-                                # Validate severity values
-                                if 'severity' in issue and issue['severity'] not in ['critical', 'high', 'medium', 'low', 'info', 'warning']:
-                                    errors.append(f"Contract {contract.get('name', i)} issue {j} has invalid severity: {issue['severity']}")
+                                # Validate impact values
+                                if 'impact' in issue and issue['impact'] not in ['high', 'medium', 'low', 'info', 'warning']:
+                                    errors.append(f"Contract {contract.get('name', i)} issue {j} has invalid impact: {issue['impact']}")
+                                
+                                # Validate confidence values
+                                if 'confidence' in issue and issue['confidence'] not in ['high', 'medium', 'low']:
+                                    errors.append(f"Contract {contract.get('name', i)} issue {j} has invalid confidence: {issue['confidence']}")
 
                                 # Validate status
                                 if 'status' in issue and issue['status'] != 'pending':
@@ -244,9 +248,38 @@ class AuditWorkflow(AIWorkflow):
                     errors.append(f"Issues directory not created at {issues_dir}")
                 elif true_positives:
                     # Check that at least some issue files exist
-                    adoc_files = list(issues_dir.glob("*.adoc"))
-                    if len(adoc_files) == 0:
-                        errors.append("No issue files (*.adoc) created for true positive findings")
+                    yaml_files = list(issues_dir.glob("*.yaml"))
+                    if len(yaml_files) == 0:
+                        errors.append("No issue files (*.yaml) created for true positive findings")
+                    else:
+                        # Validate YAML file structure
+                        for yaml_file in yaml_files[:3]:  # Check first 3 files as samples
+                            try:
+                                with open(yaml_file, 'r') as f:
+                                    issue_data = yaml.safe_load(f)
+                                
+                                if not isinstance(issue_data, dict):
+                                    errors.append(f"Issue file {yaml_file.name} is not a valid YAML dictionary")
+                                    continue
+                                
+                                # Check for required fields
+                                required_fields = ['name', 'impact', 'confidence', 'detection_type', 'location', 'description', 'recommendation']
+                                missing_fields = [field for field in required_fields if field not in issue_data]
+                                if missing_fields:
+                                    errors.append(f"Issue file {yaml_file.name} missing fields: {', '.join(missing_fields)}")
+                                
+                                # Validate location structure
+                                if 'location' in issue_data and isinstance(issue_data['location'], dict):
+                                    loc = issue_data['location']
+                                    loc_required = ['file', 'start_line', 'end_line']
+                                    loc_missing = [field for field in loc_required if field not in loc]
+                                    if loc_missing:
+                                        errors.append(f"Issue file {yaml_file.name} location missing: {', '.join(loc_missing)}")
+                                    
+                            except yaml.YAMLError as e:
+                                errors.append(f"Issue file {yaml_file.name} has invalid YAML: {str(e)}")
+                            except Exception as e:
+                                errors.append(f"Error reading issue file {yaml_file.name}: {str(e)}")
 
             except yaml.YAMLError as e:
                 errors.append(f"Invalid YAML in updated plan.yaml: {str(e)}")

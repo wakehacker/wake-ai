@@ -39,14 +39,14 @@ Work in the assigned directory `{{working_dir}}` where all audit artifacts are s
 
    ## Summary of Findings
 
-   | Severity | Count |
-   |----------|-------|
-   | High     | X     |
-   | Medium   | X     |
-   | Low      | X     |
-   | Warning  | X     |
-   | Info     | X     |
-   | **Total**| **X** |
+   | Impact   | High Confidence | Medium Confidence | Low Confidence | Total |
+   |----------|----------------|-------------------|----------------|-------|
+   | High     | X              | X                 | X              | X     |
+   | Medium   | X              | X                 | X              | X     |
+   | Low      | X              | X                 | X              | X     |
+   | Warning  | X              | X                 | X              | X     |
+   | Info     | X              | X                 | X              | X     |
+   | **Total**| **X**          | **X**             | **X**          | **X** |
 
    ## Key Technical Findings
    - Short description of the most important findings
