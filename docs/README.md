@@ -282,10 +282,10 @@ class TestGeneratorWorkflow(AIWorkflow):
         self.add_step(
             name="plan",
             prompt_template="""Review the analysis and scenarios:
-            - analysis.md: {{analyze_output}}
-            - test-scenarios.md: {{scenarios_output}}
+            - {{working_dir}}/analysis.md
+            - {{working_dir}}/test-scenarios.md
 
-            Create a structured test plan in YAML format.
+            Create a structured test plan in YAML format in the {{working_dir}}/test-plan.yaml file.
             """,
             tools=["Read", "Write"],
             validator=validate_yaml_output,
@@ -332,7 +332,7 @@ def _setup_steps(self):
 
     # Generate steps based on findings
     def generate_review_steps(response, context):
-        files = parse_file_list(response.content)
+        files = parse_file_list(self.get_context("scan_output"))
         steps = []
 
         for file in files:
@@ -367,7 +367,7 @@ self.add_step(
 
 ### Structured Data Extraction
 
-Extract and validate structured data from AI responses:
+Beyond parsing data from the working directory, you can use `add_extraction_step()` to extract structured objects directly from previous step responses. The AI returns structured data that's automatically parsed and added to context.
 
 ```python
 from pydantic import BaseModel
@@ -527,85 +527,6 @@ The `examples/` directory contains working examples:
 
 Each example includes its own README with detailed explanations.
 
-## API Reference
-
-### Core Classes
-
-#### `AIWorkflow`
-
-Base class for all workflows.
-
-```python
-class AIWorkflow:
-    def __init__(
-        name: str,
-        result_class: Type[AIResult] = None,
-        working_dir: Union[str, Path] = None,
-        allowed_tools: List[str] = None,
-        cleanup_working_dir: bool = True
-    )
-
-    def add_step(
-        name: str,
-        prompt_template: str,
-        tools: List[str] = None,
-        validator: Callable = None,
-        max_cost: float = None,
-        condition: Callable = None
-    )
-
-    def execute(
-        context: Dict[str, Any] = None,
-        resume: bool = False
-    ) -> Tuple[Dict, AIResult]
-```
-
-#### `WorkflowStep`
-
-Individual workflow step configuration.
-
-```python
-@dataclass
-class WorkflowStep:
-    name: str
-    prompt_template: str
-    allowed_tools: List[str] = None
-    validator: Callable = None
-    max_cost: float = None
-    max_retries: int = 3
-    continue_session: bool = False
-    condition: Callable = None
-```
-
-#### `MarkdownDetector`
-
-Template for simple detectors.
-
-```python
-class MarkdownDetector(AIWorkflow):
-    @abstractmethod
-    def get_detector_prompt(self) -> str:
-        """Return the detection prompt."""
-        pass
-```
-
-### CLI Commands
-
-```bash
-# Run workflow
-wake-ai <workflow-name> [OPTIONS]
-
-# Common options
---model <opus|sonnet>     # Claude model to use
---resume                  # Resume from saved state
---export <path>          # Export results to JSON
---no-cleanup             # Keep working directory
---help                   # Show help
-
-# Workflow-specific options vary
-wake-ai audit --scope contracts/ --focus reentrancy
-```
-
 ## Best Practices
 
 ### Prompt Design
@@ -632,56 +553,4 @@ wake-ai audit --scope contracts/ --focus reentrancy
 ### Security
 
 1. **Limit Tools**: Only allow necessary tools
-2. **Validate Inputs**: Check user-provided paths
-3. **Review Generated Code**: AI output needs verification
-4. **Sandbox Execution**: Run in isolated environments
-
-## Troubleshooting
-
-### Common Issues
-
-**"Claude Code not found"**
-
--   Install: `pip install claude-code`
--   Authenticate: `claude-code auth`
-
-**"Validation failed after retries"**
-
--   Check validator logic
--   Increase `max_retries`
--   Improve prompt clarity
-
-**"Cost limit exceeded"**
-
--   Increase `max_cost`
--   Optimize prompts
--   Use conditional steps
-
-**"Cannot resume workflow"**
-
--   Check working directory exists
--   Verify state file present
--   Use same workflow version
-
-### Debug Mode
-
-Run with verbose logging:
-
-```bash
-WAKE_AI_DEBUG=1 wake-ai audit
-```
-
-Check working directory for:
-
--   Step outputs
--   Validation errors
--   Cost tracking
--   Session state
-
-## Contributing
-
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for development setup and guidelines.
-
-## License
-
-MIT License - see [LICENSE](../LICENSE) for details.
+2. **Sandbox Execution**: Run in isolated environments
