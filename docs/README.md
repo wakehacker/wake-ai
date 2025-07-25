@@ -2,15 +2,15 @@
 
 ## Table of Contents
 
-- [Introduction](#introduction)
-- [Installation](#installation)
-- [Getting Started](#getting-started)
-- [Core Concepts](#core-concepts)
-- [Creating Workflows](#creating-workflows)
-- [Advanced Features](#advanced-features)
-- [Examples](#examples)
-- [API Reference](#api-reference)
-- [Best Practices](#best-practices)
+-   [Introduction](#introduction)
+-   [Installation](#installation)
+-   [Getting Started](#getting-started)
+-   [Core Concepts](#core-concepts)
+-   [Creating Workflows](#creating-workflows)
+-   [Advanced Features](#advanced-features)
+-   [Examples](#examples)
+-   [API Reference](#api-reference)
+-   [Best Practices](#best-practices)
 
 ## Introduction
 
@@ -18,19 +18,19 @@ Wake AI is a framework for building AI-powered workflows to analyze smart contra
 
 ### Key Features
 
-- **Workflow Engine**: Chain multiple AI steps with context passing
-- **Cost Management**: Set per-step cost limits to control spending
-- **Validation & Retry**: Automatic validation with configurable retries
-- **Session Persistence**: Resume workflows from where they left off
-- **Tool Control**: Fine-grained control over which tools Claude can use
-- **Working Directory**: Isolated workspace for each workflow run
+-   **Workflow Engine**: Chain multiple AI steps with context passing
+-   **Cost Management**: Set per-step cost limits to control spending
+-   **Validation & Retry**: Automatic validation with configurable retries
+-   **Session Persistence**: Resume workflows from where they left off
+-   **Tool Control**: Fine-grained control over which tools Claude can use
+-   **Working Directory**: Isolated workspace for each workflow run
 
 ## Installation
 
 ### Requirements
 
-- Python 3.8+
-- Claude Code CLI installed and authenticated
+-   Python 3.8+
+-   Claude Code CLI installed and authenticated
 
 ### Install from PyPI
 
@@ -64,6 +64,8 @@ claude-code auth
 
 Wake AI comes with ready-to-use workflows:
 
+// todo: update when exampels will be updated
+
 ```bash
 # Run comprehensive security audit
 wake-ai audit
@@ -85,24 +87,26 @@ wake-ai --resume
 
 The easiest way to create a custom detector is using the `MarkdownDetector` template:
 
+// todo: update when the detector loading will be implemented
+
 ```python
 from wake_ai.templates import MarkdownDetector
 
 class AccessControlDetector(MarkdownDetector):
     """Detect access control vulnerabilities."""
-    
+
     name = "access-control"
-    
+
     def get_detector_prompt(self) -> str:
         return """
         Analyze this codebase for access control vulnerabilities.
-        
+
         Check for:
         1. Missing access modifiers (onlyOwner, etc.)
         2. Incorrect permission checks
         3. Centralization risks
         4. Privilege escalation paths
-        
+
         For each issue found, provide:
         - Clear explanation
         - Severity (critical/high/medium/low)
@@ -121,34 +125,82 @@ wake-ai access-control
 ### Workflows
 
 A workflow is a sequence of AI-powered steps that execute in order. Each workflow:
-- Has a unique working directory (`.wake/ai/<session-id>/`)
-- Maintains context between steps
-- Can be resumed if interrupted
-- Tracks costs and validates outputs
+
+-   Has a unique working directory (`.wake/ai/<session-id>/`)
+-   Maintains context between steps
+-   Can be resumed if interrupted
+-   Tracks costs and validates outputs
 
 ### Steps
 
 Each step in a workflow:
-- Has a prompt template (using Jinja2)
-- Can specify allowed/disallowed tools
-- Has optional validation logic
-- Can retry on failure
-- Updates the workflow context
+
+-   Has a prompt template (using Jinja2)
+-   Can specify allowed/disallowed tools
+-   Has optional validation logic
+-   Can retry on failure
+-   Updates the workflow context
+-   Executes sequentially (parallel execution not currently supported)
 
 ### Context
 
 Context is how data flows between steps:
-- Each step can access all previous outputs
-- Special variables: `{{working_dir}}`, `{{execution_dir}}`
-- Step outputs available as `{{step_name}_output}}`
-- Custom context via `add_context()`
+
+-   Each step can access all previous outputs
+-   Special variables: `{{working_dir}}`, `{{execution_dir}}`
+-   Step outputs available as `{{step_name}_output}}`
+-   Custom context via `add_context()`
 
 ### Validation
 
 Steps can have validators that ensure output quality:
-- Return `(success: bool, errors: List[str])`
-- Failed validation triggers retry with error feedback
-- Maximum retry attempts configurable per step
+
+-   Return `(success: bool, errors: List[str])`
+-   Failed validation triggers retry with error feedback
+-   Maximum retry attempts configurable per step
+
+### Workflow Execution Flow
+
+This diagram shows how workflows execute with multiple steps, validation, and retry logic:
+
+```mermaid
+flowchart TD
+    Start([Start Workflow]) --> Init[Initialize Workflow]
+    Init --> NextStep
+
+    NextStep[Get Next Step] --> CheckComplete{All Steps<br/>Complete?}
+    CheckComplete -->|Yes| Complete([Workflow Complete])
+    CheckComplete -->|No| StepBox
+
+    subgraph StepBox["Claude Code Session"]
+        ExecuteStep[Execute Step:<br/>• Set step tools<br/>• Format prompt with context<br/>• Create Claude session<br/>• Query Claude] --> QueryAI
+
+        QueryAI[Claude Response] --> Validate{Has<br/>Validator?}
+        Validate -->|No| Success
+        Validate -->|Yes| RunValidator[Run Validation]
+
+        RunValidator --> Valid{Valid?}
+        Valid -->|Yes| Success
+        Valid -->|No| CheckRetries{Retries<br/>Left?}
+
+        CheckRetries -->|Yes| RetryPrompt[Add Error Correction<br/>to Prompt]
+        CheckRetries -->|No| Fail[Mark Step Failed]
+
+        RetryPrompt --> QueryAI
+    end
+
+    Success[Mark Step Complete] --> UpdateContext[Update Context]
+    UpdateContext --> NextStep
+
+    Fail --> Error([Workflow Error])
+
+    style Start fill:#90EE90,color:#000
+    style Complete fill:#90EE90,color:#000
+    style Error fill:#FFB6C1,color:#000
+    style Valid fill:#87CEEB,color:#000
+    style CheckRetries fill:#FFE4B5,color:#000
+    style StepBox fill:transparent,stroke:#333,stroke-width:2px
+```
 
 ## Creating Workflows
 
@@ -159,23 +211,26 @@ Wake AI includes a powerful prompt template that helps generate new workflows fr
 **Location**: `prompts/wake-ai-flow-generation.md`
 
 This prompt helps you:
-- Transform security analysis ideas into working detectors
-- Create multi-step audit workflows with proper validation
-- Generate CLI-ready workflows with all required components
-- Follow Wake AI coding patterns and conventions
+
+-   Transform security analysis ideas into working detectors
+-   Create multi-step audit workflows with proper validation
+-   Generate CLI-ready workflows with all required components
+-   Follow Wake AI coding patterns and conventions
 
 Example usage:
+
 ```bash
 # Use the prompt with your favorite AI to generate a new workflow
 # Then save the generated code to flows/my_detector/workflow.py
 ```
 
 The prompt handles:
-- Choosing between `MarkdownDetector` (simple) or `AIWorkflow` (complex)
-- Setting up steps with appropriate tools and validators
-- Creating CLI options and argument processing
-- Implementing proper error handling and validation
-- Following Wake AI's structured prompt patterns
+
+-   Choosing between `MarkdownDetector` (simple) or `AIWorkflow` (complex)
+-   Setting up steps with appropriate tools and validators
+-   Creating CLI options and argument processing
+-   Implementing proper error handling and validation
+-   Following Wake AI's structured prompt patterns
 
 ### Multi-Step Workflow Example
 
@@ -185,57 +240,57 @@ from wake_ai.core.utils import validate_yaml_output
 
 class TestGeneratorWorkflow(AIWorkflow):
     """Generate comprehensive test suites."""
-    
+
     name = "test-gen"
-    
+
     def _setup_steps(self):
         # Step 1: Analyze contract structure
         self.add_step(
             name="analyze",
             prompt_template="""Analyze the smart contract structure.
-            
+
             Working directory: {{working_dir}}
-            
+
             Tasks:
             1. Identify all functions and their purposes
             2. Find state variables and invariants
             3. Detect external dependencies
-            
-            Output a structured analysis.
+
+            Create a file 'analysis.md' with your findings.
             """,
             tools=["Read", "Grep", "Write"],
             max_cost=5.0
         )
-        
-        # Step 2: Generate test plan
+
+        # Step 2: Identify test scenarios (continues session)
         self.add_step(
-            name="plan",
-            prompt_template="""Based on your analysis:
-            {{analyze_output}}
-            
-            Create a comprehensive test plan covering:
-            - Unit tests for each function
-            - Integration tests
-            - Edge cases and attack vectors
-            
-            Output as YAML in plan.yaml
+            name="scenarios",
+            prompt_template="""Based on the functions and invariants you just analyzed,
+            identify critical test scenarios. Focus on:
+            - Edge cases for each function you found
+            - Invariant violations you identified
+            - Attack vectors specific to the contract logic
+
+            Add these scenarios to 'test-scenarios.md'.
             """,
             tools=["Write"],
-            validator=validate_yaml_output,
-            max_cost=3.0
+            max_cost=3.0,
+            continue_session=True  # Needs memory of specific functions found
         )
-        
-        # Step 3: Implement tests
+
+        # Step 3: Generate test plan (new session for structured output)
         self.add_step(
-            name="implement",
-            prompt_template="""Implement the test plan from plan.yaml.
-            
-            Generate test files using appropriate framework.
-            Include detailed comments and assertions.
+            name="plan",
+            prompt_template="""Review the analysis and scenarios:
+            - analysis.md: {{analyze_output}}
+            - test-scenarios.md: {{scenarios_output}}
+
+            Create a structured test plan in YAML format.
             """,
-            tools=["Read", "Write", "MultiEdit"],
-            max_cost=10.0,
-            max_retries=2
+            tools=["Read", "Write"],
+            validator=validate_yaml_output,
+            max_cost=5.0,
+            continue_session=False  # Fresh session for clean YAML generation
         )
 ```
 
@@ -274,12 +329,12 @@ def _setup_steps(self):
         prompt_template="Scan for all Solidity files...",
         tools=["Glob", "Read"]
     )
-    
+
     # Generate steps based on findings
     def generate_review_steps(response, context):
         files = parse_file_list(response.content)
         steps = []
-        
+
         for file in files:
             steps.append(WorkflowStep(
                 name=f"review_{file.name}",
@@ -287,9 +342,9 @@ def _setup_steps(self):
                 tools=["Read", "Write"],
                 max_cost=2.0
             ))
-        
+
         return steps
-    
+
     self.add_dynamic_steps(
         name="file_reviews",
         generator=generate_review_steps,
@@ -355,9 +410,55 @@ self.add_step(
 ```
 
 The cost manager:
-- Monitors costs in increments
-- Prompts Claude to finish efficiently when approaching limit
-- Supports different limits for initial vs retry attempts
+
+-   Monitors costs in increments
+-   Prompts Claude to finish efficiently when approaching limit
+-   Supports different limits for initial vs retry attempts
+
+#### Max Cost Handling Flow
+
+This diagram shows how `query_with_cost()` executes Claude in turns with cost monitoring:
+
+```mermaid
+flowchart TD
+    Start([query_with_cost<br/>max_cost = X]) --> Init[Initialize:<br/>accumulated_cost = 0]
+
+    Init --> ExecuteTurn[Execute Claude Turn]
+    ExecuteTurn --> Accumulate[accumulated_cost += turn_cost]
+    Accumulate --> CheckComplete{Task<br/>Complete?}
+
+    CheckComplete -->|Yes| Done([Return Response])
+    CheckComplete -->|No| CheckCost{accumulated_cost<br/>> threshold?}
+
+    CheckCost -->|No| NormalPath
+    CheckCost -->|Yes| InitRetry[Initialize: retry_turn = 0]
+
+    subgraph NormalPath["Normal Continuation"]
+        ContinuePrompt[Add prompt:<br/>Continue with the task] --> ExecuteTurn
+    end
+
+    subgraph FinalizePath["Quick Finalization"]
+        RetryTurn[retry_turn += 1] --> CheckRetryTurns{retry_turn < 3?}
+        CheckRetryTurns -->|Yes| FinalizePrompt[Add prompt:<br/>Finish efficiently]
+        CheckRetryTurns -->|No| Fail[Fail/Revert]
+        FinalizePrompt --> FinalTurnLoop[Execute retry turns]
+        FinalTurnLoop --> CheckComplete2{Task<br/>Complete?}
+        CheckComplete2 -->|Yes| ForceDone[Return Response]
+        CheckComplete2 -->|No| RetryTurn
+    end
+
+    InitRetry --> FinalizePrompt
+
+    ForceDone --> Done
+    Fail --> Error([Task Failed - Cost Exceeded])
+
+    style Start fill:#90EE90,color:#000
+    style Done fill:#90EE90,color:#000
+    style Error fill:#FFB6C1,color:#000
+    style CheckCost fill:#FFE4B5,color:#000
+    style FinalizePath fill:transparent,stroke:#ff6b6b,stroke-width:2px
+    style NormalPath fill:transparent,stroke:#339af0,stroke-width:2px
+```
 
 ### Tool Restrictions
 
@@ -383,11 +484,18 @@ self.add_step(
 Control session behavior:
 
 ```python
-# Continue session from previous step
+# Step 1: Identify vulnerable patterns (new session - default)
 self.add_step(
-    name="refine",
-    prompt_template="Refine your previous analysis...",
-    continue_session=True  # Reuse Claude session
+    name="identify",
+    prompt_template="Search for reentrancy vulnerabilities in this codebase...",
+    continue_session=False  # Start fresh session (default)
+)
+
+# Step 2: Generate fixes for found issues (continues session)
+self.add_step(
+    name="fix",
+    prompt_template="For each reentrancy issue you just found, generate a secure fix...",
+    continue_session=True  # Needs to know what issues were found
 )
 
 # Working directory management
@@ -397,21 +505,25 @@ workflow = MyWorkflow(
 )
 ```
 
+**Multi-Agent Execution**: By default, each step creates a new agent session (`continue_session=False`), enabling multi-agent workflows with specialized agents. To maintain context within the same agent session, explicitly set `continue_session=True`.
+
+**Note**: Steps execute sequentially. Wake AI does not currently support parallel step execution.
+
 ## Examples
 
 The `examples/` directory contains working examples:
 
 ### Basic Examples
 
-- **[reentrancy](examples/reentrancy/)** - Security detector with Wake integration
-- **[reentrancy_test](examples/reentrancy_test/)** - Test generation workflow
+-   **[reentrancy](examples/reentrancy/)** - Security detector with Wake integration
+-   **[reentrancy_test](examples/reentrancy_test/)** - Test generation workflow
 
 ### Advanced Examples
 
-- **[hooks](examples/hooks/)** - Workflow customization with pre/post hooks
-- **[conditional_test](examples/conditional_test/)** - Conditional step execution
-- **[dynamic_steps](examples/dynamic_steps/)** - Runtime step generation
-- **[extraction_step](examples/extraction_step/)** - Structured data extraction
+-   **[hooks](examples/hooks/)** - Workflow customization with pre/post hooks
+-   **[conditional_test](examples/conditional_test/)** - Conditional step execution
+-   **[dynamic_steps](examples/dynamic_steps/)** - Runtime step generation
+-   **[extraction_step](examples/extraction_step/)** - Structured data extraction
 
 Each example includes its own README with detailed explanations.
 
@@ -432,7 +544,7 @@ class AIWorkflow:
         allowed_tools: List[str] = None,
         cleanup_working_dir: bool = True
     )
-    
+
     def add_step(
         name: str,
         prompt_template: str,
@@ -441,7 +553,7 @@ class AIWorkflow:
         max_cost: float = None,
         condition: Callable = None
     )
-    
+
     def execute(
         context: Dict[str, Any] = None,
         resume: bool = False
@@ -529,23 +641,27 @@ wake-ai audit --scope contracts/ --focus reentrancy
 ### Common Issues
 
 **"Claude Code not found"**
-- Install: `pip install claude-code`
-- Authenticate: `claude-code auth`
+
+-   Install: `pip install claude-code`
+-   Authenticate: `claude-code auth`
 
 **"Validation failed after retries"**
-- Check validator logic
-- Increase `max_retries`
-- Improve prompt clarity
+
+-   Check validator logic
+-   Increase `max_retries`
+-   Improve prompt clarity
 
 **"Cost limit exceeded"**
-- Increase `max_cost`
-- Optimize prompts
-- Use conditional steps
+
+-   Increase `max_cost`
+-   Optimize prompts
+-   Use conditional steps
 
 **"Cannot resume workflow"**
-- Check working directory exists
-- Verify state file present
-- Use same workflow version
+
+-   Check working directory exists
+-   Verify state file present
+-   Use same workflow version
 
 ### Debug Mode
 
@@ -556,10 +672,11 @@ WAKE_AI_DEBUG=1 wake-ai audit
 ```
 
 Check working directory for:
-- Step outputs
-- Validation errors
-- Cost tracking
-- Session state
+
+-   Step outputs
+-   Validation errors
+-   Cost tracking
+-   Session state
 
 ## Contributing
 
