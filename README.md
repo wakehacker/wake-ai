@@ -159,7 +159,7 @@ _Features:_
 
 ### Context Sharing
 
-Wake AI's primary approach to context sharing is through the _working directory_. Additionally, the `add_extraction_step` helper function can extract structured data based on a Pydantic model from the latest session.
+Wake AI's primary approach to context sharing is through the _working directory_. Additionally, workflows provide context management methods and the `add_extraction_step` helper function to extract structured data.
 
 ```python
 from pydantic import BaseModel
@@ -188,6 +188,30 @@ self.add_extraction_step(
 
 The extracted data will be stored in the `context` state under the key specified in `context_key` (defaults to `<step_name>_data`).
 
+### Context Management
+
+Wake AI workflows provide methods to manage context that flows between steps:
+
+```python
+# Add data to context
+workflow.add_context("project_name", "MyDeFiProtocol")
+workflow.add_context("audit_scope", ["Token.sol", "Vault.sol"])
+
+# Retrieve context data
+project = workflow.get_context("project_name")  # "MyDeFiProtocol"
+scope = workflow.get_context("audit_scope")     # ["Token.sol", "Vault.sol"]
+
+# Get all available context keys
+keys = workflow.get_context_keys()  # ["project_name", "audit_scope", ...]
+```
+
+Context includes:
+
+-   User-defined values via `add_context()`
+-   Step outputs as `{{step_name}_output}}`
+-   Extracted data from `add_extraction_step()` (defaults to `<step_name>_data`, but can be overridden with the `context_key` parameter)
+-   Built-in values like `{{working_dir}}` and `{{execution_dir}}`
+
 ### Dynamic Prompt Templates
 
 To create dynamic prompt templates, Wake AI utilizes Jinja2 templates, which allow you to pass in context variables in the `{{ context_key }}` format. Workflow classes keep track of their `context` state, where you can store any data you want to pass to the prompt template.
@@ -200,8 +224,9 @@ class ContractList(BaseModel):
 
 class AuditWorkflow(AIWorkflow):
     def __init__(self, **kwargs):
-        # List all files in the codebase
-        self.context["files"] = list(self.working_dir.glob("**/*.sol"))
+        super().__init__(**kwargs)
+        # Add files to context for use in prompts
+        self.add_context("files", list(self.working_dir.glob("**/*.sol")))
 
     def _setup_steps(self):
         self.add_step(

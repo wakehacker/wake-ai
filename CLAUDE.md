@@ -101,11 +101,27 @@ wake-ai --export results.json           # Export results
    - Sessions can be resumed on interruption
 
 ### Context Management
-- Each step has access to:
-  - `{{working_dir}}` - Session working directory
-  - `{{execution_dir}}` - Where workflow was launched
-  - Previous step outputs as `{{step_name}_output}}`
-  - Custom context from workflow initialization
+Wake AI provides methods to manage data flow between steps:
+
+```python
+# Add data to context
+workflow.add_context("key", value)
+
+# Retrieve data
+value = workflow.get_context("key")
+
+# List all keys
+keys = workflow.get_context_keys()
+```
+
+Each step has access to:
+- `{{working_dir}}` - Session working directory
+- `{{execution_dir}}` - Where workflow was launched
+- Previous step outputs as `{{step_name}_output}}`
+- User-defined context via `add_context()`
+- Extracted data from `add_extraction_step()`
+
+Context is automatically saved/restored when resuming workflows.
 
 ### Template Syntax
 Wake AI uses Jinja2 templating for prompt templates:
