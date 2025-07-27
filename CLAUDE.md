@@ -224,12 +224,12 @@ pip install wake-ai
 # Development mode
 git clone https://github.com/Ackee-Blockchain/wake-ai
 cd wake-ai
-pip install -e ".[dev]"
+uv sync --extra dev
 ```
 
 ### Dependencies
-- **Core**: click, rich, pyyaml
-- **Development**: black, isort, pytest, mypy
+- **Core**: click, rich, pyyaml, jinja2, pydantic
+- **Development**: black, isort, mypy
 - **Runtime**: Claude Code CLI must be installed
 
 ### Entry Points
