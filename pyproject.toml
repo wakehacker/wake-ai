@@ -41,6 +41,9 @@ dev = [
 [project.scripts]
 wake-ai = "wake_ai.cli:main"
 
+[project.entry-points."wake.plugins.printers"]
+printers = "printers"
+
 [project.urls]
 Homepage = "https://github.com/Ackee-Blockchain/wake-ai"
 Repository = "https://github.com/Ackee-Blockchain/wake-ai"
