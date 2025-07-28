@@ -195,7 +195,7 @@ class AIWorkflow(ABC):
             "Read", "Grep", "Glob", "LS", "Task", "TodoWrite",
 
             # Write tools (needed for results - cannot be path-restricted)
-            f"Write({self.working_dir}/**)", f"Edit({self.working_dir}/**)", f"MultiEdit({self.working_dir}/**)",
+            f"Write(/{self.working_dir}/**)", f"Edit(/{self.working_dir}/**)", f"MultiEdit(/{self.working_dir}/**)",
 
             # Essential bash commands for codebase analysis
             "Bash(wake:*)",      # Wake framework commands
