@@ -163,7 +163,7 @@ class AuditWorkflow(AIWorkflow):
             required_sections = ["# Codebase Overview", "## Architecture", "## Key Components", "## Actors"]
             for section in required_sections:
                 if section not in content:
-                    errors.append(f"Missing required section '{section}' in overview.md")
+                    errors.append(f"Missing required section '{section}' in {overview_file}")
 
         # Check for plan.yaml
         plan_file = Path(self.working_dir) / "plan.yaml"
@@ -177,7 +177,7 @@ class AuditWorkflow(AIWorkflow):
 
                 # Validate YAML schema
                 if 'contracts' not in plan_data:
-                    errors.append("Missing 'contracts' key in YAML")
+                    errors.append(f"Missing 'contracts' key in {plan_file}")
                 else:
                     for i, contract in enumerate(plan_data['contracts']):
                         if 'name' not in contract:
@@ -210,9 +210,9 @@ class AuditWorkflow(AIWorkflow):
                                     errors.append(f"Contract {contract.get('name', i)} issue {j} should have status 'pending', not '{issue['status']}'")
 
             except yaml.YAMLError as e:
-                errors.append(f"Invalid YAML in plan.yaml: {str(e)}")
+                errors.append(f"Invalid YAML in {plan_file}: {str(e)}")
             except Exception as e:
-                errors.append(f"Error validating plan.yaml structure: {str(e)}")
+                errors.append(f"Error validating {plan_file} structure: {str(e)}")
 
         return (len(errors) == 0, errors)
 
@@ -244,10 +244,10 @@ class AuditWorkflow(AIWorkflow):
 
                         # Check for comment field when validated
                         if status != 'pending' and 'comment' not in issue:
-                            errors.append(f"Issue '{issue.get('title')}' missing validation comment")
+                            errors.append(f"Issue '{issue.get('title')}' in {plan_file} missing validation comment")
 
                 if not has_validated_issues:
-                    errors.append("No issues have been validated (all still pending)")
+                    errors.append(f"No issues have been validated in {plan_file} (all still pending)")
 
                 # Check for issue files for true positives
                 issues_dir = Path(self.working_dir) / "issues"
@@ -257,7 +257,7 @@ class AuditWorkflow(AIWorkflow):
                     # Check that at least some issue files exist
                     yaml_files = list(issues_dir.glob("*.yaml"))
                     if len(yaml_files) == 0:
-                        errors.append("No issue files (*.yaml) created for true positive findings")
+                        errors.append(f"No issue files (*.yaml) created for true positive findings in {issues_dir}")
                     else:
                         # Validate YAML file structure
                         for yaml_file in yaml_files[:3]:  # Check first 3 files as samples
@@ -295,9 +295,9 @@ class AuditWorkflow(AIWorkflow):
                                 errors.append(f"Error reading issue file {yaml_file.name}: {str(e)}")
 
             except yaml.YAMLError as e:
-                errors.append(f"Invalid YAML in updated plan.yaml: {str(e)}")
+                errors.append(f"Invalid YAML in updated {plan_file}: {str(e)}")
             except Exception as e:
-                errors.append(f"Error validating updated plan.yaml: {str(e)}")
+                errors.append(f"Error validating updated {plan_file}: {str(e)}")
 
         return (len(errors) == 0, errors)
 
@@ -320,15 +320,26 @@ class AuditWorkflow(AIWorkflow):
 
             for section in required_sections:
                 if section not in content:
-                    errors.append(f"Missing required section '{section}' in executive-summary.md")
+                    errors.append(f"Missing required section '{section}' in {summary_file}")
 
-            # Check for findings table
-            if "| Severity | Count |" not in content:
-                errors.append("Missing severity findings table in executive-summary.md")
+            # Check for the EXACT table format from the prompt
+            table_headers = ["| Impact", "| High Confidence", "| Medium Confidence", "| Low Confidence", "| Total"]
+            if not all(header in content for header in table_headers):
+                errors.append(
+                    f"Missing findings summary table in {summary_file}. The executive summary must include a table with "
+                    "this exact header row: | Impact | High Confidence | Medium Confidence | Low Confidence | Total |"
+                )
+            
+            # Also check for table separator line
+            if "| Impact" in content and not any("|---" in line for line in content.split('\n') if "---" in line):
+                errors.append(
+                    f"Findings table missing separator line in {summary_file}. Tables must have a separator line "
+                    "like |----------|----------------|-------------------|----------------|-------|"
+                )
 
             # Check minimum content length
             if len(content) < 500:
-                errors.append("Executive summary is too short (minimum 500 characters)")
+                errors.append(f"Executive summary in {summary_file} is too short (minimum 500 characters)")
 
         return (len(errors) == 0, errors)
 
