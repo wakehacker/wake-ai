@@ -94,8 +94,6 @@ Work in the assigned directory `{{working_dir}}` where the audit plan and result
     ````
 
     exploit: |
-    = Proof of Concept
-
     An attacker can exploit this vulnerability:
 
     1. Deploy a malicious contract with a fallback function that calls Vault.withdraw()
@@ -122,8 +120,6 @@ Work in the assigned directory `{{working_dir}}` where the audit plan and result
     ```
 
     recommendation: |
-    = Recommendation
-
     Apply the checks-effects-interactions pattern by updating state before external calls:
 
     ```solidity
