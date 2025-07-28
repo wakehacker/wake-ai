@@ -128,6 +128,7 @@ class WorkflowState:
     errors: List[Dict[str, Any]] = field(default_factory=list)
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+    cumulative_cost: float = 0.0
 
 
 class AIWorkflow(ABC):
@@ -452,6 +453,9 @@ class AIWorkflow(ABC):
                         self.state.responses[step.name] = response
                         self.state.context[f"{step.name}_output"] = response.content
                         self._custom_context_update(step.name, response)
+                        
+                        # Update cumulative cost
+                        self.state.cumulative_cost += response.cost
 
                         # Call step-specific post-processing if defined (used internally)
                         if step._post_hook:
@@ -494,7 +498,7 @@ class AIWorkflow(ABC):
 
         self.state.completed_at = datetime.now()
         results = self._prepare_results()
-        logger.info(f"Workflow '{self.name}' completed successfully in {results.get('duration', 0):.2f} seconds")
+        logger.info(f"Workflow '{self.name}' completed successfully in {results.get('duration', 0):.2f} seconds (total cost: ${self.state.cumulative_cost:.4f})")
 
         # Format results before cleanup
         formatted_results = self.format_results(results)
@@ -581,7 +585,7 @@ class AIWorkflow(ABC):
                 if self.state.started_at and self.state.completed_at
                 else None
             ),
-            "total_cost": sum(response.cost for response in self.state.responses.values())
+            "total_cost": self.state.cumulative_cost
         }
 
     @classmethod
@@ -623,7 +627,8 @@ class AIWorkflow(ABC):
             "completed_steps": self.state.completed_steps,
             "skipped_steps": self.state.skipped_steps,
             "context": self.state.context,
-            "errors": self.state.errors
+            "errors": self.state.errors,
+            "cumulative_cost": self.state.cumulative_cost
         }
         state_file = self.working_dir / f"{self.name}_state.json"
         state_file.write_text(json.dumps(state_data, indent=2))
@@ -639,6 +644,7 @@ class AIWorkflow(ABC):
         self.state.skipped_steps = data.get("skipped_steps", [])  # Backwards compatibility
         self.state.context = data["context"]
         self.state.errors = data["errors"]
+        self.state.cumulative_cost = data.get("cumulative_cost", 0.0)  # Backwards compatibility
         logger.debug(f"Loaded state: step {self.state.current_step}/{len(self.steps)}, completed: {len(self.state.completed_steps)}")
 
     def add_context(self, key: str, value: Any):
@@ -652,6 +658,10 @@ class AIWorkflow(ABC):
     def get_context_keys(self) -> List[str]:
         """Get all context keys."""
         return list(self.state.context.keys())
+    
+    def get_cumulative_cost(self) -> float:
+        """Get the cumulative cost of all steps executed so far."""
+        return self.state.cumulative_cost
 
     def format_results(self, results: Dict[str, Any]) -> AIResult:
         """Convert workflow results to an AIResult object.
