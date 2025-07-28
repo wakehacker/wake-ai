@@ -7,6 +7,15 @@ import yaml
 from wake_ai.core.claude import ClaudeCodeSession
 from wake_ai.core.flow import AIWorkflow, ClaudeCodeResponse
 
+# Valid detection types for audit findings
+VALID_DETECTION_TYPES = [
+    "Data validation", "Code quality", "Logic error", "Standards violation",
+    "Gas optimization", "Logging", "Trust model", "Arithmetics",
+    "Access control", "Unused code", "Storage clashes", "Denial of service",
+    "Front-running", "Replay attack", "Reentrancy", "Function visibility",
+    "Overflow/Underflow", "Configuration", "Reinitialization", "Griefing", "N/A"
+]
+
 
 class AuditWorkflow(AIWorkflow):
     """Fixed security audit workflow following industry best practices."""
@@ -191,7 +200,7 @@ class AuditWorkflow(AIWorkflow):
                                 # Validate impact values
                                 if 'impact' in issue and issue['impact'] not in ['high', 'medium', 'low', 'info', 'warning']:
                                     errors.append(f"Contract {contract.get('name', i)} issue {j} has invalid impact: {issue['impact']}")
-                                
+
                                 # Validate confidence values
                                 if 'confidence' in issue and issue['confidence'] not in ['high', 'medium', 'low']:
                                     errors.append(f"Contract {contract.get('name', i)} issue {j} has invalid confidence: {issue['confidence']}")
@@ -255,17 +264,23 @@ class AuditWorkflow(AIWorkflow):
                             try:
                                 with open(yaml_file, 'r') as f:
                                     issue_data = yaml.safe_load(f)
-                                
+
                                 if not isinstance(issue_data, dict):
                                     errors.append(f"Issue file {yaml_file.name} is not a valid YAML dictionary")
                                     continue
-                                
+
                                 # Check for required fields
                                 required_fields = ['name', 'impact', 'confidence', 'detection_type', 'location', 'description', 'recommendation']
                                 missing_fields = [field for field in required_fields if field not in issue_data]
                                 if missing_fields:
                                     errors.append(f"Issue file {yaml_file.name} missing fields: {', '.join(missing_fields)}")
-                                
+
+                                # Validate detection_type
+                                if 'detection_type' in issue_data:
+                                    detection_type = issue_data['detection_type']
+                                    if detection_type not in VALID_DETECTION_TYPES:
+                                        errors.append(f"Issue file {yaml_file.name} has invalid detection_type '{detection_type}'. Valid types are: {', '.join(VALID_DETECTION_TYPES)}")
+
                                 # Validate location structure
                                 if 'location' in issue_data and isinstance(issue_data['location'], dict):
                                     loc = issue_data['location']
@@ -273,7 +288,7 @@ class AuditWorkflow(AIWorkflow):
                                     loc_missing = [field for field in loc_required if field not in loc]
                                     if loc_missing:
                                         errors.append(f"Issue file {yaml_file.name} location missing: {', '.join(loc_missing)}")
-                                    
+
                             except yaml.YAMLError as e:
                                 errors.append(f"Issue file {yaml_file.name} has invalid YAML: {str(e)}")
                             except Exception as e:

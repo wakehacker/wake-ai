@@ -94,11 +94,11 @@ def print_detection(
     # Build content
     content_parts = []
 
-    if detection.detection:
+    if detection.description:
         # Add detection section with improved formatting
         content_parts.append(Text.from_markup("[bold cyan]Detection[/bold cyan]"))
         # Parse and add content with code blocks
-        content_with_code = _parse_content_with_code_blocks(detection.detection.strip(), theme)
+        content_with_code = _parse_content_with_code_blocks(detection.description.strip(), theme)
         content_parts.extend(content_with_code)
 
     if detection.recommendation:
