@@ -329,7 +329,7 @@ class AuditWorkflow(AIWorkflow):
                     f"Missing findings summary table in {summary_file}. The executive summary must include a table with "
                     "this exact header row: | Impact | High Confidence | Medium Confidence | Low Confidence | Total |"
                 )
-            
+
             # Also check for table separator line
             if "| Impact" in content and not any("|---" in line for line in content.split('\n') if "---" in line):
                 errors.append(
@@ -384,7 +384,8 @@ class AuditWorkflow(AIWorkflow):
     @classmethod
     def get_cli_options(cls) -> Dict[str, Any]:
         """Return audit workflow CLI options."""
-        import click
+        import rich_click as click
+
         return {
             "scope": {
                 "param_decls": ["-s", "--scope"],

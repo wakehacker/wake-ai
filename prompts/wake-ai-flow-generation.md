@@ -27,10 +27,10 @@ Analyze the requirements to choose the appropriate base class:
 a. **For Simple Detectors** (finding specific patterns/vulnerabilities):
    ```python
    from wake_ai import MarkdownDetector
-   
+
    class MyDetector(MarkdownDetector):
        """Detects specific vulnerability patterns."""
-       
+
        def get_detector_prompt(self) -> str:
            return """<task>...</task>..."""
    ```
@@ -39,10 +39,10 @@ b. **For Complex Workflows** (multi-step analysis, custom validation):
    ```python
    from wake_ai import AIWorkflow
    from wake_ai.results import AIResult
-   
+
    class MyWorkflow(AIWorkflow):
        """Complex multi-step analysis workflow."""
-       
+
        def __init__(self, scope: List[str], **kwargs):
            # Custom initialization
            super().__init__(name="my_workflow", **kwargs)
@@ -52,11 +52,11 @@ c. **For Workflows with Custom Results**:
    ```python
    from wake_ai import AIWorkflow
    from wake_ai.results import AIResult
-   
+
    class MyCustomResult(AIResult):
        # Define custom result structure
        pass
-   
+
    class MyWorkflow(AIWorkflow):
        def __init__(self, **kwargs):
            super().__init__(
@@ -82,7 +82,7 @@ a. **Set Basic Properties**:
    def __init__(self, scope: List[str], threshold: float = 0.8, **kwargs):
        # Call parent constructor with workflow name
        super().__init__(name="vulnerability_analyzer", **kwargs)
-       
+
        # Store configuration
        self.scope = scope
        self.threshold = threshold
@@ -101,7 +101,7 @@ c. **Load External Prompts** (for complex workflows):
    # Load prompts before _setup_steps() is called
    self.prompts = {}
    prompt_dir = Path(__file__).parent / "prompts"
-   
+
    for prompt_file in prompt_dir.glob("*.md"):
        key = prompt_file.stem.split("-", 1)[1]  # Remove number prefix
        self.prompts[key] = prompt_file.read_text()
@@ -132,7 +132,7 @@ b. **Step with Tool Restrictions**:
        name="test_contracts",
        prompt_template="Run Wake tests on the contracts",
        allowed_tools=[
-           "Read", 
+           "Read",
            "Bash(wake test:*)",  # Note: Use colon for command prefixes
            "Bash(cd:*)"
        ],
@@ -191,7 +191,7 @@ self.add_extraction_step(
 def _generate_remediation_steps(self, response: ClaudeCodeResponse, context: Dict[str, Any]) -> List[WorkflowStep]:
     """Generate steps based on findings."""
     steps = []
-    
+
     vulnerabilities = context.get("vulnerabilities", [])
     for i, vuln in enumerate(vulnerabilities):
         steps.append(WorkflowStep(
@@ -200,7 +200,7 @@ def _generate_remediation_steps(self, response: ClaudeCodeResponse, context: Dic
             allowed_tools=["Read", "Edit", "Write"],
             max_cost=3.0
         ))
-    
+
     return steps
 
 # In _setup_steps():
@@ -221,7 +221,7 @@ Create validation functions that return `(success: bool, errors: List[str])` and
 def _validate_analysis(self, response: ClaudeCodeResponse) -> Tuple[bool, List[str]]:
     """Validate analysis step output - MUST match prompt requirements exactly."""
     errors = []
-    
+
     # Check for required output file (use exact filename from prompt)
     results_file = self.working_dir / "analysis_results.yaml"
     if not results_file.exists():
@@ -230,23 +230,23 @@ def _validate_analysis(self, response: ClaudeCodeResponse) -> Tuple[bool, List[s
             "The prompt asks you to create this file with vulnerability findings."
         )
         return (False, errors)
-    
+
     # Validate YAML structure (match exact structure from prompt)
     try:
         import yaml
         with open(results_file) as f:
             data = yaml.safe_load(f)
-        
+
         # Check required fields match prompt example
         if not isinstance(data, dict):
             errors.append("Results must be a YAML dictionary as shown in the prompt example")
-        
+
         if "vulnerabilities" not in data:
             errors.append(
                 "Missing 'vulnerabilities' field. The YAML must have structure:\n"
                 "vulnerabilities:\n  - contract: ...\n    function: ...\n    ..."
             )
-        
+
         # Validate each vulnerability has required fields from prompt
         for i, vuln in enumerate(data.get("vulnerabilities", [])):
             required_fields = ["contract", "function", "line", "severity", "description"]
@@ -256,17 +256,17 @@ def _validate_analysis(self, response: ClaudeCodeResponse) -> Tuple[bool, List[s
                     f"Vulnerability {i} missing fields: {', '.join(missing)}. "
                     f"Each vulnerability must have: {', '.join(required_fields)}"
                 )
-            
+
             # Validate severity values match prompt specification
             if "severity" in vuln and vuln["severity"] not in ["high", "medium", "low"]:
                 errors.append(
                     f"Vulnerability {i} has invalid severity '{vuln['severity']}'. "
                     "Must be one of: high, medium, low (as specified in prompt)"
                 )
-            
+
     except Exception as e:
         errors.append(f"Invalid YAML format: {str(e)}. Check the YAML example in the prompt.")
-    
+
     return (len(errors) == 0, errors)
 ```
 
@@ -276,7 +276,7 @@ def _validate_analysis(self, response: ClaudeCodeResponse) -> Tuple[bool, List[s
    ```python
    # Bad: No file path - AI doesn't know where to fix
    errors.append("Missing required table")
-   
+
    # Good: File path included - AI knows exactly where to fix
    errors.append(f"Missing required table in {file_path}")
    ```
@@ -295,7 +295,7 @@ def _validate_analysis(self, response: ClaudeCodeResponse) -> Tuple[bool, List[s
    ```python
    # Bad: Generic error, no file path
    errors.append("Invalid format")
-   
+
    # Good: Specific with example and file path
    errors.append(
        f"Invalid severity value in {file_path}. Must be 'high', 'medium', or 'low' "
@@ -390,7 +390,7 @@ Previous findings: {{initialize_output}}
    # WRONG: Prompt asks for one format, validator checks for another
    # Prompt: "Create table with columns: | Impact | Confidence | Location |"
    # Validator: if "| Severity | Count |" not in content:  # MISMATCH!
-   
+
    # CORRECT: Validator matches prompt exactly
    # Prompt: "Create table with columns: | Impact | Confidence | Location |"
    # Validator: if "| Impact | Confidence | Location |" not in content:
@@ -400,7 +400,7 @@ Previous findings: {{initialize_output}}
    ```python
    # WRONG: Doesn't help AI fix the issue
    errors.append("Missing table")
-   
+
    # CORRECT: Tells AI exactly what's needed
    errors.append(
        "Missing findings table. Must include table with exact header: "
@@ -415,7 +415,7 @@ Previous findings: {{initialize_output}}
    # findings:
    #   - type: "high"
    #     description: "..."
-   
+
    # Validator checking for different fields:
    if "severity" not in finding:  # Should be "type"!
    ```
@@ -448,7 +448,7 @@ Previous findings: {{initialize_output}}
    ```python
    def _validate_results(self, response: ClaudeCodeResponse) -> Tuple[bool, List[str]]:
        errors = []
-       
+
        # Check exact filename from prompt
        results_file = self.working_dir / "results.yaml"
        if not results_file.exists():
@@ -457,11 +457,11 @@ Previous findings: {{initialize_output}}
                "The prompt asks you to create this exact file."
            )
            return (False, errors)
-       
+
        try:
            with open(results_file) as f:
                data = yaml.safe_load(f)
-           
+
            # Check exact structure from prompt
            if "findings" not in data:
                errors.append(
@@ -469,7 +469,7 @@ Previous findings: {{initialize_output}}
                    "findings:\n  - title: ...\n    impact: ...\n    ..."
                )
                return (False, errors)
-           
+
            # Validate each finding matches prompt example
            for i, finding in enumerate(data.get("findings", [])):
                # Check exact fields from prompt
@@ -480,14 +480,14 @@ Previous findings: {{initialize_output}}
                        f"Finding {i} missing: {', '.join(missing)}. "
                        f"Each finding needs: {', '.join(required)}"
                    )
-               
+
                # Check exact enum values from prompt
                if finding.get("impact") not in ["high", "medium", "low"]:
                    errors.append(
                        f"Finding {i}: invalid impact '{finding.get('impact')}'. "
                        "Must be: high, medium, or low (as shown in prompt)"
                    )
-               
+
                # Check nested structure from prompt
                if "location" in finding:
                    loc = finding["location"]
@@ -496,10 +496,10 @@ Previous findings: {{initialize_output}}
                            f"Finding {i}: location must have 'file' and 'line' "
                            "(see prompt example)"
                        )
-       
+
        except yaml.YAMLError as e:
            errors.append(f"Invalid YAML: {e}. Check prompt example for correct format.")
-       
+
        return (len(errors) == 0, errors)
    ```
 
@@ -596,16 +596,16 @@ from typing import Dict, Any
 
 class SecurityAuditResult(AIResult):
     """Custom result for security audit workflow."""
-    
+
     def __init__(self, vulnerabilities: List[Dict], summary: Dict):
         self.vulnerabilities = vulnerabilities
         self.summary = summary
-    
+
     @classmethod
     def from_working_dir(cls, working_dir: Path, raw_results: Dict[str, Any]) -> "SecurityAuditResult":
         """Parse results from working directory."""
         import yaml
-        
+
         # Load main results file
         results_file = working_dir / "analysis_results.yaml"
         if results_file.exists():
@@ -615,27 +615,27 @@ class SecurityAuditResult(AIResult):
                     vulnerabilities=data.get("vulnerabilities", []),
                     summary=data.get("summary", {})
                 )
-        
+
         return cls(vulnerabilities=[], summary={})
-    
+
     def pretty_print(self) -> None:
         """Display results in console."""
         from rich.console import Console
         from rich.table import Table
-        
+
         console = Console()
-        
+
         if not self.vulnerabilities:
             console.print("[green]No vulnerabilities found![/green]")
             return
-        
+
         # Create summary table
         table = Table(title="Security Audit Results")
         table.add_column("Contract", style="cyan")
         table.add_column("Function", style="yellow")
         table.add_column("Severity", style="red")
         table.add_column("Description")
-        
+
         for vuln in self.vulnerabilities:
             table.add_row(
                 vuln["contract"],
@@ -643,10 +643,10 @@ class SecurityAuditResult(AIResult):
                 vuln["severity"].upper(),
                 vuln["description"]
             )
-        
+
         console.print(table)
         console.print(f"\nTotal: {self.summary.get('total_found', 0)} vulnerabilities")
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON export."""
         return {
@@ -662,7 +662,7 @@ Here's a complete example combining all concepts:
 ```python
 from pathlib import Path
 from typing import Dict, Any, List, Tuple, Optional
-import click
+import rich_click as click
 from pydantic import BaseModel
 
 from wake_ai import AIWorkflow, WorkflowStep
@@ -681,51 +681,51 @@ class VulnerabilityInfo(BaseModel):
 
 class ReentrancyResult(AIResult):
     """Result class for reentrancy detection."""
-    
+
     def __init__(self, vulnerabilities: List[Dict]):
         self.vulnerabilities = vulnerabilities
-    
+
     @classmethod
     def from_working_dir(cls, working_dir: Path, raw_results: Dict[str, Any]) -> "ReentrancyResult":
         import yaml
         results_file = working_dir / "reentrancy_report.yaml"
-        
+
         if results_file.exists():
             with open(results_file) as f:
                 data = yaml.safe_load(f)
                 return cls(vulnerabilities=data.get("vulnerabilities", []))
-        
+
         return cls(vulnerabilities=[])
-    
+
     def pretty_print(self) -> None:
         from rich.console import Console
         from rich.panel import Panel
-        
+
         console = Console()
-        
+
         if not self.vulnerabilities:
             console.print(Panel("[green]✓ No reentrancy vulnerabilities found[/green]"))
             return
-        
+
         console.print(Panel(f"[red]Found {len(self.vulnerabilities)} reentrancy vulnerabilities[/red]"))
-        
+
         for vuln in self.vulnerabilities:
             console.print(f"\n[red]● {vuln['severity'].upper()}[/red] in {vuln['contract']}::{vuln['function']}")
             console.print(f"  Line {vuln['line']}: {vuln['description']}")
-    
+
     def to_dict(self) -> Dict[str, Any]:
         return {"vulnerabilities": self.vulnerabilities}
 
 
 class ReentrancyWorkflow(AIWorkflow):
     """Detects and analyzes reentrancy vulnerabilities in smart contracts."""
-    
+
     # Default cleanup behavior for this workflow
     cleanup_working_dir = False  # Preserve results
-    
+
     def __init__(self, contracts: List[str], deep_analysis: bool = False, **kwargs):
         """Initialize reentrancy detection workflow.
-        
+
         Args:
             contracts: List of contract files to analyze
             deep_analysis: Whether to perform deep analysis with symbolic execution
@@ -735,17 +735,17 @@ class ReentrancyWorkflow(AIWorkflow):
             result_class=ReentrancyResult,
             **kwargs
         )
-        
+
         self.contracts = contracts
         self.deep_analysis = deep_analysis
-        
+
         # Add context
         self.add_context("contracts", " ".join(contracts))
         self.add_context("deep_analysis", deep_analysis)
-    
+
     def _setup_steps(self):
         """Define workflow steps."""
-        
+
         # Step 1: Initial scan for reentrancy patterns
         self.add_step(
             name="scan",
@@ -754,14 +754,14 @@ class ReentrancyWorkflow(AIWorkflow):
             max_cost=3.0,
             validator=self._validate_scan
         )
-        
+
         # Step 2: Extract vulnerability data
         self.add_extraction_step(
             after_step="scan",
             output_schema=VulnerabilityInfo,
             context_key="vulnerabilities"
         )
-        
+
         # Step 3: Deep analysis (conditional)
         self.add_step(
             name="deep_analysis",
@@ -771,7 +771,7 @@ class ReentrancyWorkflow(AIWorkflow):
             continue_session=True,
             max_cost=10.0
         )
-        
+
         # Step 4: Generate final report
         self.add_step(
             name="report",
@@ -781,7 +781,7 @@ class ReentrancyWorkflow(AIWorkflow):
             max_cost=1.0,
             validator=self._validate_report
         )
-    
+
     def _get_scan_prompt(self) -> str:
         return """<task>
 Scan smart contracts for reentrancy vulnerabilities by identifying external calls followed by state changes.
@@ -820,7 +820,7 @@ Working directory: {{working_dir}}
 <output_format>
 Create a mental note of all findings. You'll be asked to format them in the next step.
 </output_format>"""
-    
+
     def _get_deep_analysis_prompt(self) -> str:
         return """<task>
 Perform deep analysis of identified reentrancy vulnerabilities using Wake's symbolic execution.
@@ -844,7 +844,7 @@ Perform deep analysis of identified reentrancy vulnerabilities using Wake's symb
    - Refine severity based on deep analysis
    - Add exploitation difficulty assessment
 </steps>"""
-    
+
     def _get_report_prompt(self) -> str:
         return """<task>
 Generate a comprehensive reentrancy vulnerability report based on all analysis performed.
@@ -866,36 +866,36 @@ vulnerabilities:
 </output_format>
 
 Include all vulnerabilities found, ordered by severity (high to low)."""
-    
+
     def _validate_scan(self, response: ClaudeCodeResponse) -> Tuple[bool, List[str]]:
         """Validate initial scan completed successfully."""
         # Basic validation - just check response has content
         if not response.content:
             return (False, ["Scan produced no output"])
         return (True, [])
-    
+
     def _validate_report(self, response: ClaudeCodeResponse) -> Tuple[bool, List[str]]:
         """Validate final report generation."""
         errors = []
         report_file = self.working_dir / "reentrancy_report.yaml"
-        
+
         if not report_file.exists():
             errors.append("reentrancy_report.yaml not created")
             return (False, errors)
-        
+
         try:
             import yaml
             with open(report_file) as f:
                 data = yaml.safe_load(f)
-            
+
             if "vulnerabilities" not in data:
                 errors.append("Missing 'vulnerabilities' field in report")
-            
+
         except Exception as e:
             errors.append(f"Invalid YAML in report: {str(e)}")
-        
+
         return (len(errors) == 0, errors)
-    
+
     @classmethod
     def get_cli_options(cls) -> Dict[str, Any]:
         """CLI options for reentrancy detector."""
@@ -913,8 +913,8 @@ Include all vulnerabilities found, ordered by severity (high to low)."""
                 "help": "Perform deep analysis with symbolic execution"
             }
         }
-    
-    @classmethod  
+
+    @classmethod
     def process_cli_args(cls, **kwargs) -> Dict[str, Any]:
         """Process CLI arguments."""
         return {
@@ -983,7 +983,7 @@ When asked to create a workflow, provide:
    ```bash
    # CLI usage
    wake-ai --flow my_workflow -c contract.sol --deep-analysis
-   
+
    # Python usage
    from flows.my_workflow import MyWorkflow
    workflow = MyWorkflow(contracts=["contract.sol"])
@@ -1008,7 +1008,7 @@ from wake_ai import MarkdownDetector
 
 class UnusedImportDetector(MarkdownDetector):
     """Detects unused imports in Solidity contracts."""
-    
+
     def get_detector_prompt(self) -> str:
         return """<task>
 Identify all unused import statements in Solidity contracts by analyzing which imported symbols are never referenced in the code.
@@ -1052,7 +1052,7 @@ findings:
 ```python
 from pathlib import Path
 from typing import Dict, Any, List, Tuple
-import click
+import rich_click as click
 
 from wake_ai import AIWorkflow
 from wake_ai.core.claude import ClaudeCodeResponse
@@ -1060,26 +1060,26 @@ from wake_ai.core.claude import ClaudeCodeResponse
 
 class UpgradeabilityAudit(AIWorkflow):
     """Comprehensive audit for upgradeable smart contract systems."""
-    
+
     # Preserve results by default
     cleanup_working_dir = False
-    
+
     def __init__(self, proxy_address: str, implementation_address: str, **kwargs):
         super().__init__(name="upgradeability_audit", **kwargs)
-        
+
         self.proxy = proxy_address
         self.implementation = implementation_address
-        
+
         # Load external prompts
         prompt_dir = Path(__file__).parent / "prompts"
         self.prompts = {}
         for p in prompt_dir.glob("*.md"):
             self.prompts[p.stem.split("-", 1)[1]] = p.read_text()
-        
+
         # Set context
         self.add_context("proxy_address", proxy_address)
         self.add_context("implementation_address", implementation_address)
-    
+
     def _setup_steps(self):
         # Step 1: Analyze proxy pattern
         self.add_step(
@@ -1089,16 +1089,16 @@ class UpgradeabilityAudit(AIWorkflow):
             max_cost=5.0,
             validator=self._validate_proxy_analysis
         )
-        
+
         # Step 2: Check storage layout
         self.add_step(
-            name="storage_check", 
+            name="storage_check",
             prompt_template=self.prompts["storage_check"],
             allowed_tools=["Read", "Bash(wake print storage-layout:*)"],
             continue_session=True,
             max_cost=3.0
         )
-        
+
         # Step 3: Security analysis
         self.add_step(
             name="security_audit",
@@ -1107,52 +1107,52 @@ class UpgradeabilityAudit(AIWorkflow):
             max_cost=10.0,
             validator=self._validate_security_audit
         )
-        
+
         # Dynamic steps based on findings
         self.add_dynamic_steps(
             name="issue_remediation",
             generator=self._generate_fix_steps,
             after_step="security_audit"
         )
-    
+
     def _validate_proxy_analysis(self, response: ClaudeCodeResponse) -> Tuple[bool, List[str]]:
         errors = []
         analysis_file = self.working_dir / "proxy_analysis.yaml"
-        
+
         if not analysis_file.exists():
             errors.append("proxy_analysis.yaml not created")
-        
+
         return (len(errors) == 0, errors)
-    
+
     def _validate_security_audit(self, response: ClaudeCodeResponse) -> Tuple[bool, List[str]]:
         errors = []
-        
+
         required_files = ["security_findings.yaml", "audit_report.md"]
         for file in required_files:
             if not (self.working_dir / file).exists():
                 errors.append(f"Required file {file} not created")
-        
+
         return (len(errors) == 0, errors)
-    
+
     def _generate_fix_steps(self, response: ClaudeCodeResponse, context: Dict[str, Any]) -> List[WorkflowStep]:
         # Parse findings and generate remediation steps
         import yaml
-        
+
         findings_file = self.working_dir / "security_findings.yaml"
         if not findings_file.exists():
             return []
-        
+
         with open(findings_file) as f:
             findings = yaml.safe_load(f)
-        
+
         steps = []
         critical_issues = [f for f in findings.get("issues", []) if f["severity"] == "critical"]
-        
+
         for i, issue in enumerate(critical_issues[:3]):  # Limit to 3 critical fixes
             steps.append(WorkflowStep(
                 name=f"fix_critical_{i}",
                 prompt_template=f"""Fix the critical issue: {issue['title']}
-                
+
 Issue description: {issue['description']}
 Location: {issue['location']}
 
@@ -1160,9 +1160,9 @@ Generate a patch file that addresses this issue.""",
                 allowed_tools=["Read", "Write", "Edit"],
                 max_cost=3.0
             ))
-        
+
         return steps
-    
+
     @classmethod
     def get_cli_options(cls) -> Dict[str, Any]:
         return {
@@ -1179,7 +1179,7 @@ Generate a patch file that addresses this issue.""",
                 "help": "Implementation contract address"
             }
         }
-    
+
     @classmethod
     def process_cli_args(cls, **kwargs) -> Dict[str, Any]:
         return {
