@@ -68,7 +68,14 @@ c. **For Workflows with Custom Results**:
 
 ## 2. **Initialize the Workflow**
 
-Configure the workflow in `__init__`:
+Configure the workflow in `__init__`.
+
+**Note on Default Tools**: As of recent updates, AIWorkflow provides secure default tools that include:
+- Read-only tools: `Read`, `Grep`, `Glob`, `LS`, `Task`, `TodoWrite`
+- Write tools (path-restricted): `Write({working_dir}/**)`, `Edit({working_dir}/**)`, `MultiEdit({working_dir}/**)`
+- Essential bash commands: `Bash(wake:*)`, `Bash(cd:*)`, `Bash(pwd)`, and others
+
+Use `allowed_tools=None` in your steps to inherit these secure defaults.
 
 a. **Set Basic Properties**:
    ```python
@@ -111,7 +118,7 @@ a. **Basic Step Pattern**:
        self.add_step(
            name="analyze",
            prompt_template=self._get_analysis_prompt(),
-           allowed_tools=["Read", "Grep", "Glob", "LS"],
+           allowed_tools=None,  # Use secure defaults from parent class
            max_cost=5.0,
            validator=self._validate_analysis,
            max_retries=2
@@ -126,8 +133,8 @@ b. **Step with Tool Restrictions**:
        prompt_template="Run Wake tests on the contracts",
        allowed_tools=[
            "Read", 
-           "Bash(wake test *)",
-           "Bash(cd *)"
+           "Bash(wake test:*)",  # Note: Use colon for command prefixes
+           "Bash(cd:*)"
        ],
        max_cost=3.0
    )
@@ -528,7 +535,7 @@ class ReentrancyWorkflow(AIWorkflow):
         self.add_step(
             name="deep_analysis",
             prompt_template=self._get_deep_analysis_prompt(),
-            allowed_tools=["Read", "Bash(wake *)", "Task"],
+            allowed_tools=["Read", "Bash(wake:*)", "Task"],
             condition=lambda ctx: self.deep_analysis and len(ctx.get("vulnerabilities", [])) > 0,
             continue_session=True,
             max_cost=10.0
@@ -687,6 +694,30 @@ Include all vulnerabilities found, ordered by severity (high to low)."""
 
 </steps>
 
+<recent_updates>
+## Recent Framework Updates
+
+The following changes have been made to the Wake AI framework that affect workflow creation:
+
+1. **Default Tool Permissions**: AIWorkflow now provides secure default tools. Use `allowed_tools=None` to inherit defaults instead of specifying all tools manually.
+
+2. **Tool Pattern Format**: When restricting Bash commands, use colon syntax: `Bash(wake:*)` instead of `Bash(wake *)`
+
+3. **Detection Structure Changes**:
+   - The `Detection` class now uses `description` field instead of `detection` field
+   - Added optional `source` field to track which workflow/detector found the issue
+   - Audit workflow uses `AuditDetection` with `impact` and `confidence` instead of `severity`
+
+4. **MarkdownDetector Independence**: `MarkdownDetector` no longer depends on `AuditResult` and has its own `MarkdownDetectorResult` class
+
+5. **Detection Type Validation**: Audit workflow validates detection types against a specific list:
+   - Data validation, Code quality, Logic error, Standards violation
+   - Gas optimization, Logging, Trust model, Arithmetics
+   - Access control, Unused code, Storage clashes, Denial of service
+   - Front-running, Replay attack, Reentrancy, Function visibility
+   - Overflow/Underflow, Configuration, Reinitialization, Griefing, N/A
+</recent_updates>
+
 <validation_requirements>
 - **ALWAYS** inherit from either `AIWorkflow` or `MarkdownDetector`
 - **ALWAYS** implement `_setup_steps()` method
@@ -828,7 +859,7 @@ class UpgradeabilityAudit(AIWorkflow):
         self.add_step(
             name="storage_check", 
             prompt_template=self.prompts["storage_check"],
-            allowed_tools=["Read", "Bash(wake print storage-layout *)"],
+            allowed_tools=["Read", "Bash(wake print storage-layout:*)"],
             continue_session=True,
             max_cost=3.0
         )
