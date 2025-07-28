@@ -20,9 +20,9 @@ class AuditDetection:
     impact: str  # high, medium, low, warning, info
     confidence: str  # high, medium, low
     detection_type: str  # e.g., "vulnerability", "gas-optimization", "best-practice"
+    description: str  # Main detection description
     source: Optional[str] = None  # Workflow/detector that found this issue
     location: Optional[Location] = None
-    description: Optional[str] = None  # Main detection description
     recommendation: Optional[str] = None
     exploit: Optional[str] = None
 
@@ -33,6 +33,7 @@ class AuditDetection:
             "impact": self.impact,
             "confidence": self.confidence,
             "detection_type": self.detection_type,
+            "description": self.description,
         }
         
         if self.source:
@@ -40,8 +41,6 @@ class AuditDetection:
 
         if self.location:
             data["location"] = self.location.to_dict()
-        if self.description:
-            data["description"] = self.description
         if self.recommendation:
             data["recommendation"] = self.recommendation
         if self.exploit:
@@ -117,7 +116,7 @@ class AuditResult(AIResult):
                     )
 
                 # Get content fields (with markdown/asciidoc content)
-                description_text = issue_data.get('description', '')
+                description_text = issue_data.get('description', 'No description provided')
                 recommendation = issue_data.get('recommendation', '')
                 exploit = issue_data.get('exploit', '')
 
