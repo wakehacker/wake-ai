@@ -62,8 +62,9 @@ class Detection:
     name: str  # Detection title/name
     severity: Severity
     detection_type: str  # e.g., "vulnerability", "gas-optimization", "best-practice"
+    source: Optional[str] = None  # Workflow/detector that found this issue
     location: Optional[Location] = None
-    detection: Optional[str] = None  # Main detection description
+    description: Optional[str] = None  # Main detection description
     recommendation: Optional[str] = None
     exploit: Optional[str] = None
     uri: Optional[str] = None
@@ -76,10 +77,12 @@ class Detection:
             "detection_type": self.detection_type,
         }
 
+        if self.source:
+            data["source"] = self.source
         if self.location:
             data["location"] = self.location.to_dict()
-        if self.detection:
-            data["detection"] = self.detection
+        if self.description:
+            data["description"] = self.description
         if self.recommendation:
             data["recommendation"] = self.recommendation
         if self.exploit:
@@ -111,8 +114,9 @@ class Detection:
             name=data["name"],
             severity=Severity(data["severity"]),
             detection_type=data["detection_type"],
+            source=data.get("source"),
             location=location,
-            detection=data.get("detection"),
+            description=data.get("description"),
             recommendation=data.get("recommendation"),
             exploit=data.get("exploit"),
             uri=data.get("uri"),

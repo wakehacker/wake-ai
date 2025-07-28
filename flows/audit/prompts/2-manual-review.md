@@ -61,7 +61,7 @@ Work in the assigned directory `{{working_dir}}` where the audit plan and result
     name: Reentrancy Vulnerability in Withdraw Function
     impact: high
     confidence: high
-    detection_type: vulnerability
+    detection_type: Reentrancy  # Valid types: Data validation, Code quality, Logic error, Standards violation, Gas optimization, Logging, Trust model, Arithmetics, Access control, Unused code, Storage clashes, Denial of service, Front-running, Replay attack, Reentrancy, Function visibility, Overflow/Underflow, Configuration, Reinitialization, Griefing, N/A (Ensure correct spelling and capitalization)
     location:
         target: Vault.withdraw
         file: src/Vault.sol
