@@ -19,24 +19,11 @@
   - Add `timeout` parameter for time-based limits
   - Pass these to ClaudeCodeSession
 
-- [ ] Debug Mode
-  - Implement `--debug` CLI flag
-  - Save step prompts/responses to debug folder
-  - Force preserve working directories
+- [ ] Test resuming of workflows
 
-- [ ] Workflow Base Classes & Mixins
-  - Create DetectorWorkflow base class with auto-extraction
+- [ ] Consider Workflow Base Classes & Mixins
   - Add WakeAnalysisMixin for Wake integration
   - Add SecurityAuditMixin for security tools
-
-- [ ] Testing
-  - Test dynamic step insertion and resume
-  - Test JSON extraction formats
-  - Test validation retry logic
-
-- [ ] Documentation
-  - Update prompt-writing.md with new examples
-  - Document new CLI flags and APIs
 
 - [x] Consolidate workflow enhancement design documents (2025-07-23)
   - Cleaned up .claude/thoughts/ folder
@@ -45,3 +32,10 @@
 - [x] Conditional Steps
   - Add `condition` parameter to steps
   - Skip steps when condition evaluates to False
+
+- [ ] Implement custom permissions MCP for more granular tool permissions
+  - Allow writing/editing only within working_dir by default
+  - See https://docs.anthropic.com/en/docs/claude-code/sdk#custom-permission-prompt-tool
+
+- [ ] Simplify workflow discovery in CLI
+  - Do not rely on importing workflows in cli.py
