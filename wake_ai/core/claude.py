@@ -105,7 +105,7 @@ class ClaudeCodeSession:
 
     def __init__(
         self,
-        model: str = "opus",
+        model: str = "sonnet",
         allowed_tools: Optional[List[str]] = None,
         disallowed_tools: Optional[List[str]] = None,
         working_dir: Optional[Union[str, Path]] = None,
