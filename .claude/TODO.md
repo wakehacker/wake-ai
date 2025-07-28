@@ -45,3 +45,10 @@
 
 - [ ] Simplify workflow discovery in CLI
   - Do not rely on importing workflows in cli.py
+
+- [ ] Fix CLI options handling for flows
+
+- [ ] Parallel Claude Code Session execution support
+  - Some workflows could benefit from parallel execution of certain steps
+  - Consider support of batch size
+
