@@ -3,12 +3,9 @@
 import json
 import logging
 import subprocess
-import shlex
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Union
 from dataclasses import dataclass
-import tempfile
-import os
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -57,29 +54,20 @@ class ClaudeCodeResponse:
             total_cost_usd: float;
         }
         """
-        try:
-            data = json.loads(json_str)
-            logger.debug(f"Parsed JSON response: type={data.get('type')}, subtype={data.get('subtype')}, cost=${data.get('total_cost_usd', 0):.4f}")
+        data = json.loads(json_str)
+        logger.debug(f"Parsed JSON response: type={data.get('type')}, subtype={data.get('subtype')}, cost=${data.get('total_cost_usd', 0):.4f}")
 
-            return cls(
-                content=data.get("result", ""),
-                raw_output=json_str,
-                tool_calls=[],
-                success=not data.get("is_error", False),
-                cost=data.get("total_cost_usd", 0.0),
-                duration=data.get("duration_ms", 0),
-                num_turns=data.get("num_turns", 0),
-                session_id=data.get("session_id", ""),
-                is_finished=data.get("subtype", "success") == "success"
-            )
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse JSON response: {e}")
-            return cls(
-                content="",
-                raw_output=json_str,
-                success=False,
-                error=f"Failed to parse JSON: {e}"
-            )
+        return cls(
+            content=data.get("result", ""),
+            raw_output=json_str,
+            tool_calls=[],
+            success=not data.get("is_error", False),
+            cost=data.get("total_cost_usd", 0.0),
+            duration=data.get("duration_ms", 0),
+            num_turns=data.get("num_turns", 0),
+            session_id=data.get("session_id", ""),
+            is_finished=data.get("subtype", "success") == "success"
+        )
 
     @classmethod
     def from_text(cls, text: str) -> "ClaudeCodeResponse":
@@ -146,7 +134,7 @@ class ClaudeCodeSession:
 
     def _build_command(
         self,
-        prompt: Optional[str] = None,
+        prompt: str,
         output_format: str = "json",
         max_turns: Optional[int] = None,
         resume_session: Optional[str] = None,
@@ -226,7 +214,7 @@ class ClaudeCodeSession:
             stdin_input = input_data.encode() if input_data else None
 
             # Execute command
-            logger.debug("Executing subprocess...")
+            logger.debug(f"Executing subprocess: {cmd}")
             result = subprocess.run(
                 cmd,
                 capture_output=True,
@@ -235,30 +223,48 @@ class ClaudeCodeSession:
                 cwd=self.execution_dir,
                 check=False
             )
-
-            if result.returncode != 0:
-                logger.error(f"Command failed with return code {result.returncode}")
-                logger.error(f"stderr: {result.stderr}")
-                return ClaudeCodeResponse(
-                    content=f"Command failed: {result.stderr}",
-                    raw_output=result.stderr,
-                    tool_calls=[],
-                    success=False,
-                )
+            output = result.stderr if len(result.stderr) > 0 else result.stdout
 
             # Parse response based on format
             if output_format == "json":
-                response = ClaudeCodeResponse.from_json(result.stdout)
-                logger.debug(f"Query completed: cost=${response.cost:.4f}, turns={response.num_turns}, finished={response.is_finished}")
+                if len(result.stdout) > 0:
+                    try:
+                        response = ClaudeCodeResponse.from_json(result.stdout)
+                        if not response.success:
+                            logger.error(f"Command failed: {response.content}")
+                            return response
 
-                # Save session_id if this was the first query (not a continuation)
-                if response.session_id and not continue_session:
-                    self.last_session_id = response.session_id
-                    self.session_history.append(response.session_id)
-                    logger.debug(f"Saved session ID: {self.last_session_id}")
+                        logger.debug(f"Query completed: cost=${response.cost:.4f}, turns={response.num_turns}, finished={response.is_finished}")
 
-                return response
+                        # Save session_id if this was the first query (not a continuation)
+                        if response.session_id and not continue_session:
+                            self.last_session_id = response.session_id
+                            self.session_history.append(response.session_id)
+                            logger.debug(f"Saved session ID: {self.last_session_id}")
+
+                        return response
+                    except json.JSONDecodeError as e:
+                        logger.debug(f"Failed to parse JSON response: {e}")
+
+                logger.error(f"Command failed with return code {result.returncode}")
+                logger.error(f"output: {output}")
+                return ClaudeCodeResponse(
+                    content=f"Command failed: {output}",
+                    raw_output=output,
+                    tool_calls=[],
+                    success=False,
+                )
             else:
+                if result.returncode != 0:
+                    logger.error(f"Command failed with return code {result.returncode}")
+                    logger.error(f"output: {output}")
+                    return ClaudeCodeResponse(
+                        content=f"Command failed: {output}",
+                        raw_output=output,
+                        tool_calls=[],
+                        success=False,
+                    )
+
                 logger.debug("Query completed (text format)")
                 return ClaudeCodeResponse.from_text(result.stdout)
 
@@ -336,6 +342,7 @@ class ClaudeCodeSession:
             )
 
             try:
+                logger.debug(f"Executing subprocess: {cmd}")
                 result = subprocess.run(
                     cmd,
                     capture_output=True,
@@ -343,17 +350,28 @@ class ClaudeCodeSession:
                     cwd=self.execution_dir,
                     check=False
                 )
+                output = result.stderr if len(result.stderr) > 0 else result.stdout
+                parse_error = False
 
-                if result.returncode != 0:
-                    logger.error(f"Iteration {iteration} failed: {result.stderr}")
+                if len(result.stdout) > 0:
+                    try:
+                        response = ClaudeCodeResponse.from_json(result.stdout)
+                        if not response.success:
+                            logger.error(f"Command failed: {response.content}")
+                            return response
+                    except json.JSONDecodeError as e:
+                        logger.debug(f"Failed to parse JSON response: {e}")
+                        parse_error = True
+
+                if result.returncode != 0 or parse_error:
+                    logger.error(f"Iteration {iteration} failed: {output}")
                     return ClaudeCodeResponse(
-                        content=f"Command failed: {result.stderr}",
-                        raw_output=result.stderr,
+                        content=f"Command failed: {output}",
+                        raw_output=output,
                         tool_calls=[],
                         success=False,
                     )
 
-                response = ClaudeCodeResponse.from_json(result.stdout)
                 last_response = response
 
                 total_cost += response.cost
@@ -396,6 +414,7 @@ class ClaudeCodeSession:
             )
 
             try:
+                logger.debug(f"Executing subprocess: {cmd}")
                 result = subprocess.run(
                     cmd,
                     capture_output=True,
@@ -403,17 +422,28 @@ class ClaudeCodeSession:
                     cwd=self.execution_dir,
                     check=False
                 )
+                output = result.stderr if len(result.stderr) > 0 else result.stdout
+                parse_error = False
 
-                if result.returncode != 0:
-                    logger.error(f"Finish attempt {finish_tries + 1} failed: {result.stderr}")
+                if len(result.stdout) > 0:
+                    try:
+                        response = ClaudeCodeResponse.from_json(result.stdout)
+                        if not response.success:
+                            logger.error(f"Command failed: {response.content}")
+                            return response
+                    except json.JSONDecodeError as e:
+                        logger.debug(f"Failed to parse JSON response: {e}")
+                        parse_error = True
+
+                if result.returncode != 0 or parse_error:
+                    logger.error(f"Finish attempt {finish_tries + 1} failed: {output}")
                     return ClaudeCodeResponse(
-                        content=f"Command failed: {result.stderr}",
-                        raw_output=result.stderr,
+                        content=f"Command failed: {output}",
+                        raw_output=output,
                         tool_calls=[],
                         success=False,
                     )
 
-                response = ClaudeCodeResponse.from_json(result.stdout)
                 last_response = response
 
                 total_cost += response.cost
