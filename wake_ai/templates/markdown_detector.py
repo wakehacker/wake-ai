@@ -68,7 +68,7 @@ class MarkdownDetectorResult(AIResult):
                         severity=severity,
                         detection_type=detection_data.get('type', 'vulnerability'),
                         location=location,
-                        detection=detection_data.get('description', ''),
+                        description=detection_data.get('description', ''),
                         recommendation=detection_data.get('recommendation'),
                         exploit=detection_data.get('exploit')
                     )
