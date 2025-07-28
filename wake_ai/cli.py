@@ -1,6 +1,6 @@
 """CLI interface for Wake AI."""
 
-import click
+import rich_click as click
 import logging
 from pathlib import Path
 from typing import Optional

@@ -3218,6 +3218,7 @@ dependencies = [
     { name = "pydantic", version = "2.11.7", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.9'" },
     { name = "pyyaml" },
     { name = "rich" },
+    { name = "rich-click" },
     { name = "typing-extensions", version = "4.13.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
     { name = "typing-extensions", version = "4.14.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.9.*'" },
 ]
@@ -3243,6 +3244,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.0" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "rich", specifier = ">=13.3.2" },
+    { name = "rich-click", specifier = ">=1.8.9" },
     { name = "typing-extensions", marker = "python_full_version < '3.10'", specifier = ">=4.12" },
 ]
 provides-extras = ["dev"]

@@ -341,7 +341,7 @@ class AuditWorkflow(AIWorkflow):
     @classmethod
     def get_cli_options(cls) -> Dict[str, Any]:
         """Return audit workflow CLI options."""
-        import click
+        import rich_click as click
         return {
             "scope": {
                 "param_decls": ["-s", "--scope"],
