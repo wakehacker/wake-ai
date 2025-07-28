@@ -52,3 +52,4 @@
   - Some workflows could benefit from parallel execution of certain steps
   - Consider support of batch size
 
+- [ ] Think about results parsing (and also type standardization for CLI/export functionality) and possible improvement of current implementation
