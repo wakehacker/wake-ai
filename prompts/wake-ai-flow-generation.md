@@ -211,42 +211,105 @@ self.add_dynamic_steps(
 )
 ```
 
-## 5. **Implement Validators**
+## 5. **Implement Validators with Prompt Alignment**
 
-Create validation functions that return `(success: bool, errors: List[str])`:
+### Critical Rule: Validators Must Match Prompts Exactly
+
+Create validation functions that return `(success: bool, errors: List[str])` and **exactly match what you asked for in the prompt**:
 
 ```python
 def _validate_analysis(self, response: ClaudeCodeResponse) -> Tuple[bool, List[str]]:
-    """Validate analysis step output."""
+    """Validate analysis step output - MUST match prompt requirements exactly."""
     errors = []
     
-    # Check for required output file
+    # Check for required output file (use exact filename from prompt)
     results_file = self.working_dir / "analysis_results.yaml"
     if not results_file.exists():
-        errors.append("No analysis_results.yaml file created")
+        errors.append(
+            f"Required file 'analysis_results.yaml' not created at {results_file}. "
+            "The prompt asks you to create this file with vulnerability findings."
+        )
         return (False, errors)
     
-    # Validate YAML structure
+    # Validate YAML structure (match exact structure from prompt)
     try:
         import yaml
         with open(results_file) as f:
             data = yaml.safe_load(f)
         
-        # Check required fields
+        # Check required fields match prompt example
         if not isinstance(data, dict):
-            errors.append("Results must be a YAML dictionary")
+            errors.append("Results must be a YAML dictionary as shown in the prompt example")
         
         if "vulnerabilities" not in data:
-            errors.append("Missing 'vulnerabilities' field")
+            errors.append(
+                "Missing 'vulnerabilities' field. The YAML must have structure:\n"
+                "vulnerabilities:\n  - contract: ...\n    function: ...\n    ..."
+            )
         
-        if not isinstance(data.get("vulnerabilities", []), list):
-            errors.append("'vulnerabilities' must be a list")
+        # Validate each vulnerability has required fields from prompt
+        for i, vuln in enumerate(data.get("vulnerabilities", [])):
+            required_fields = ["contract", "function", "line", "severity", "description"]
+            missing = [f for f in required_fields if f not in vuln]
+            if missing:
+                errors.append(
+                    f"Vulnerability {i} missing fields: {', '.join(missing)}. "
+                    f"Each vulnerability must have: {', '.join(required_fields)}"
+                )
+            
+            # Validate severity values match prompt specification
+            if "severity" in vuln and vuln["severity"] not in ["high", "medium", "low"]:
+                errors.append(
+                    f"Vulnerability {i} has invalid severity '{vuln['severity']}'. "
+                    "Must be one of: high, medium, low (as specified in prompt)"
+                )
             
     except Exception as e:
-        errors.append(f"Invalid YAML: {str(e)}")
+        errors.append(f"Invalid YAML format: {str(e)}. Check the YAML example in the prompt.")
     
     return (len(errors) == 0, errors)
 ```
+
+### Validation Best Practices
+
+1. **ALWAYS Include File Path in Error Messages**:
+   ```python
+   # Bad: No file path - AI doesn't know where to fix
+   errors.append("Missing required table")
+   
+   # Good: File path included - AI knows exactly where to fix
+   errors.append(f"Missing required table in {file_path}")
+   ```
+
+2. **Copy Exact Strings from Prompt**:
+   ```python
+   # If prompt says: "Create a table with header: | Type | Count | Description |"
+   if "| Type | Count | Description |" not in content:
+       errors.append(
+           f"Missing required table in {file_path}. Must include exact header: "
+           "| Type | Count | Description |"
+       )
+   ```
+
+3. **Provide Actionable Error Messages**:
+   ```python
+   # Bad: Generic error, no file path
+   errors.append("Invalid format")
+   
+   # Good: Specific with example and file path
+   errors.append(
+       f"Invalid severity value in {file_path}. Must be 'high', 'medium', or 'low' "
+       "as specified in the prompt example."
+   )
+   ```
+
+4. **Reference Prompt Requirements**:
+   ```python
+   errors.append(
+       f"Missing required section '## {section_name}' in {file_path}. "
+       f"The prompt requires this exact section header."
+   )
+   ```
 
 ## 6. **Write Effective Prompts**
 
@@ -314,7 +377,175 @@ Previous findings: {{initialize_output}}
 </output_format>
 ```
 
-## 7. **Configure CLI Options**
+## 7. **Ensure Prompt-Validator Alignment**
+
+### The Most Critical Rule in Wake AI
+
+**Your validators MUST check for EXACTLY what your prompts ask the AI to create.**
+
+### Common Alignment Failures
+
+1. **Format Mismatch**:
+   ```python
+   # WRONG: Prompt asks for one format, validator checks for another
+   # Prompt: "Create table with columns: | Impact | Confidence | Location |"
+   # Validator: if "| Severity | Count |" not in content:  # MISMATCH!
+   
+   # CORRECT: Validator matches prompt exactly
+   # Prompt: "Create table with columns: | Impact | Confidence | Location |"
+   # Validator: if "| Impact | Confidence | Location |" not in content:
+   ```
+
+2. **Vague Error Messages**:
+   ```python
+   # WRONG: Doesn't help AI fix the issue
+   errors.append("Missing table")
+   
+   # CORRECT: Tells AI exactly what's needed
+   errors.append(
+       "Missing findings table. Must include table with exact header: "
+       "| Impact | Confidence | Location | (as specified in the prompt)"
+   )
+   ```
+
+3. **Structure Misalignment**:
+   ```python
+   # WRONG: Prompt shows one YAML structure, validator expects another
+   # Prompt example:
+   # findings:
+   #   - type: "high"
+   #     description: "..."
+   
+   # Validator checking for different fields:
+   if "severity" not in finding:  # Should be "type"!
+   ```
+
+### Prompt-Validator Development Process
+
+1. **Write Prompt with Exact Outputs**:
+   ```markdown
+   Create `{{working_dir}}/results.yaml` with structure:
+   ```yaml
+   findings:
+     - title: "Finding title"
+       impact: "high|medium|low"
+       confidence: "high|medium|low"
+       location:
+         file: "path/to/file.sol"
+         line: 123
+   ```
+   ```
+
+2. **Extract Every Requirement**:
+   - File: `results.yaml` in working_dir
+   - Root key: `findings` (list)
+   - Required fields: `title`, `impact`, `confidence`, `location`
+   - Location subfields: `file`, `line`
+   - Valid impact values: `high`, `medium`, `low`
+   - Valid confidence values: `high`, `medium`, `low`
+
+3. **Write Validator That Checks Each Requirement**:
+   ```python
+   def _validate_results(self, response: ClaudeCodeResponse) -> Tuple[bool, List[str]]:
+       errors = []
+       
+       # Check exact filename from prompt
+       results_file = self.working_dir / "results.yaml"
+       if not results_file.exists():
+           errors.append(
+               f"File 'results.yaml' not created at {results_file}. "
+               "The prompt asks you to create this exact file."
+           )
+           return (False, errors)
+       
+       try:
+           with open(results_file) as f:
+               data = yaml.safe_load(f)
+           
+           # Check exact structure from prompt
+           if "findings" not in data:
+               errors.append(
+                   "Missing 'findings' key. File must have structure:\n"
+                   "findings:\n  - title: ...\n    impact: ...\n    ..."
+               )
+               return (False, errors)
+           
+           # Validate each finding matches prompt example
+           for i, finding in enumerate(data.get("findings", [])):
+               # Check exact fields from prompt
+               required = ["title", "impact", "confidence", "location"]
+               missing = [f for f in required if f not in finding]
+               if missing:
+                   errors.append(
+                       f"Finding {i} missing: {', '.join(missing)}. "
+                       f"Each finding needs: {', '.join(required)}"
+                   )
+               
+               # Check exact enum values from prompt
+               if finding.get("impact") not in ["high", "medium", "low"]:
+                   errors.append(
+                       f"Finding {i}: invalid impact '{finding.get('impact')}'. "
+                       "Must be: high, medium, or low (as shown in prompt)"
+                   )
+               
+               # Check nested structure from prompt
+               if "location" in finding:
+                   loc = finding["location"]
+                   if "file" not in loc or "line" not in loc:
+                       errors.append(
+                           f"Finding {i}: location must have 'file' and 'line' "
+                           "(see prompt example)"
+                       )
+       
+       except yaml.YAMLError as e:
+           errors.append(f"Invalid YAML: {e}. Check prompt example for correct format.")
+       
+       return (len(errors) == 0, errors)
+   ```
+
+### Validation Alignment Checklist
+
+Before finalizing any workflow step:
+
+- [ ] List every file the prompt asks to create
+- [ ] Note exact filenames and paths
+- [ ] Copy exact section headers from prompt
+- [ ] Copy exact table headers from prompt
+- [ ] List all required YAML/JSON fields
+- [ ] Note valid values for enums/choices
+- [ ] Validator checks each item above
+- [ ] Error messages reference prompt requirements
+- [ ] Error messages include correct examples
+- [ ] Test with intentionally wrong output
+
+### Real Example: Audit Workflow Fix
+
+The audit workflow had this misalignment:
+
+**Prompt** (3-executive-summary.md):
+```markdown
+| Impact   | High Confidence | Medium Confidence | Low Confidence | Total |
+```
+
+**Validator** (workflow.py):
+```python
+if "| Severity | Count |" not in content:
+    errors.append("Missing severity findings table in executive-summary.md")
+```
+
+**Fixed Validator**:
+```python
+# Check for the EXACT table format from the prompt
+if "| Impact" not in content or not all(
+    conf in content for conf in ["High Confidence", "Medium Confidence", "Low Confidence", "Total"]
+):
+    errors.append(
+        "Missing findings summary table. The executive summary must include a table with "
+        "this exact header: | Impact | High Confidence | Medium Confidence | Low Confidence | Total |"
+    )
+```
+
+## 8. **Configure CLI Options**
 
 Define command-line interface for the workflow:
 
@@ -719,6 +950,8 @@ The following changes have been made to the Wake AI framework that affect workfl
 </recent_updates>
 
 <validation_requirements>
+- **CRITICAL**: Validators MUST check for EXACTLY what prompts ask the AI to create
+- **CRITICAL**: Error messages MUST tell the AI specifically what to fix, with examples
 - **ALWAYS** inherit from either `AIWorkflow` or `MarkdownDetector`
 - **ALWAYS** implement `_setup_steps()` method
 - **ALWAYS** call `super().__init__()` with workflow name
@@ -728,6 +961,8 @@ The following changes have been made to the Wake AI framework that affect workfl
 - **ALWAYS** use proper tool restrictions for security-sensitive operations
 - **ALWAYS** provide proper typing for all methods
 - **NEVER** use generic Exception catching without proper error handling
+- **ALWAYS** copy exact strings (headers, table formats, field names) from prompts to validators
+- **NEVER** paraphrase or change formats between prompt and validator
 </validation_requirements>
 
 <output_format>
