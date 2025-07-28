@@ -33,6 +33,12 @@
   - Add `condition` parameter to steps
   - Skip steps when condition evaluates to False
 
+- [x] Validation Alignment Documentation & Fix (2025-07-28)
+  - Created comprehensive validation alignment guide
+  - Updated wake-ai-flow-generation.md with critical validation rules
+  - Fixed audit workflow validator to match prompt requirements
+  - Added actionable error messages to help AI fix validation failures
+
 - [ ] Implement custom permissions MCP for more granular tool permissions
   - Allow writing/editing only within working_dir by default
   - See https://docs.anthropic.com/en/docs/claude-code/sdk#custom-permission-prompt-tool
