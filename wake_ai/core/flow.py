@@ -101,8 +101,8 @@ class WorkflowStep:
             Tuple of (success: bool, errors: List[str])
         """
         if not response.success:
-            logger.warning(f"Step '{self.name}' response failed: {response.error}")
-            return (False, [response.error or "Response failed"])
+            logger.warning(f"Step '{self.name}' response failed: {response.content}")
+            return (False, [response.content or "Response failed"])
 
         if self.validator:
             result = self.validator(response)

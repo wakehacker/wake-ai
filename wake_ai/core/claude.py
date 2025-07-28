@@ -22,7 +22,6 @@ class ClaudeCodeResponse:
     raw_output: str
     tool_calls: List[Dict[str, Any]]
     success: bool
-    error: Optional[str] = None
     cost: float = 0.0
     duration: float = 0.0
     num_turns: int = 0
@@ -67,7 +66,6 @@ class ClaudeCodeResponse:
                 raw_output=json_str,
                 tool_calls=[],
                 success=not data.get("is_error", False),
-                error=None if not data.get("is_error", False) else "Error occurred",
                 cost=data.get("total_cost_usd", 0.0),
                 duration=data.get("duration_ms", 0),
                 num_turns=data.get("num_turns", 0),
@@ -91,7 +89,6 @@ class ClaudeCodeResponse:
             raw_output=text,
             tool_calls=[],
             success=True,
-            error=None,
             cost=0.0,
             duration=0.0,
             num_turns=0,
@@ -243,11 +240,10 @@ class ClaudeCodeSession:
                 logger.error(f"Command failed with return code {result.returncode}")
                 logger.error(f"stderr: {result.stderr}")
                 return ClaudeCodeResponse(
-                    content="",
+                    content=f"Command failed: {result.stderr}",
                     raw_output=result.stderr,
                     tool_calls=[],
                     success=False,
-                    error=f"Command failed: {result.stderr}"
                 )
 
             # Parse response based on format
@@ -269,11 +265,10 @@ class ClaudeCodeSession:
         except Exception as e:
             logger.error(f"Exception during query execution: {e}")
             return ClaudeCodeResponse(
-                content="",
+                content=str(e),
                 raw_output=str(e),
                 tool_calls=[],
                 success=False,
-                error=str(e)
             )
 
     def query_with_cost(self, prompt: str, cost_limit: float, turn_step: int = 50, continue_session: bool = False) -> ClaudeCodeResponse:
@@ -352,11 +347,10 @@ class ClaudeCodeSession:
                 if result.returncode != 0:
                     logger.error(f"Iteration {iteration} failed: {result.stderr}")
                     return ClaudeCodeResponse(
-                        content="",
+                        content=f"Command failed: {result.stderr}",
                         raw_output=result.stderr,
                         tool_calls=[],
                         success=False,
-                        error=f"Command failed: {result.stderr}"
                     )
 
                 response = ClaudeCodeResponse.from_json(result.stdout)
@@ -378,11 +372,10 @@ class ClaudeCodeSession:
             except Exception as e:
                 logger.error(f"Exception in iteration {iteration}: {e}")
                 return ClaudeCodeResponse(
-                    content="",
+                    content=str(e),
                     raw_output=str(e),
                     tool_calls=[],
                     success=False,
-                    error=str(e)
                 )
 
         # If the task is not finished, we need to prompt the AI to finish it
@@ -414,11 +407,10 @@ class ClaudeCodeSession:
                 if result.returncode != 0:
                     logger.error(f"Finish attempt {finish_tries + 1} failed: {result.stderr}")
                     return ClaudeCodeResponse(
-                        content="",
+                        content=f"Command failed: {result.stderr}",
                         raw_output=result.stderr,
                         tool_calls=[],
                         success=False,
-                        error=f"Command failed: {result.stderr}"
                     )
 
                 response = ClaudeCodeResponse.from_json(result.stdout)
@@ -436,11 +428,10 @@ class ClaudeCodeSession:
             except Exception as e:
                 logger.error(f"Exception in finish attempt {finish_tries + 1}: {e}")
                 return ClaudeCodeResponse(
-                    content="",
+                    content=str(e),
                     raw_output=str(e),
                     tool_calls=[],
                     success=False,
-                    error=str(e)
                 )
 
         if not last_response.is_finished:
