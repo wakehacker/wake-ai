@@ -2,11 +2,19 @@
 name = "wake-ai"
 version = "0.1.0"
 description = "AI-powered smart contract security analysis framework"
-license = {text = "ISC"}
-authors = [{name = "Ackee Blockchain"}]
+license = { text = "ISC" }
+authors = [{ name = "Ackee Blockchain" }]
 readme = "README.md"
 requires-python = ">=3.8"
-keywords = ["ethereum", "solidity", "security", "ai", "audit", "smart-contracts", "claude"]
+keywords = [
+    "ethereum",
+    "solidity",
+    "security",
+    "ai",
+    "audit",
+    "smart-contracts",
+    "claude",
+]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -33,11 +41,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = [
-    "black>=22.0",
-    "isort>=5.0",
-    "mypy>=1.0",
-]
+dev = ["black>=22.0", "isort>=5.0", "mypy>=1.0"]
 
 [project.scripts]
 wake-ai = "wake_ai.cli:main"
@@ -52,6 +56,9 @@ Repository = "https://github.com/Ackee-Blockchain/wake-ai"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build]
+packages = ["wake_ai"]
 
 [tool.black]
 target-version = ["py38"]
