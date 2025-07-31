@@ -96,12 +96,21 @@ These examples are for educational purposes. To run them in a real project:
 
 1. Copy the workflow class to your project
 2. Adapt the prompts and steps to your specific needs
-3. Register with Wake AI CLI or use programmatically:
+3. Use programmatically:
 
 ```python
 from docs.examples.conditional_workflow import ConditionalWorkflow
 
-# Create and execute
-workflow = ConditionalWorkflow(name="my_analysis")
+# Create and configure
+workflow = ConditionalWorkflow()
+workflow.cli(threshold=10)  # Configure via CLI method
+
+# Execute workflow
 results, formatted = workflow.execute()
+```
+
+Or run via CLI once registered:
+
+```bash
+wake-ai conditional-example --threshold 10
 ```

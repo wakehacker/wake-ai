@@ -3,44 +3,28 @@
 from typing import Dict, Any, Optional, Union
 from pathlib import Path
 
+from wake_ai import workflow
 from wake_ai.templates.markdown_detector import MarkdownDetector
+
+import rich_click as click
 
 
 class UniswapDetector(MarkdownDetector):
     """Detector for Uniswap V2/V3 specific vulnerabilities and best practices."""
 
-    name = "uniswap"
+    focus_version: str
+    check_oracle_manipulation: bool
+    check_sandwich_protection: bool
 
-    def __init__(
-        self,
-        focus_version: str = "both",  # "v2", "v3", or "both"
-        check_oracle_manipulation: bool = True,
-        check_sandwich_protection: bool = True,
-        session: Optional[Any] = None,
-        model: Optional[str] = None,
-        working_dir: Optional[Union[str, Path]] = None,
-        execution_dir: Optional[Union[str, Path]] = None,
-        **kwargs
-    ):
-        """Initialize Uniswap detector.
-
-        Args:
-            focus_version: Which Uniswap version to focus on ("v2", "v3", or "both")
-            check_oracle_manipulation: Whether to check for price oracle manipulation vulnerabilities
-            check_sandwich_protection: Whether to check for sandwich attack protections
-        """
+    @workflow.command(name="uniswap")
+    @click.option("--focus-version", "-f", type=click.Choice(["v2", "v3", "both"]), default="both", help="Uniswap version to focus on")
+    @click.option("--no-oracle-check", is_flag=True, help="Skip price oracle manipulation checks")
+    @click.option("--no-sandwich-check", is_flag=True, help="Skip sandwich attack protection checks")
+    def cli(self, focus_version: str, no_oracle_check: bool, no_sandwich_check: bool):
+        """Run Uniswap integration detector."""
         self.focus_version = focus_version
-        self.check_oracle_manipulation = check_oracle_manipulation
-        self.check_sandwich_protection = check_sandwich_protection
-
-        super().__init__(
-            name=self.name,
-            session=session,
-            model=model,
-            working_dir=working_dir,
-            execution_dir=execution_dir,
-            **kwargs
-        )
+        self.check_oracle_manipulation = not no_oracle_check
+        self.check_sandwich_protection = not no_sandwich_check
 
     def get_detector_prompt(self) -> str:
         """Get the Uniswap-specific detection prompt."""
@@ -264,36 +248,3 @@ detections:
 </output_format>"""
 
         return prompt
-
-    @classmethod
-    def get_cli_options(cls) -> Dict[str, Any]:
-        """Return CLI options for Uniswap detector."""
-        import rich_click as click
-
-        return {
-            "version": {
-                "param_decls": ["--version", "-v"],
-                "type": click.Choice(["v2", "v3", "both"]),
-                "default": "both",
-                "help": "Uniswap version to focus on"
-            },
-            "no_oracle_check": {
-                "param_decls": ["--no-oracle-check"],
-                "is_flag": True,
-                "help": "Skip price oracle manipulation checks"
-            },
-            "no_sandwich_check": {
-                "param_decls": ["--no-sandwich-check"],
-                "is_flag": True,
-                "help": "Skip sandwich attack protection checks"
-            }
-        }
-
-    @classmethod
-    def process_cli_args(cls, **kwargs) -> Dict[str, Any]:
-        """Process CLI arguments for Uniswap detector."""
-        return {
-            "focus_version": kwargs.get("version", "both"),
-            "check_oracle_manipulation": not kwargs.get("no_oracle_check", False),
-            "check_sandwich_protection": not kwargs.get("no_sandwich_check", False)
-        }

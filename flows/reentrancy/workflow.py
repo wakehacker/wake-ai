@@ -1,16 +1,16 @@
 """Reentrancy vulnerability detector using Wake's built-in detection capabilities."""
 
+from wake_ai import workflow
 from wake_ai.templates import MarkdownDetector
 
 
 class ReentrancyDetector(MarkdownDetector):
     """Enhanced reentrancy detector that leverages Wake's static analysis."""
 
-    name = "reentrancy"
-
-    def __init__(self, **kwargs):
-        """Initialize the reentrancy detector."""
-        super().__init__(name=self.name, **kwargs)
+    @workflow.command(name="reentrancy")
+    def cli(self):
+        """Run reentrancy detector."""
+        pass
 
     def get_detector_prompt(self) -> str:
         """Define the reentrancy detection workflow."""

@@ -36,7 +36,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
 from jinja2 import Environment, StrictUndefined, Template, meta
 from pydantic import BaseModel
 
-from ..results import AIResult
+from ..results import AIResult, MessageResult
 from .claude import ClaudeCodeResponse, ClaudeCodeSession
 
 # Set up logging
@@ -134,10 +134,17 @@ class WorkflowState:
 class AIWorkflow(ABC):
     """Base class for fixed AI workflows."""
 
-    # Default cleanup behavior (can be overridden by subclasses)
-    cleanup_working_dir: bool = True
+    name: str
+    result_class: Type[AIResult]
+    cleanup_working_dir: bool
+    working_dir: Path
+    execution_dir: Path
+    session: ClaudeCodeSession
+    steps: List[WorkflowStep]
+    state: WorkflowState
+    _dynamic_generators: Dict[str, Callable[[ClaudeCodeResponse, Dict[str, Any]], List[WorkflowStep]]]
 
-    def __init__(
+    def _pre_init(
         self,
         name: str,
         result_class: Optional[Type[AIResult]] = None,
@@ -164,7 +171,7 @@ class AIWorkflow(ABC):
             cleanup_working_dir: Whether to remove working_dir after completion (default: True)
         """
         self.name = name
-        self.result_class = result_class
+        self.result_class = result_class or MessageResult
 
         # Set cleanup behavior (use instance value if provided, else class default)
         self.cleanup_working_dir = cleanup_working_dir if cleanup_working_dir is not None else self.__class__.cleanup_working_dir
@@ -244,12 +251,6 @@ class AIWorkflow(ABC):
         self.steps: List[WorkflowStep] = []
         self.state = WorkflowState()
         self._dynamic_generators: Dict[str, Callable[[ClaudeCodeResponse, Dict[str, Any]], List[WorkflowStep]]] = {}
-
-        self._setup_steps()
-        logger.debug(f"Workflow '{name}' initialized with {len(self.steps)} steps")
-
-        # Add working directory to context
-        self.add_context("working_dir", str(self.working_dir))
 
     @abstractmethod
     def _setup_steps(self):
@@ -350,6 +351,12 @@ class AIWorkflow(ABC):
         Returns:
             Tuple of (raw results dict, formatted AIResult object)
         """
+        self._setup_steps()
+        logger.debug(f"Workflow '{self.name}' initialized with {len(self.steps)} steps")
+
+        # Add working directory to context
+        self.add_context("working_dir", str(self.working_dir))
+
         logger.debug(f"Starting workflow '{self.name}' execution (resume={resume})")
 
         if resume and (self.working_dir / f"{self.name}_state.json").exists():
@@ -453,7 +460,7 @@ class AIWorkflow(ABC):
                         self.state.responses[step.name] = response
                         self.state.context[f"{step.name}_output"] = response.content
                         self._custom_context_update(step.name, response)
-                        
+
                         # Update cumulative cost
                         self.state.cumulative_cost += response.cost
 
@@ -658,7 +665,7 @@ class AIWorkflow(ABC):
     def get_context_keys(self) -> List[str]:
         """Get all context keys."""
         return list(self.state.context.keys())
-    
+
     def get_cumulative_cost(self) -> float:
         """Get the cumulative cost of all steps executed so far."""
         return self.state.cumulative_cost

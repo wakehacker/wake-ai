@@ -2,12 +2,11 @@
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Dict, TYPE_CHECKING, Type, List, Tuple
+from typing import Any, Dict, TYPE_CHECKING
 import json
 
 if TYPE_CHECKING:
     from rich.console import Console
-    from .detections import AIDetection
 
 
 class AIResult(ABC):

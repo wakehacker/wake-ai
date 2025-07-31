@@ -26,10 +26,14 @@ Analyze the requirements to choose the appropriate base class:
 
 a. **For Simple Detectors** (finding specific patterns/vulnerabilities):
    ```python
-   from wake_ai import MarkdownDetector
+   from wake_ai import MarkdownDetector, workflow
 
    class MyDetector(MarkdownDetector):
        """Detects specific vulnerability patterns."""
+
+       @workflow.command("my-detector")
+       def cli(self):
+           pass
 
        def get_detector_prompt(self) -> str:
            return """<task>...</task>..."""
@@ -37,15 +41,17 @@ a. **For Simple Detectors** (finding specific patterns/vulnerabilities):
 
 b. **For Complex Workflows** (multi-step analysis, custom validation):
    ```python
-   from wake_ai import AIWorkflow
+   import rich_click as click
+   from wake_ai import AIWorkflow, workflow
    from wake_ai.results import AIResult
 
    class MyWorkflow(AIWorkflow):
        """Complex multi-step analysis workflow."""
 
-       def __init__(self, scope: List[str], **kwargs):
-           # Custom initialization
-           super().__init__(name="my_workflow", **kwargs)
+       @workflow.command("my-workflow")
+       @click.option("--verbose", "-v", is_flag=True)
+       def cli(self):
+           pass
    ```
 
 c. **For Workflows with Custom Results**:
@@ -58,17 +64,17 @@ c. **For Workflows with Custom Results**:
        pass
 
    class MyWorkflow(AIWorkflow):
-       def __init__(self, **kwargs):
-           super().__init__(
-               name="my_workflow",
-               result_class=MyCustomResult,
-               **kwargs
-           )
+       def __init__(self):
+           self.result_class = MyCustomResult
+
+       @workflow.command("my-workflow")
+       def cli(self):
+           pass
    ```
 
-## 2. **Initialize the Workflow**
+## 2. **Configure the Workflow**
 
-Configure the workflow in `__init__`.
+Set up workflow configuration using CLI method and optional `__init__`.
 
 **Note on Default Tools**: As of recent updates, AIWorkflow provides secure default tools that include:
 - Read-only tools: `Read`, `Grep`, `Glob`, `LS`, `Task`, `TodoWrite`
@@ -77,23 +83,32 @@ Configure the workflow in `__init__`.
 
 Use `allowed_tools=None` in your steps to inherit these secure defaults.
 
-a. **Set Basic Properties**:
+a. **Configure from CLI Method**:
    ```python
-   def __init__(self, scope: List[str], threshold: float = 0.8, **kwargs):
-       # Call parent constructor with workflow name
-       super().__init__(name="vulnerability_analyzer", **kwargs)
-
-       # Store configuration
-       self.scope = scope
+   @workflow.command("vulnerability-analyzer")
+   @click.option("--scope", "-s", multiple=True, type=click.Path(exists=True))
+   @click.option("--threshold", "-t", type=float, default=0.8)
+   def cli(self, scope, threshold):
+       # Set configuration directly on self
+       self.scope = list(scope)
        self.threshold = threshold
+
+       # Add workflow-specific context variables
+       self.add_context("scope", " ".join(self.scope))
+       self.add_context("threshold", str(self.threshold))
+       self.add_context("execution_dir", str(self.execution_dir))
    ```
 
-b. **Add Initial Context**:
+b. **Only add __init__ if needed** (e.g., for loading external prompts):
    ```python
-   # Add workflow-specific context variables
-   self.add_context("scope", " ".join(self.scope))
-   self.add_context("threshold", str(self.threshold))
-   self.add_context("execution_dir", str(self.execution_dir))
+   def __init__(self, **kwargs):
+       super().__init__(**kwargs)
+
+       # Load external prompts
+       prompt_dir = Path(__file__).parent / "prompts"
+       self.prompts = {}
+       for p in prompt_dir.glob("*.md"):
+           self.prompts[p.stem.split("-", 1)[1]] = p.read_text()
    ```
 
 c. **Load External Prompts** (for complex workflows):
@@ -547,42 +562,34 @@ if "| Impact" not in content or not all(
 
 ## 8. **Configure CLI Options**
 
-Define command-line interface for the workflow:
+Define command-line interface using click decorators:
 
 ```python
-@classmethod
-def get_cli_options(cls) -> Dict[str, Any]:
-    """Define CLI options for this workflow."""
-    return {
-        "scope": {
-            "param_decls": ["-s", "--scope"],
-            "multiple": True,
-            "type": click.Path(exists=True),
-            "help": "Contract files or directories to analyze",
-            "required": True
-        },
-        "threshold": {
-            "param_decls": ["-t", "--threshold"],
-            "type": click.FloatRange(0.0, 1.0),
-            "default": 0.8,
-            "help": "Confidence threshold for vulnerability detection"
-        },
-        "output_format": {
-            "param_decls": ["-f", "--format"],
-            "type": click.Choice(["yaml", "json", "markdown"]),
-            "default": "yaml",
-            "help": "Output format for results"
-        }
-    }
-
-@classmethod
-def process_cli_args(cls, **kwargs) -> Dict[str, Any]:
-    """Process CLI arguments into workflow init parameters."""
-    return {
-        "scope": list(kwargs.get("scope", [])),
-        "threshold": kwargs.get("threshold", 0.8),
-        "output_format": kwargs.get("output_format", "yaml")
-    }
+@workflow.command("my-workflow")
+@click.option(
+    "--scope", "-s",
+    multiple=True,
+    type=click.Path(exists=True),
+    required=True,
+    help="Contract files or directories to analyze"
+)
+@click.option(
+    "--threshold", "-t",
+    type=click.FloatRange(0.0, 1.0),
+    default=0.8,
+    help="Confidence threshold for vulnerability detection"
+)
+@click.option(
+    "--output-format", "-f",
+    type=click.Choice(["yaml", "json", "markdown"]),
+    default="yaml",
+    help="Output format for results"
+)
+def cli(self, scope, threshold, output_format):
+    """Run the workflow with specified options."""
+    self.scope = list(scope)
+    self.threshold = threshold
+    self.output_format = output_format
 ```
 
 ## 8. **Implement Custom Result Classes** (if needed)
@@ -720,28 +727,11 @@ class ReentrancyResult(AIResult):
 class ReentrancyWorkflow(AIWorkflow):
     """Detects and analyzes reentrancy vulnerabilities in smart contracts."""
 
-    # Default cleanup behavior for this workflow
-    cleanup_working_dir = False  # Preserve results
-
-    def __init__(self, contracts: List[str], deep_analysis: bool = False, **kwargs):
-        """Initialize reentrancy detection workflow.
-
-        Args:
-            contracts: List of contract files to analyze
-            deep_analysis: Whether to perform deep analysis with symbolic execution
-        """
-        super().__init__(
-            name="reentrancy_detector",
-            result_class=ReentrancyResult,
-            **kwargs
-        )
-
-        self.contracts = contracts
-        self.deep_analysis = deep_analysis
-
-        # Add context
-        self.add_context("contracts", " ".join(contracts))
-        self.add_context("deep_analysis", deep_analysis)
+    def __init__(self, **kwargs):
+        """Initialize reentrancy detection workflow."""
+        # Set parameters directly on self
+        self.cleanup_working_dir = False  # Preserve results
+        self.result_class = ReentrancyResult
 
     def _setup_steps(self):
         """Define workflow steps."""
@@ -896,31 +886,27 @@ Include all vulnerabilities found, ordered by severity (high to low)."""
 
         return (len(errors) == 0, errors)
 
-    @classmethod
-    def get_cli_options(cls) -> Dict[str, Any]:
-        """CLI options for reentrancy detector."""
-        return {
-            "contracts": {
-                "param_decls": ["-c", "--contracts"],
-                "multiple": True,
-                "type": click.Path(exists=True),
-                "required": True,
-                "help": "Smart contract files to analyze"
-            },
-            "deep_analysis": {
-                "param_decls": ["--deep-analysis"],
-                "is_flag": True,
-                "help": "Perform deep analysis with symbolic execution"
-            }
-        }
+    @workflow.command("reentrancy")
+    @click.option(
+        "--contracts", "-c",
+        multiple=True,
+        type=click.Path(exists=True),
+        required=True,
+        help="Smart contract files to analyze"
+    )
+    @click.option(
+        "--deep-analysis",
+        is_flag=True,
+        help="Perform deep analysis with symbolic execution"
+    )
+    def cli(self, contracts, deep_analysis):
+        """Detect reentrancy vulnerabilities in smart contracts."""
+        self.contracts = list(contracts)
+        self.deep_analysis = deep_analysis
 
-    @classmethod
-    def process_cli_args(cls, **kwargs) -> Dict[str, Any]:
-        """Process CLI arguments."""
-        return {
-            "contracts": list(kwargs.get("contracts", [])),
-            "deep_analysis": kwargs.get("deep_analysis", False)
-        }
+        # Add context
+        self.add_context("contracts", " ".join(self.contracts))
+        self.add_context("deep_analysis", self.deep_analysis)
 ```
 
 </steps>
@@ -982,11 +968,12 @@ When asked to create a workflow, provide:
 3. **Usage Example**:
    ```bash
    # CLI usage
-   wake-ai --flow my_workflow -c contract.sol --deep-analysis
+   wake-ai my-workflow --scope contract.sol --verbose
 
-   # Python usage
+   # Python usage (for programmatic access)
    from flows.my_workflow import MyWorkflow
-   workflow = MyWorkflow(contracts=["contract.sol"])
+   workflow = MyWorkflow()
+   workflow.cli(scope=["contract.sol"], verbose=True)
    results, formatted = workflow.execute()
    ```
 
@@ -1061,24 +1048,15 @@ from wake_ai.core.claude import ClaudeCodeResponse
 class UpgradeabilityAudit(AIWorkflow):
     """Comprehensive audit for upgradeable smart contract systems."""
 
-    # Preserve results by default
-    cleanup_working_dir = False
-
-    def __init__(self, proxy_address: str, implementation_address: str, **kwargs):
-        super().__init__(name="upgradeability_audit", **kwargs)
-
-        self.proxy = proxy_address
-        self.implementation = implementation_address
+    def __init__(self, **kwargs):
+        # Set parameters directly on self
+        self.cleanup_working_dir = False  # Preserve results by default
 
         # Load external prompts
         prompt_dir = Path(__file__).parent / "prompts"
         self.prompts = {}
         for p in prompt_dir.glob("*.md"):
             self.prompts[p.stem.split("-", 1)[1]] = p.read_text()
-
-        # Set context
-        self.add_context("proxy_address", proxy_address)
-        self.add_context("implementation_address", implementation_address)
 
     def _setup_steps(self):
         # Step 1: Analyze proxy pattern
@@ -1163,28 +1141,26 @@ Generate a patch file that addresses this issue.""",
 
         return steps
 
-    @classmethod
-    def get_cli_options(cls) -> Dict[str, Any]:
-        return {
-            "proxy_address": {
-                "param_decls": ["--proxy"],
-                "type": str,
-                "required": True,
-                "help": "Proxy contract address"
-            },
-            "implementation_address": {
-                "param_decls": ["--implementation"],
-                "type": str,
-                "required": True,
-                "help": "Implementation contract address"
-            }
-        }
+    @workflow.command("upgradeability-audit")
+    @click.option(
+        "--proxy",
+        type=str,
+        required=True,
+        help="Proxy contract address"
+    )
+    @click.option(
+        "--implementation",
+        type=str,
+        required=True,
+        help="Implementation contract address"
+    )
+    def cli(self, proxy, implementation):
+        """Audit upgradeable smart contract system."""
+        self.proxy = proxy
+        self.implementation = implementation
 
-    @classmethod
-    def process_cli_args(cls, **kwargs) -> Dict[str, Any]:
-        return {
-            "proxy_address": kwargs["proxy_address"],
-            "implementation_address": kwargs["implementation_address"]
-        }
+        # Set context
+        self.add_context("proxy_address", proxy)
+        self.add_context("implementation_address", implementation)
 ```
 </example_complex_workflow>

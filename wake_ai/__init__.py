@@ -1,5 +1,7 @@
 """Wake AI - AI-powered smart contract security analysis framework."""
 
+from .cli import main as workflow
+
 # Framework imports
 from .core import (
     ClaudeCodeResponse,
@@ -62,8 +64,6 @@ __all__ = [
     "export_detections_json",
     # Utils
     "load_workflow_from_file",
-    "validate_claude_cli",
-    "query_with_cost",
     # Templates
     "MarkdownDetector",
     "MarkdownDetectorResult",

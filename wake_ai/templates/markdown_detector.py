@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 class MarkdownDetectorResult(AIResult):
     """Result class for markdown detector workflows."""
-    
+
     def __init__(self, detections: List[Tuple[str, Detection]], working_dir: Path):
         """Initialize with detections and working directory."""
         self.detections = detections
@@ -126,26 +126,8 @@ class MarkdownDetector(AIWorkflow):
     2. Handling the workflow setup and validation automatically
     3. Parsing results into standardized AIDetection format
     """
-
-    def __init__(
-        self,
-        name: str,
-        session: Optional[Any] = None,
-        model: Optional[str] = None,
-        working_dir: Optional[Union[str, Path]] = None,
-        execution_dir: Optional[Union[str, Path]] = None,
-        **kwargs
-    ):
-        """Initialize markdown detector workflow."""
-        super().__init__(
-            name=name,
-            result_class=MarkdownDetectorResult,
-            session=session,
-            model=model,
-            working_dir=working_dir,
-            execution_dir=execution_dir,
-            **kwargs
-        )
+    def _pre_init(self, *args, **kwargs):
+        super()._pre_init(*args, **kwargs, result_class=MarkdownDetectorResult)
 
     @abstractmethod
     def get_detector_prompt(self) -> str:

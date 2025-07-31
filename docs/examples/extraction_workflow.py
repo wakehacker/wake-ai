@@ -5,7 +5,7 @@ from typing import List, Optional
 import rich_click as click
 from pydantic import BaseModel
 
-from wake_ai import AIWorkflow, AIResult, MessageResult
+from wake_ai import AIWorkflow, AIResult, MessageResult, workflow
 
 
 class CodeIssue(BaseModel):
@@ -27,17 +27,17 @@ class IssuesList(BaseModel):
 class ExtractionWorkflow(AIWorkflow):
     """Example workflow showing extraction steps."""
 
-    def __init__(self, target_file: Optional[str] = None, **kwargs):
-        kwargs["name"] = "extraction_example"
-        kwargs["result_class"] = MessageResult
-        super().__init__(**kwargs)
+    def __init__(self, **kwargs):
+        """Initialize the workflow."""
+        self.result_class = MessageResult
 
+    @workflow.command("extraction-example")
+    @click.option("--file", "-f", type=click.Path(exists=True), help="Python file to analyze")
+    def cli(self, file):
+        """Run extraction workflow example."""
+        target_file = file or "example_code.py"
         # Add target file to context
-        if target_file:
-            self.state.context["target_file"] = target_file
-        else:
-            # Use a default example file
-            self.state.context["target_file"] = "example_code.py"
+        self.add_context("target_file", target_file)
 
     def _setup_steps(self):
         """Define workflow steps."""
@@ -98,21 +98,3 @@ Format as a simple markdown report.""",
             all_content.append(f"## {step_name}\n{response.content}")
 
         return MessageResult("\n\n".join(all_content))
-
-    @classmethod
-    def get_cli_options(cls):
-        """Define CLI options."""
-        return {
-            "target_file": {
-                "param_decls": ["-f", "--file"],
-                "type": click.Path(exists=True),
-                "help": "Python file to analyze"
-            }
-        }
-
-    @classmethod
-    def process_cli_args(cls, **kwargs):
-        """Process CLI arguments."""
-        return {
-            "target_file": kwargs.get("target_file")
-        }

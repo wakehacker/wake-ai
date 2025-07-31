@@ -1,6 +1,7 @@
 """Example workflow demonstrating conditional steps."""
 
-from wake_ai import AIWorkflow, WorkflowStep
+import rich_click as click
+from wake_ai import AIWorkflow, WorkflowStep, workflow
 from wake_ai.results import MessageResult
 from typing import Dict, Any
 
@@ -12,15 +13,15 @@ class ConditionalWorkflow(AIWorkflow):
     as conditions for controlling step execution.
     """
     
-    def __init__(self, threshold: int = 5, **kwargs):
-        """Initialize the workflow.
-        
-        Args:
-            threshold: Threshold value for conditional logic
-            **kwargs: Additional workflow arguments
-        """
+    def __init__(self, **kwargs):
+        """Initialize the workflow."""
+        self.result_class = MessageResult
+    
+    @workflow.command("conditional-example")
+    @click.option("--threshold", "-t", type=int, default=5, help="Threshold value for conditional logic")
+    def cli(self, threshold):
+        """Run conditional workflow example."""
         self.threshold = threshold
-        super().__init__(name="conditional_example", result_class=MessageResult, **kwargs)
         # Add threshold to context
         self.add_context("threshold", threshold)
     
