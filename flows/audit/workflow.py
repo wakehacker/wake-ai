@@ -1,11 +1,13 @@
 """Security audit workflow implementation."""
 
 from pathlib import Path
-from typing import List, Optional, Dict, Any, Tuple, Union
+from typing import List, Optional, Dict, Any, Tuple
 import yaml
 
-from wake_ai.core.claude import ClaudeCodeSession
-from wake_ai.core.flow import AIWorkflow, ClaudeCodeResponse
+import rich_click as click
+
+from wake_ai import workflow
+from wake_ai.core.flow import AIWorkflow, ClaudeCodeResponse, AIResult
 
 # Valid detection types for audit findings
 VALID_DETECTION_TYPES = [
@@ -20,32 +22,11 @@ VALID_DETECTION_TYPES = [
 class AuditWorkflow(AIWorkflow):
     """Fixed security audit workflow following industry best practices."""
 
-    name = "audit"
     # Preserve audit results by default
     cleanup_working_dir = False
 
-    def __init__(
-        self,
-        scope_files: Optional[List[str]] = None,
-        context_docs: Optional[List[str]] = None,
-        focus_areas: Optional[List[str]] = None,
-        session: Optional[ClaudeCodeSession] = None,
-        model: Optional[str] = None,
-        working_dir: Optional[Union[str, Path]] = None,
-        execution_dir: Optional[Union[str, Path]] = None,
-        **kwargs
-    ):
-        """Initialize security audit workflow.
-
-        Args:
-            scope_files: List of files to audit (None = entire codebase)
-            context_docs: Additional documentation/context files
-            focus_areas: Specific vulnerabilities or ERCs to focus on
-            session: Claude session to use
-        """
-        self.scope_files = scope_files or []
-        self.context_docs = context_docs or []
-        self.focus_areas = focus_areas or []
+    def __init__(self):
+        """Initialize security audit workflow."""
 
         # Load prompts from markdown files before parent init
         self._load_prompts()
@@ -53,21 +34,7 @@ class AuditWorkflow(AIWorkflow):
         # Import result class
         from .result import AuditResult
 
-        # Now call parent init which will call _setup_steps
-        super().__init__(
-            name=self.name,
-            result_class=AuditResult,
-            session=session,
-            model=model,
-            working_dir=working_dir,
-            execution_dir=execution_dir,
-            **kwargs
-        )
-
-        # Add context after parent init (which creates self.state)
-        self.add_context("scope_files", self.scope_files)
-        self.add_context("context_docs", self.context_docs)
-        self.add_context("focus_areas", self.focus_areas)
+        self.result_class = AuditResult
 
     def _load_prompts(self):
         """Load audit prompts from markdown files."""
@@ -364,7 +331,7 @@ class AuditWorkflow(AIWorkflow):
 
         return base_prompt
 
-    def execute(self, context: Optional[Dict[str, Any]] = None, **kwargs) -> Dict[str, Any]:
+    def execute(self, context: Optional[Dict[str, Any]] = None, **kwargs) -> Tuple[Dict[str, Any], AIResult]:
         """Execute the audit workflow with proper context setup."""
         # Initialize context with audit-specific information
         audit_context = {
@@ -381,37 +348,17 @@ class AuditWorkflow(AIWorkflow):
 
         return results
 
-    @classmethod
-    def get_cli_options(cls) -> Dict[str, Any]:
-        """Return audit workflow CLI options."""
-        import rich_click as click
+    @workflow.command(name="audit")
+    @click.option("--scope", "-s", type=click.Path(exists=True), multiple=True, help="Files/directories in audit scope (default: entire codebase)")
+    @click.option("--context", "-c", type=click.Path(exists=True), multiple=True, help="Additional context files (docs, specs, etc.)")
+    @click.option("--focus", "-f", type=str, multiple=True, help="Focus areas (e.g., 'reentrancy', 'ERC20', 'access-control')")
+    def cli(self, scope: List[str], context: List[str], focus: List[str]):
+        """Run audit workflow."""
+        self.scope_files = scope
+        self.context_docs = context
+        self.focus_areas = focus
 
-        return {
-            "scope": {
-                "param_decls": ["-s", "--scope"],
-                "multiple": True,
-                "type": click.Path(exists=True),
-                "help": "Files/directories in audit scope (default: entire codebase)"
-            },
-            "context": {
-                "param_decls": ["-c", "--context"],
-                "multiple": True,
-                "type": click.Path(exists=True),
-                "help": "Additional context files (docs, specs, etc.)"
-            },
-            "focus": {
-                "param_decls": ["-f", "--focus"],
-                "multiple": True,
-                "help": "Focus areas (e.g., 'reentrancy', 'ERC20', 'access-control')"
-            }
-        }
-
-    @classmethod
-    def process_cli_args(cls, **kwargs) -> Dict[str, Any]:
-        """Process CLI arguments for audit workflow."""
-        return {
-            "scope_files": list(kwargs.get("scope", [])),
-            "context_docs": list(kwargs.get("context", [])),
-            "focus_areas": list(kwargs.get("focus", []))
-        }
-
+        # Add context after parent init (which creates self.state)
+        self.add_context("scope_files", self.scope_files)
+        self.add_context("context_docs", self.context_docs)
+        self.add_context("focus_areas", self.focus_areas)

@@ -115,12 +115,18 @@ The easiest way to create a custom detector is using the `MarkdownDetector` temp
 // todo: update when the detector loading will be implemented
 
 ```python
+import rich_click as click
 from wake_ai.templates import MarkdownDetector
+from wake_ai import workflow
 
 class AccessControlDetector(MarkdownDetector):
     """Detect access control vulnerabilities."""
 
-    name = "access-control"
+    @workflow.command("access-control")
+    @click.option("--scope", "-s", multiple=True, type=click.Path(exists=True), help="Files to analyze")
+    def cli(self, scope):
+        """Detect access control vulnerabilities in smart contracts."""
+        self.scope = list(scope)
 
     def get_detector_prompt(self) -> str:
         return """
@@ -281,13 +287,18 @@ The prompt handles:
 ### Multi-Step Workflow Example
 
 ```python
-from wake_ai import AIWorkflow, WorkflowStep
+import rich_click as click
+from wake_ai import AIWorkflow, WorkflowStep, workflow
 from wake_ai.core.utils import validate_yaml_output
 
 class TestGeneratorWorkflow(AIWorkflow):
     """Generate comprehensive test suites."""
 
-    name = "test-gen"
+    @workflow.command("test-gen")
+    @click.option("--framework", "-f", type=click.Choice(["foundry", "hardhat"]), default="foundry", help="Test framework to use")
+    def cli(self, framework):
+        """Generate comprehensive test suites for smart contracts."""
+        self.framework = framework
 
     def _setup_steps(self):
         # Step 1: Analyze contract structure
@@ -342,23 +353,16 @@ class TestGeneratorWorkflow(AIWorkflow):
 
 ### Adding CLI Options
 
-```python
-@classmethod
-def get_cli_options(cls):
-    return {
-        "framework": {
-            "param_decls": ["-f", "--framework"],
-            "type": click.Choice(["foundry", "hardhat"]),
-            "default": "foundry",
-            "help": "Test framework to use"
-        }
-    }
+CLI options are added using click decorators on the `cli` method:
 
-@classmethod
-def process_cli_args(cls, **kwargs):
-    return {
-        "test_framework": kwargs.get("framework", "foundry")
-    }
+```python
+@workflow.command("test-gen")
+@click.option("--framework", "-f", type=click.Choice(["foundry", "hardhat"]), default="foundry", help="Test framework to use")
+@click.option("--scope", "-s", multiple=True, type=click.Path(exists=True), help="Files to analyze")
+def cli(self, framework, scope):
+    """Generate comprehensive test suites for smart contracts."""
+    self.framework = framework
+    self.scope = list(scope)
 ```
 
 ## Advanced Features
@@ -525,11 +529,11 @@ self.add_step(
     continue_session=True  # Needs to know what issues were found
 )
 
-# Working directory management
-workflow = MyWorkflow(
-    working_dir="/custom/path",  # Custom working directory
-    cleanup_working_dir=False    # Preserve after completion
-)
+# Python usage for programmatic access
+workflow = MyWorkflow()
+workflow.cli(scope=["contract.sol"], custom_param=True)
+# Working directory and cleanup are handled automatically
+results, formatted = workflow.execute()
 ```
 
 **Multi-Agent Execution**: By default, each step creates a new agent session (`continue_session=False`), enabling multi-agent workflows with specialized agents. To maintain context within the same agent session, explicitly set `continue_session=True`.

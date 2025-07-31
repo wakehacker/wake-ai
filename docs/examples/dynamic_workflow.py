@@ -8,16 +8,23 @@ This workflow:
 
 import re
 from typing import Dict, Any, List
-from wake_ai import AIWorkflow, WorkflowStep
+import rich_click as click
+from wake_ai import AIWorkflow, WorkflowStep, workflow
 from wake_ai.core.claude import ClaudeCodeResponse
 
 
 class DynamicAnalysisWorkflow(AIWorkflow):
     """Workflow that dynamically creates steps based on initial analysis."""
     
-    def __init__(self, target_dir: str = ".", **kwargs):
+    def __init__(self, **kwargs):
+        """Initialize the workflow."""
+        pass
+    
+    @workflow.command("dynamic-analysis")
+    @click.option("--target-dir", "-d", type=str, default=".", help="Directory to analyze")
+    def cli(self, target_dir):
+        """Run dynamic analysis workflow."""
         self.target_dir = target_dir
-        super().__init__(name="dynamic_analysis", **kwargs)
     
     def _setup_steps(self):
         """Setup initial workflow steps."""
@@ -121,7 +128,10 @@ Keep your analysis concise (3-5 sentences per section).""",
 
 if __name__ == "__main__":
     # Example usage
-    workflow = DynamicAnalysisWorkflow(target_dir="wake_ai/core")
+    workflow = DynamicAnalysisWorkflow()
+    
+    # Configure via CLI method
+    workflow.cli(target_dir="wake_ai/core")
     
     # Add initial context
     workflow.add_context("target_dir", "wake_ai/core")

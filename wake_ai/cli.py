@@ -3,15 +3,15 @@
 import rich_click as click
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union, Dict, Any, Sequence, List, Type, TYPE_CHECKING
 
+import rich.traceback
 from rich.console import Console
 from rich.logging import RichHandler
 
-from wake_ai import AIWorkflow
+if TYPE_CHECKING:
+    from wake_ai import AIWorkflow
 
-# Import available workflows from flows module
-from flows import AuditWorkflow, ReentrancyDetector, UniswapDetector
 
 console = Console()
 
@@ -22,40 +22,152 @@ logging.basicConfig(
     datefmt="[%X]",
     handlers=[RichHandler(console=console, rich_tracebacks=True)]
 )
-
-# Register available workflows
-AVAILABLE_WORKFLOWS = {
-    "audit": AuditWorkflow,
-    "uniswap": UniswapDetector,
-    "reentrancy": ReentrancyDetector,
-}
-
-def all_workflow_options():
-    """Decorator to add all workflow-specific options to a Click command."""
-    def decorator(f):
-        # Collect all unique options from all workflows
-        all_options = {}
-        for workflow_name, workflow_class in AVAILABLE_WORKFLOWS.items():
-            if hasattr(workflow_class, 'get_cli_options'):
-                workflow_options = workflow_class.get_cli_options()
-                for opt_name, opt_config in workflow_options.items():
-                    if opt_name not in all_options:
-                        all_options[opt_name] = opt_config.copy()
-
-        # Add options in reverse order (Click requirement)
-        for opt_name, opt_config in reversed(list(all_options.items())):
-            param_decls = opt_config.pop("param_decls", [f"--{opt_name}"])
-            click.option(*param_decls, **opt_config)(f)
-        return f
-    return decorator
+logger = logging.getLogger(__name__)
 
 
-@click.command()
-@click.argument(
-    "workflow",
-    type=click.Choice(list(AVAILABLE_WORKFLOWS.keys())),
-    required=True
-)
+class WorkflowGroup(click.Group):
+    _current_plugin: str | None = None
+    _loading_from_plugins: bool = False
+    _plugins_loaded: bool = False
+    _failed_plugin_entry_points: set[tuple[str, Exception]] = set()
+    _workflow_collisions: set[tuple[str, str, str]] = set()
+    _completion_mode: bool  # if set, don't log errors
+
+    loaded_from_plugins: dict[str, str] = {}
+    workflow_sources: dict[str, set[str | None]] = {}
+
+    def __init__(
+        self,
+        name: Optional[str] = None,
+        commands: Optional[
+            Union[Dict[str, click.Command], Sequence[click.Command]]
+        ] = None,
+        **attrs: Any,
+    ):
+        super().__init__(name=name, commands=commands, **attrs)
+
+        import os
+
+        self._completion_mode = "_WAKE_AI_COMPLETE" in os.environ
+
+    def _load_plugins(self) -> None:
+        import sys
+
+        if sys.version_info < (3, 10):
+            from importlib_metadata import entry_points
+        else:
+            from importlib.metadata import entry_points
+
+        self._loading_from_plugins = True
+        for cmd in self.loaded_from_plugins.keys():
+            self.commands.pop(cmd, None)
+        self.loaded_from_plugins.clear()
+        self.workflow_sources.clear()
+        self._failed_plugin_entry_points.clear()
+        self._workflow_collisions.clear()
+
+        workflow_entry_points = entry_points().select(group="wake-ai.plugins.workflows")
+        for entry_point in sorted(workflow_entry_points, key=lambda e: e.module):
+            self._current_plugin = entry_point.module
+
+            # unload target module and all its children
+            for m in [
+                k
+                for k in sys.modules.keys()
+                if k == entry_point.module or k.startswith(entry_point.module + ".")
+            ]:
+                sys.modules.pop(m)
+
+            try:
+                entry_point.load()
+            except Exception as e:
+                self._failed_plugin_entry_points.add((entry_point.module, e))
+                if not self._completion_mode:
+                    logger.error(
+                        f"Failed to load detectors from plugin module '{entry_point.module}': {e}"
+                    )
+
+        self._loading_from_plugins = False
+
+    def add_command(self, cmd: click.Command, name: Optional[str] = None) -> None:
+        name = name or cmd.name
+        assert name is not None
+        if name in set():  # whitelisted commands that are not workflows
+            super().add_command(cmd, name)
+            return
+
+        if name not in self.workflow_sources:
+            self.workflow_sources[name] = {self._current_plugin}
+        else:
+            self.workflow_sources[name].add(self._current_plugin)
+
+        if name in self.loaded_from_plugins:
+            prev = f"plugin module '{self.loaded_from_plugins[name]}'"
+            current = f"plugin module '{self._current_plugin}'"
+            self._workflow_collisions.add((name, prev, current))
+
+            if not self._completion_mode:
+                logger.warning(f"Workflow '{name}' already loaded from plugin '{self.loaded_from_plugins[name]}'. Second load from '{self._current_plugin}' will be ignored.")
+            return
+
+        super().add_command(cmd, name)
+        if self._loading_from_plugins:
+            self.loaded_from_plugins[
+                name
+            ] = self._current_plugin  # pyright: ignore reportGeneralTypeIssues
+
+    def get_command(
+        self,
+        ctx: click.Context,
+        cmd_name: str,
+        force_load_plugins: bool = False,
+    ) -> Optional[click.Command]:
+        if not self._plugins_loaded or force_load_plugins:
+            self._load_plugins()
+            self._plugins_loaded = True
+        return self.commands.get(cmd_name)
+
+    def list_commands(
+        self,
+        ctx: click.Context,
+        force_load_plugins: bool = False,
+    ) -> List[str]:
+        if not self._plugins_loaded or force_load_plugins:
+            self._load_plugins()
+            self._plugins_loaded = True
+        return sorted(self.commands)
+
+    def invoke(self, ctx: click.Context):
+        ctx.ensure_object(dict)
+        ctx.obj["subcommand_args"] = ctx.args
+        ctx.obj["subcommand_protected_args"] = ctx.protected_args
+        super().invoke(ctx)
+
+
+# credits: https://stackoverflow.com/questions/3589311/get-defining-class-of-unbound-method-object-in-python-3/25959545#25959545
+def get_class_that_defined_method(meth):
+    import functools
+    import inspect
+
+    if isinstance(meth, functools.partial):
+        return get_class_that_defined_method(meth.func)
+    if inspect.ismethod(meth):
+        for c in inspect.getmro(meth.__self__.__class__):
+            if meth.__name__ in c.__dict__:
+                return c
+        meth = getattr(meth, "__func__", meth)  # fallback to __qualname__ parsing
+    if inspect.isfunction(meth):
+        c = getattr(
+            inspect.getmodule(meth),
+            meth.__qualname__.split(".<locals>", 1)[0].rsplit(".", 1)[0],
+            None,
+        )
+        if isinstance(c, type):
+            return c
+    return getattr(meth, "__objclass__", None)  # handle special descriptor objects
+
+
+@click.group(cls=WorkflowGroup)
 @click.option(
     "--working-dir",
     "-w",
@@ -65,6 +177,7 @@ def all_workflow_options():
 @click.option(
     "--model",
     "-m",
+    default="sonnet",
     help="Claude model to use"
 )
 @click.option(
@@ -94,9 +207,8 @@ def all_workflow_options():
     is_flag=True,
     help="Enable verbose logging (debug level)"
 )
-@all_workflow_options()
 @click.pass_context
-def main(ctx: click.Context, **kwargs):
+def main(ctx: click.Context, model: str, **kwargs):
     """AI-powered smart contract security analysis.
 
     This command runs various AI workflows for smart contract analysis
@@ -121,76 +233,90 @@ def main(ctx: click.Context, **kwargs):
         # Resume previous session
         wake-ai --resume
     """
+    rich.traceback.install(console=console)
+
     # Set logging level based on verbose flag
     if kwargs.get("verbose"):
         logging.getLogger().setLevel(logging.DEBUG)
         console.print("[dim]Debug logging enabled[/dim]")
 
-    workflow = kwargs["workflow"]
-    console.print(f"[blue]Starting {workflow} workflow[/blue]")
+    if "--help" in ctx.obj["subcommand_args"]:
+        return
 
-    # Get workflow class
-    workflow_class = AVAILABLE_WORKFLOWS.get(workflow)
-    if not workflow_class:
-        console.print(f"[red]Unknown workflow:[/red] {workflow}")
-        ctx.exit(1)
+    if ctx.invoked_subcommand is not None:
+        try:
+            workflow_name = ctx.invoked_subcommand
+            console.print(f"[blue]Starting {workflow_name} workflow[/blue]")
 
-    # Process arguments using workflow's processor if available
-    if hasattr(workflow_class, 'process_cli_args'):
-        init_args = workflow_class.process_cli_args(**kwargs)
-    else:
-        init_args = {}
+            command: Optional[click.Command] = main.get_command(ctx, workflow_name)
+            if command is None:
+                console.print(f"[red]Unknown workflow:[/red] {workflow_name}")
+                ctx.exit(1)
 
-    # Add common parameters
-    if kwargs.get("model"):
-        init_args["model"] = kwargs["model"]
-    if kwargs.get("execution_dir"):
-        init_args["execution_dir"] = kwargs["execution_dir"]
-    if kwargs.get("working_dir"):
-        init_args["working_dir"] = kwargs["working_dir"]
-    if kwargs.get("no_cleanup") is not None:
-        # CLI uses --no-cleanup flag, so invert it to get cleanup_working_dir
-        init_args["cleanup_working_dir"] = not kwargs["no_cleanup"]
+            args = [*ctx.obj["subcommand_protected_args"][1:], *ctx.obj["subcommand_args"]]
 
-    try:
-        # Create workflow instance
-        workflow: AIWorkflow = workflow_class(**init_args)
+            cls: Type[AIWorkflow] = get_class_that_defined_method(command.callback)
+            workflow = object.__new__(cls)
+            workflow._pre_init(
+                name=workflow_name,
+                model=model,
+                working_dir=kwargs.get("working_dir"),
+                execution_dir=kwargs.get("execution_dir"),
+                cleanup_working_dir=not kwargs.get("no_cleanup"),
+            )
+            workflow.__init__()
 
-        # Display working directory and cleanup info
-        console.print(f"[blue]Working directory:[/blue] {workflow.working_dir}")
-        if workflow.cleanup_working_dir:
-            console.print(f"[dim]Working directory will be cleaned up after completion. Use --no-cleanup to preserve it.[/dim]")
-        else:
-            console.print(f"[dim]Working directory will be preserved after completion.[/dim]")
+            original_callback = command.callback
+            command.callback = lambda *args, **kwargs: original_callback(workflow, *args, **kwargs)
 
-        # Execute workflow
-        results, formatted_results = workflow.execute(resume=kwargs["resume"])
+            sub_ctx = command.make_context(
+                command.name,
+                list(args),
+                parent=ctx,
+            )
+            with sub_ctx:
+                sub_ctx.command.invoke(sub_ctx)
 
-        # Display results
-        console.print("\n[green]Workflow complete![/green]")
+            command.callback = original_callback
 
-        export_path = kwargs.get("export")
-
-        if export_path:
-            # Export to JSON
-            if hasattr(formatted_results, 'export_json'):
-                formatted_results.export_json(export_path)
-                console.print(f"[green]Results exported to:[/green] {export_path}")
-        else:
-            # Pretty print to console
-            if hasattr(formatted_results, 'pretty_print'):
-                formatted_results.pretty_print(console)
+            # Display working directory and cleanup info
+            console.print(f"[blue]Working directory:[/blue] {workflow.working_dir}")
+            if workflow.cleanup_working_dir:
+                console.print(f"[dim]Working directory will be cleaned up after completion. Use --no-cleanup to preserve it.[/dim]")
             else:
-                console.print(formatted_results)
+                console.print(f"[dim]Working directory will be preserved after completion.[/dim]")
 
-    except KeyboardInterrupt:
-        console.print("\n[yellow]Workflow interrupted. Use --resume to continue.[/yellow]")
-        ctx.exit(0)
-    except Exception as e:
-        console.print(f"[red]Workflow failed:[/red] {e}")
-        if kwargs["resume"]:
-            console.print("[yellow]Try running without --resume flag[/yellow]")
-        ctx.exit(1)
+            # Execute workflow
+            results, formatted_results = workflow.execute(resume=kwargs["resume"])
+
+            # Display results
+            console.print("\n[green]Workflow complete![/green]")
+
+            export_path = kwargs.get("export")
+
+            if export_path:
+                # Export to JSON
+                if hasattr(formatted_results, 'export_json'):
+                    formatted_results.export_json(export_path)
+                    console.print(f"[green]Results exported to:[/green] {export_path}")
+            else:
+                # Pretty print to console
+                if hasattr(formatted_results, 'pretty_print'):
+                    formatted_results.pretty_print(console)
+                else:
+                    console.print(formatted_results)
+
+        except KeyboardInterrupt:
+            console.print("\n[yellow]Workflow interrupted. Use --resume to continue.[/yellow]")
+            ctx.exit(0)
+        except Exception as e:
+            console.print_exception()
+            if kwargs["resume"]:
+                console.print("[yellow]Try running without --resume flag[/yellow]")
+            ctx.exit(1)
+
+    # prevent execution of subcommands
+    ctx.exit(0)
 
 
 if __name__ == "__main__":
