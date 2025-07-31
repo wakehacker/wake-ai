@@ -191,6 +191,7 @@ Work in the assigned directory `{{working_dir}}` to store analysis results.
 - Router addresses in deployment scripts
 - Mock Uniswap contracts in test suites
 
+Only report objective security vulnerabilities. Do not report any issues if the implementation meets established security best practices and does not violate known standards or introduce exploitable conditions.
 </validation_requirements>
 
 <output_format>
