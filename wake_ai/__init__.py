@@ -28,9 +28,6 @@ from .utils.formatters import (
     export_detections_json,
 )
 
-# Runner imports
-from .runner import run_ai_workflow
-
 # Utils imports
 from .utils.workflow import (
     load_workflow_from_file,
@@ -63,8 +60,6 @@ __all__ = [
     "Severity",
     "print_detection",
     "export_detections_json",
-    # Runner
-    "run_ai_workflow",
     # Utils
     "load_workflow_from_file",
     "validate_claude_cli",
