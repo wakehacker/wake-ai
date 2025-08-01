@@ -8,6 +8,7 @@ from typing import Optional, Union, Dict, Any, Sequence, List, Type, TYPE_CHECKI
 import rich.traceback
 from rich.console import Console
 from rich.logging import RichHandler
+from wake_ai.utils.logging import get_logger, set_debug
 
 if TYPE_CHECKING:
     from wake_ai import AIWorkflow
@@ -22,7 +23,7 @@ logging.basicConfig(
     datefmt="[%X]",
     handlers=[RichHandler(console=console, rich_tracebacks=True)]
 )
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class WorkflowGroup(click.Group):
@@ -237,7 +238,7 @@ def main(ctx: click.Context, model: str, **kwargs):
 
     # Set logging level based on verbose flag
     if kwargs.get("verbose"):
-        logging.getLogger().setLevel(logging.DEBUG)
+        set_debug(True)
         console.print("[dim]Debug logging enabled[/dim]")
 
     if "--help" in ctx.obj["subcommand_args"]:
