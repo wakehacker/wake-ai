@@ -110,16 +110,16 @@ wake-ai --resume
 
 ### Creating a Simple Detector
 
-The easiest way to create a custom detector is using the `MarkdownDetector` template:
+The easiest way to create a custom detector is using the `SimpleDetector` template:
 
 // todo: update when the detector loading will be implemented
 
 ```python
 import rich_click as click
-from wake_ai.templates import MarkdownDetector
+from wake_ai.templates import SimpleDetector
 from wake_ai import workflow
 
-class AccessControlDetector(MarkdownDetector):
+class AccessControlDetector(SimpleDetector):
     """Detect access control vulnerabilities."""
 
     @workflow.command("access-control")
@@ -278,7 +278,7 @@ Example usage:
 
 The prompt handles:
 
--   Choosing between `MarkdownDetector` (simple) or `AIWorkflow` (complex)
+-   Choosing between `SimpleDetector` or `AIWorkflow` (complex)
 -   Setting up steps with appropriate tools and validators
 -   Creating CLI options and argument processing
 -   Implementing proper error handling and validation

@@ -1,4 +1,4 @@
-"""Abstract base class for markdown-based detector workflows."""
+"""Abstract base class for simple detector workflows."""
 
 from abc import abstractmethod
 from pathlib import Path
@@ -13,8 +13,8 @@ from ..utils.logging import get_logger
 logger = get_logger(__name__)
 
 
-class MarkdownDetectorResult(AIResult):
-    """Result class for markdown detector workflows."""
+class SimpleDetectorResult(AIResult):
+    """Result class for simple detector workflows."""
 
     def __init__(self, detections: List[Tuple[str, Detection]], working_dir: Path):
         """Initialize with detections and working directory."""
@@ -22,7 +22,7 @@ class MarkdownDetectorResult(AIResult):
         self.working_dir = working_dir
 
     @classmethod
-    def from_working_dir(cls, working_dir: Path, raw_results: Dict[str, Any]) -> "MarkdownDetectorResult":
+    def from_working_dir(cls, working_dir: Path, raw_results: Dict[str, Any]) -> "SimpleDetectorResult":
         """Parse detector results from the simplified results.yaml format."""
         # Create instance first with empty detections
         instance = cls([], working_dir)
@@ -36,7 +36,7 @@ class MarkdownDetectorResult(AIResult):
                 with open(results_file, 'r') as f:
                     data = yaml.safe_load(f)
 
-                detector_name = raw_results.get('workflow', 'markdown-detector')
+                detector_name = raw_results.get('workflow', 'simple-detector')
 
                 for detection_data in data.get('detections', []):
                     # Parse location if present
@@ -118,8 +118,8 @@ class MarkdownDetectorResult(AIResult):
         export_detections_json(self.detections, output_path)
 
 
-class MarkdownDetector(AIWorkflow):
-    """Abstract base class for markdown-based detector workflows.
+class SimpleDetector(AIWorkflow):
+    """Abstract base class for simple detector workflows.
 
     This class simplifies creating custom detectors by:
     1. Providing a single abstract method to implement (get_detector_prompt)
@@ -127,13 +127,13 @@ class MarkdownDetector(AIWorkflow):
     3. Parsing results into standardized AIDetection format
     """
     def _pre_init(self, *args, **kwargs):
-        super()._pre_init(*args, **kwargs, result_class=MarkdownDetectorResult)
+        super()._pre_init(*args, **kwargs, result_class=SimpleDetectorResult)
 
     @abstractmethod
     def get_detector_prompt(self) -> str:
         """Get the detector-specific prompt.
 
-        This should return a markdown prompt that describes:
+        This should return a prompt that describes:
         1. What vulnerabilities/issues to look for
         2. Any specific patterns or code smells
         3. Context about the protocol/system being analyzed

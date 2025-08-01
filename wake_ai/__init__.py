@@ -37,8 +37,8 @@ from .utils.workflow import (
 
 # Template imports
 from .templates import (
-    MarkdownDetector,
-    MarkdownDetectorResult,
+    SimpleDetector,
+    SimpleDetectorResult,
 )
 
 
@@ -65,8 +65,8 @@ __all__ = [
     # Utils
     "load_workflow_from_file",
     # Templates
-    "MarkdownDetector",
-    "MarkdownDetectorResult",
+    "SimpleDetector",
+    "SimpleDetectorResult",
     # Version
     "__version__",
 ]
