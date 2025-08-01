@@ -24,7 +24,6 @@ Tools not requiring permission (always available):
 """
 
 import json
-import logging
 import re
 import shutil
 from abc import ABC, abstractmethod
@@ -38,9 +37,10 @@ from pydantic import BaseModel
 
 from ..results import AIResult, MessageResult
 from .claude import ClaudeCodeResponse, ClaudeCodeSession
+from ..utils.logging import get_logger
 
 # Set up logging
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

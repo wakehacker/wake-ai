@@ -10,8 +10,9 @@ import rich_click as click
 from wake_ai.core import AIWorkflow, WorkflowStep, ClaudeCodeResponse
 from wake_ai import workflow
 from wake_ai.results import SimpleResult
+from wake_ai.utils import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class HookExampleWorkflow(AIWorkflow):

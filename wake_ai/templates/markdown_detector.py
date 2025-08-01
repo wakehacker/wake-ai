@@ -1,16 +1,16 @@
 """Abstract base class for markdown-based detector workflows."""
 
-import logging
 from abc import abstractmethod
 from pathlib import Path
-from typing import Dict, Any, Optional, List, Tuple, Union
+from typing import Dict, Any, List, Tuple
 import yaml
 
 from ..core.flow import AIWorkflow, ClaudeCodeResponse
 from ..detections import Detection, Location, Severity
 from ..results import AIResult
+from ..utils.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class MarkdownDetectorResult(AIResult):
