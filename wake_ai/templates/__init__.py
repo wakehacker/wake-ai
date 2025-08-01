@@ -1,8 +1,8 @@
 """Templates for creating specialized AI workflows."""
 
-from .markdown_detector import MarkdownDetector, MarkdownDetectorResult
+from .simple_detector import SimpleDetector, SimpleDetectorResult
 
 __all__ = [
-    "MarkdownDetector",
-    "MarkdownDetectorResult",
+    "SimpleDetector",
+    "SimpleDetectorResult",
 ]

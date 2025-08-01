@@ -26,9 +26,9 @@ Analyze the requirements to choose the appropriate base class:
 
 a. **For Simple Detectors** (finding specific patterns/vulnerabilities):
    ```python
-   from wake_ai import MarkdownDetector, workflow
+   from wake_ai import SimpleDetector, workflow
 
-   class MyDetector(MarkdownDetector):
+   class MyDetector(SimpleDetector):
        """Detects specific vulnerability patterns."""
 
        @workflow.command("my-detector")
@@ -925,7 +925,7 @@ The following changes have been made to the Wake AI framework that affect workfl
    - Added optional `source` field to track which workflow/detector found the issue
    - Audit workflow uses `AuditDetection` with `impact` and `confidence` instead of `severity`
 
-4. **MarkdownDetector Independence**: `MarkdownDetector` no longer depends on `AuditResult` and has its own `MarkdownDetectorResult` class
+4. **SimpleDetector Independence**: `SimpleDetector` no longer depends on `AuditResult` and has its own `SimpleDetectorResult` class
 
 5. **Detection Type Validation**: Audit workflow validates detection types against a specific list:
    - Data validation, Code quality, Logic error, Standards violation
@@ -938,7 +938,7 @@ The following changes have been made to the Wake AI framework that affect workfl
 <validation_requirements>
 - **CRITICAL**: Validators MUST check for EXACTLY what prompts ask the AI to create
 - **CRITICAL**: Error messages MUST tell the AI specifically what to fix, with examples
-- **ALWAYS** inherit from either `AIWorkflow` or `MarkdownDetector`
+- **ALWAYS** inherit from either `AIWorkflow` or `SimpleDetector`
 - **ALWAYS** implement `_setup_steps()` method
 - **ALWAYS** call `super().__init__()` with workflow name
 - **NEVER** access `self.steps` before `super().__init__()` is called
@@ -991,9 +991,9 @@ When asked to create a workflow, provide:
 
 <example_simple_detector>
 ```python
-from wake_ai import MarkdownDetector
+from wake_ai import SimpleDetector
 
-class UnusedImportDetector(MarkdownDetector):
+class UnusedImportDetector(SimpleDetector):
     """Detects unused imports in Solidity contracts."""
 
     def get_detector_prompt(self) -> str:

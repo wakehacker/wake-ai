@@ -531,8 +531,8 @@ This flexible architecture allows us to define new result types (e.g., fuzzing r
     -   **_Kōro_** – technical, directional, navigating dynamic environments; feels advanced and system-level.
     -   **_Sendō_** (先導) – "Guidance / Leading the way" Suggests an agent that leads or follows intelligently.
 -   [x] Reach consensus on AI detector output structure
--   [x] Add SingleStep helper class for simple detectors (implemented as `MarkdownDetector`)
-    -   [ ] Consider multi-step MarkdownDetector variant with shared session context
+-   [x] Add SingleStep helper class for simple detectors (implemented as `SimpleDetector`)
+    -   [ ] Consider multi-step SimpleDetector variant with shared session context
         -   Would allow breaking complex detectors into phases (e.g., understanding → analysis → verification)
         -   Requires modifying base workflow to reuse ClaudeCodeSession across steps
         -   However, a single well-crafted prompt often achieves similar results with less complexity
@@ -563,7 +563,7 @@ description:
       function approve(...) { ... }
 ```
 
-2. YAML with Markdown/ADOC (default, used by `MarkdownDetector`)
+2. YAML with Markdown/ADOC (default, used by `SimpleDetector`)
 
 ```yaml
 - name: Reentrancy in approve()
@@ -664,14 +664,14 @@ class MyWorkflow(AIWorkflow):
 
 ## Creating Custom Detectors
 
-Wake AI provides a `MarkdownDetector` template that makes it easy to create custom security detectors. You only need to define what to look for - the framework handles everything else.
+Wake AI provides a `SimpleDetector` template that makes it easy to create custom security detectors. You only need to define what to look for - the framework handles everything else.
 
 ### Quick Example: Uniswap Detector
 
 ```python
-from wake_ai.templates import MarkdownDetector
+from wake_ai.templates import SimpleDetector
 
-class UniswapDetector(MarkdownDetector):
+class UniswapDetector(SimpleDetector):
     """Detector for Uniswap-specific vulnerabilities."""
 
     name = "uniswap"
@@ -714,9 +714,9 @@ See the [Uniswap detector implementation](flows/uniswap_detector/workflow.py) fo
 The reentrancy detector demonstrates how to combine Wake's built-in static analysis with AI-powered verification:
 
 ```python
-from wake_ai.templates import MarkdownDetector
+from wake_ai.templates import SimpleDetector
 
-class ReentrancyDetector(MarkdownDetector):
+class ReentrancyDetector(SimpleDetector):
     """Enhanced reentrancy detector leveraging Wake's static analysis."""
 
     name = "reentrancy"
@@ -755,7 +755,7 @@ The `examples/` directory contains examples demonstrating various Wake AI featur
 
 ### Security Detector Example: Reentrancy
 
-The [reentrancy example](examples/reentrancy/) demonstrates how to build a security detector using the `MarkdownDetector` template, which:
+The [reentrancy example](examples/reentrancy/) demonstrates how to build a security detector using the `SimpleDetector` template, which:
 
 -   Integrates with Wake's built-in static analysis tools
 -   Performs AI-powered verification to eliminate false positives

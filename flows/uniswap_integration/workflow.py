@@ -4,12 +4,12 @@ from typing import Dict, Any, Optional, Union
 from pathlib import Path
 
 from wake_ai import workflow
-from wake_ai.templates.markdown_detector import MarkdownDetector
+from wake_ai.templates.simple_detector import SimpleDetector
 
 import rich_click as click
 
 
-class UniswapDetector(MarkdownDetector):
+class UniswapDetector(SimpleDetector):
     """Detector for Uniswap V2/V3 specific vulnerabilities and best practices."""
 
     focus_version: str

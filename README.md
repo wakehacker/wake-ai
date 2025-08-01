@@ -256,12 +256,12 @@ class AuditWorkflow(AIWorkflow):
 
 ## Creating Custom Detectors
 
-Wake AI makes it trivial to prototype new vulnerability detectors with the `MarkdownDetector` helper class:
+Wake AI makes it trivial to prototype new vulnerability detectors with the `SimpleDetector` helper class:
 
 ```python
-from wake_ai.templates import MarkdownDetector
+from wake_ai.templates import SimpleDetector
 
-class FlashLoanDetector(MarkdownDetector):
+class FlashLoanDetector(SimpleDetector):
     name = "flashloan"
 
     def get_detector_prompt(self) -> str:

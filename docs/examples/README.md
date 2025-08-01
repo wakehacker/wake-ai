@@ -65,7 +65,7 @@ For developers new to Wake AI, we recommend exploring the examples in this order
 
 After studying these examples, you can create your own detector by:
 
-1. Inheriting from `MarkdownDetector` for simple single-step detectors
+1. Inheriting from `SimpleDetector` for simple single-step detectors
 2. Inheriting from `AIWorkflow` for complex multi-step workflows
 3. Following the prompt structure patterns shown in the examples
 4. Using appropriate validation to ensure output quality
