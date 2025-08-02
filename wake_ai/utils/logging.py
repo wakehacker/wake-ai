@@ -1,10 +1,11 @@
 import logging
+from typing import Optional
 
 _debug: bool = False
 _created_logger_names: set[str] = set()
 
 
-def get_logger(name: str, override_level: int | None = None) -> logging.Logger:
+def get_logger(name: str, override_level: Optional[int] = None) -> logging.Logger:
     logger = logging.getLogger(name)
 
     if override_level is not None:

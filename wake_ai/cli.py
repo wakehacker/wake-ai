@@ -27,7 +27,7 @@ logger = get_logger(__name__)
 
 
 class WorkflowGroup(click.Group):
-    _current_plugin: str | None = None
+    _current_plugin: Optional[str] = None
     _loading_from_plugins: bool = False
     _plugins_loaded: bool = False
     _failed_plugin_entry_points: set[tuple[str, Exception]] = set()
@@ -35,7 +35,7 @@ class WorkflowGroup(click.Group):
     _completion_mode: bool  # if set, don't log errors
 
     loaded_from_plugins: dict[str, str] = {}
-    workflow_sources: dict[str, set[str | None]] = {}
+    workflow_sources: dict[str, set[Optional[str]]] = {}
 
     def __init__(
         self,
