@@ -7,13 +7,14 @@ from wake_ai import workflow
 from wake_ai.templates.simple_detector import SimpleDetector
 
 
+@workflow.command(name="donation-attack")
+def factory():
+    """Run donation attack detector."""
+    return DonationAttackDetector()
+
+
 class DonationAttackDetector(SimpleDetector):
     """Detector for donation attack vulnerabilities."""
-
-    @workflow.command(name="donation-attack")
-    def cli(self):
-        """Run donation attack detector."""
-        pass
 
     def get_detector_prompt(self) -> str:
         """Get the donation attack detection prompt."""

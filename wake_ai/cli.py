@@ -1,5 +1,7 @@
 """CLI interface for Wake AI."""
 
+from __future__ import annotations
+
 import rich_click as click
 import logging
 from pathlib import Path
@@ -138,12 +140,6 @@ class WorkflowGroup(click.Group):
             self._plugins_loaded = True
         return sorted(self.commands)
 
-    def invoke(self, ctx: click.Context):
-        ctx.ensure_object(dict)
-        ctx.obj["subcommand_args"] = ctx.args
-        ctx.obj["subcommand_protected_args"] = ctx.protected_args
-        super().invoke(ctx)
-
 
 # credits: https://stackoverflow.com/questions/3589311/get-defining-class-of-unbound-method-object-in-python-3/25959545#25959545
 def get_class_that_defined_method(meth):
@@ -209,7 +205,7 @@ def get_class_that_defined_method(meth):
     help="Enable verbose logging (debug level)"
 )
 @click.pass_context
-def main(ctx: click.Context, model: str, **kwargs):
+def main(ctx: click.Context, working_dir: str | None, model: str, resume: bool, execution_dir: str | None, export: str | None, no_cleanup: bool, verbose: bool):
     """AI-powered smart contract security analysis.
 
     This command runs various AI workflows for smart contract analysis
@@ -237,88 +233,60 @@ def main(ctx: click.Context, model: str, **kwargs):
     rich.traceback.install(console=console)
 
     # Set logging level based on verbose flag
-    if kwargs.get("verbose"):
+    if verbose:
         set_debug(True)
         console.print("[dim]Debug logging enabled[/dim]")
-
-    if "--help" in ctx.obj["subcommand_args"]:
-        return
-
-    if ctx.invoked_subcommand is not None:
-        try:
-            workflow_name = ctx.invoked_subcommand
-            console.print(f"[blue]Starting {workflow_name} workflow[/blue]")
-
-            command: Optional[click.Command] = main.get_command(ctx, workflow_name)
-            if command is None:
-                console.print(f"[red]Unknown workflow:[/red] {workflow_name}")
-                ctx.exit(1)
-
-            args = [*ctx.obj["subcommand_protected_args"][1:], *ctx.obj["subcommand_args"]]
-
-            cls: Type[AIWorkflow] = get_class_that_defined_method(command.callback)
-            workflow = object.__new__(cls)
-            workflow._pre_init(
-                name=workflow_name,
-                model=model,
-                working_dir=kwargs.get("working_dir"),
-                execution_dir=kwargs.get("execution_dir"),
-                cleanup_working_dir=not kwargs.get("no_cleanup"),
-            )
-            workflow.__init__()
-
-            original_callback = command.callback
-            command.callback = lambda *args, **kwargs: original_callback(workflow, *args, **kwargs)
-
-            sub_ctx = command.make_context(
-                command.name,
-                list(args),
-                parent=ctx,
-            )
-            with sub_ctx:
-                sub_ctx.command.invoke(sub_ctx)
-
-            command.callback = original_callback
-
-            # Display working directory and cleanup info
-            console.print(f"[blue]Working directory:[/blue] {workflow.working_dir}")
-            if workflow.cleanup_working_dir:
-                console.print(f"[dim]Working directory will be cleaned up after completion. Use --no-cleanup to preserve it.[/dim]")
-            else:
-                console.print(f"[dim]Working directory will be preserved after completion.[/dim]")
-
-            # Execute workflow
-            results, formatted_results = workflow.execute(resume=kwargs["resume"])
-
-            # Display results
-            console.print("\n[green]Workflow complete![/green]")
-
-            export_path = kwargs.get("export")
-
-            if export_path:
-                # Export to JSON
-                if hasattr(formatted_results, 'export_json'):
-                    formatted_results.export_json(export_path)
-                    console.print(f"[green]Results exported to:[/green] {export_path}")
-            else:
-                # Pretty print to console
-                if hasattr(formatted_results, 'pretty_print'):
-                    formatted_results.pretty_print(console)
-                else:
-                    console.print(formatted_results)
-
-        except KeyboardInterrupt:
-            console.print("\n[yellow]Workflow interrupted. Use --resume to continue.[/yellow]")
-            ctx.exit(0)
-        except Exception as e:
-            console.print_exception()
-            if kwargs["resume"]:
-                console.print("[yellow]Try running without --resume flag[/yellow]")
-            ctx.exit(1)
-
-    # prevent execution of subcommands
-    ctx.exit(0)
 
 
 if __name__ == "__main__":
     main()
+
+@main.result_callback()
+def factory_callback(workflow: AIWorkflow, model: str, resume: bool, working_dir: str | None, execution_dir: str | None, no_cleanup: bool, export: str | None, **kwargs):
+    ctx = click.get_current_context()
+    workflow_name = ctx.invoked_subcommand
+
+    try:
+        console.print(f"[blue]Starting {workflow_name} workflow[/blue]")
+
+        workflow._pre_init(
+            name=workflow_name,
+            model=model,
+            working_dir=working_dir,
+            execution_dir=execution_dir,
+            cleanup_working_dir=not no_cleanup,
+        )
+
+        # Display working directory and cleanup info
+        console.print(f"[blue]Working directory:[/blue] {workflow.working_dir}")
+        if workflow.cleanup_working_dir:
+            console.print(f"[dim]Working directory will be cleaned up after completion. Use --no-cleanup to preserve it.[/dim]")
+        else:
+            console.print(f"[dim]Working directory will be preserved after completion.[/dim]")
+
+        # Execute workflow
+        results, formatted_results = workflow.execute(resume=resume)
+
+        # Display results
+        console.print("\n[green]Workflow complete![/green]")
+
+        if export:
+            # Export to JSON
+            if hasattr(formatted_results, 'export_json'):
+                formatted_results.export_json(Path(export))
+                console.print(f"[green]Results exported to:[/green] {export}")
+        else:
+            # Pretty print to console
+            if hasattr(formatted_results, 'pretty_print'):
+                formatted_results.pretty_print(console)
+            else:
+                console.print(formatted_results)
+
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Workflow interrupted. Use --resume to continue.[/yellow]")
+        ctx.exit(0)
+    except Exception as e:
+        console.print_exception()
+        if resume:
+            console.print("[yellow]Try running without --resume flag[/yellow]")
+        ctx.exit(1)

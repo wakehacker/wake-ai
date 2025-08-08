@@ -3,14 +3,14 @@
 from wake_ai import workflow
 from wake_ai.templates import SimpleDetector
 
+@workflow.command(name="reentrancy")
+def factory():
+    """Run reentrancy detector."""
+    return ReentrancyDetector()
+
 
 class ReentrancyDetector(SimpleDetector):
     """Enhanced reentrancy detector that leverages Wake's static analysis."""
-
-    @workflow.command(name="reentrancy")
-    def cli(self):
-        """Run reentrancy detector."""
-        pass
 
     def get_detector_prompt(self) -> str:
         """Define the reentrancy detection workflow."""
