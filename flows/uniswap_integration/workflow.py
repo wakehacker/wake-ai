@@ -9,22 +9,25 @@ from wake_ai.templates.simple_detector import SimpleDetector
 import rich_click as click
 
 
+@workflow.command(name="uniswap")
+@click.option("--focus-version", "-f", type=click.Choice(["v2", "v3", "both"]), default="both", help="Uniswap version to focus on")
+@click.option("--no-oracle-check", is_flag=True, help="Skip price oracle manipulation checks")
+@click.option("--no-sandwich-check", is_flag=True, help="Skip sandwich attack protection checks")
+def factory(focus_version: str, no_oracle_check: bool, no_sandwich_check: bool):
+    """Run Uniswap integration detector."""
+    detector = UniswapDetector()
+    detector.focus_version = focus_version
+    detector.check_oracle_manipulation = not no_oracle_check
+    detector.check_sandwich_protection = not no_sandwich_check
+    return detector
+
+
 class UniswapDetector(SimpleDetector):
     """Detector for Uniswap V2/V3 specific vulnerabilities and best practices."""
 
     focus_version: str
     check_oracle_manipulation: bool
     check_sandwich_protection: bool
-
-    @workflow.command(name="uniswap")
-    @click.option("--focus-version", "-f", type=click.Choice(["v2", "v3", "both"]), default="both", help="Uniswap version to focus on")
-    @click.option("--no-oracle-check", is_flag=True, help="Skip price oracle manipulation checks")
-    @click.option("--no-sandwich-check", is_flag=True, help="Skip sandwich attack protection checks")
-    def cli(self, focus_version: str, no_oracle_check: bool, no_sandwich_check: bool):
-        """Run Uniswap integration detector."""
-        self.focus_version = focus_version
-        self.check_oracle_manipulation = not no_oracle_check
-        self.check_sandwich_protection = not no_sandwich_check
 
     def get_detector_prompt(self) -> str:
         """Get the Uniswap-specific detection prompt."""

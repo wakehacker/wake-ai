@@ -19,8 +19,31 @@ VALID_DETECTION_TYPES = [
 ]
 
 
+@workflow.command(name="audit")
+@click.option("--scope", "-s", type=click.Path(exists=True), multiple=True, help="Files/directories in audit scope (default: entire codebase)")
+@click.option("--context", "-c", type=click.Path(exists=True), multiple=True, help="Additional context files (docs, specs, etc.)")
+@click.option("--focus", "-f", type=str, multiple=True, help="Focus areas (e.g., 'reentrancy', 'ERC20', 'access-control')")
+def factory(scope: List[str], context: List[str], focus: List[str]):
+    """Run audit workflow."""
+    workflow = AuditWorkflow()
+    workflow.scope_files = scope
+    workflow.context_docs = context
+    workflow.focus_areas = focus
+
+    # Add context after parent init (which creates self.state)
+    workflow.add_context("scope_files", workflow.scope_files)
+    workflow.add_context("context_docs", workflow.context_docs)
+    workflow.add_context("focus_areas", workflow.focus_areas)
+
+    return workflow
+
+
 class AuditWorkflow(AIWorkflow):
     """Fixed security audit workflow following industry best practices."""
+
+    scope_files: List[str]
+    context_docs: List[str]
+    focus_areas: List[str]
 
     # Preserve audit results by default
     cleanup_working_dir = False
@@ -347,18 +370,3 @@ class AuditWorkflow(AIWorkflow):
         results = super().execute(context=audit_context, **kwargs)
 
         return results
-
-    @workflow.command(name="audit")
-    @click.option("--scope", "-s", type=click.Path(exists=True), multiple=True, help="Files/directories in audit scope (default: entire codebase)")
-    @click.option("--context", "-c", type=click.Path(exists=True), multiple=True, help="Additional context files (docs, specs, etc.)")
-    @click.option("--focus", "-f", type=str, multiple=True, help="Focus areas (e.g., 'reentrancy', 'ERC20', 'access-control')")
-    def cli(self, scope: List[str], context: List[str], focus: List[str]):
-        """Run audit workflow."""
-        self.scope_files = scope
-        self.context_docs = context
-        self.focus_areas = focus
-
-        # Add context after parent init (which creates self.state)
-        self.add_context("scope_files", self.scope_files)
-        self.add_context("context_docs", self.context_docs)
-        self.add_context("focus_areas", self.focus_areas)
