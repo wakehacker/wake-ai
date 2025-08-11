@@ -1,16 +1,52 @@
 """Claude Code CLI wrapper for Python integration."""
 
+import asyncio
 import json
 import logging
 import subprocess
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, List, Optional, Any, Union, AsyncIterator
 from dataclasses import dataclass
 
-from ..utils.logging import get_logger
-
 # Set up logging
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
+
+from claude_code_sdk import ClaudeCodeOptions, AssistantMessage, ResultMessage, ToolUseBlock, TextBlock, query, SystemMessage, ToolResultBlock, UserMessage
+
+
+def format_todo_list(todos: List[Dict[str, Any]]) -> None:
+    """Format and print a todo list with icons and colors."""
+    if not todos:
+        return
+
+    print(f"\033[94m  📋 Todo List:\033[0m")
+    for todo in todos:
+        status = todo.get("status", "pending")
+        content = todo.get("content", "")
+        todo_id = todo.get("id", "")
+
+        # Choose icon and color based on status
+        if status == "completed":
+            icon, color = "✅", "\033[92m"  # Green
+        elif status == "in_progress":
+            icon, color = "🔄", "\033[93m"  # Yellow
+        else:  # pending
+            icon, color = "⏳", "\033[90m"  # Gray
+
+        print(f"    {color}{icon} [{todo_id}] {content}\033[0m")
+
+
+def format_tool_use(block: ToolUseBlock) -> None:
+    """Format and print tool usage information."""
+    print(f"\033[90m[Using tool: {block.name}]\033[0m", flush=True)
+
+    # Special formatting for TodoWrite
+    if block.name == "TodoWrite" and "todos" in block.input:
+        format_todo_list(block.input.get("todos", []))
+    else:
+        # Default formatting for other tools
+        for key, value in block.input.items():
+            print(f"  \033[90m[Tool input: {key}: {value}]\033[0m", flush=True)
 
 
 @dataclass
@@ -134,46 +170,105 @@ class ClaudeCodeSession:
         validate_claude_cli()
 
 
-    def _build_command(
+    async def query_async(
         self,
         prompt: str,
         output_format: str = "json",
         max_turns: Optional[int] = None,
-        resume_session: Optional[str] = None,
-        continue_last: bool = False
-    ) -> List[str]:
-        """Build Claude Code CLI command."""
-        cmd = ["claude"]
+        input_data: Optional[str] = None,
+        continue_session: bool = False
+    ) -> ClaudeCodeResponse:
+        """Execute a query with Claude Code asynchronously."""
 
-        # Model selection
-        cmd.extend(["--model", self.model])
+        # Determine if we should resume a session
+        resume_session_id = None
+        if continue_session and self.last_session_id:
+            resume_session_id = self.last_session_id
+            logger.debug(f"Continuing session: {resume_session_id}")
 
-        # Tool configuration
-        if self.allowed_tools:
-            cmd.extend(["--allowedTools", " ".join(self.allowed_tools)])
-        if self.disallowed_tools:
-            cmd.extend(["--disallowedTools", " ".join(self.disallowed_tools)])
+        options = ClaudeCodeOptions(
+            allowed_tools=self.allowed_tools,
+            disallowed_tools=self.disallowed_tools,
+            max_turns=max_turns,
+            resume=resume_session_id,
+            continue_conversation=continue_session,
+            model=self.model,
+            cwd=str(self.execution_dir),  # Use working_dir for SDK since it's the scratch space
+            # max_thinking_tokens=
+            # mcp_tools
+            # mcp_servers
+            # permission_mode
+            # permission_prompt_tool_name
+            # settings
+            # add_dirs=
+            # append_system_prompt !!!!!
+        )
 
-        cmd.extend(["--output-format", output_format])
-        if max_turns:
-            cmd.extend(["--max-turns", str(max_turns)])
+        result: ResultMessage | None = None
 
-        # Session management
-        if resume_session:
-            cmd.extend(["--resume", resume_session])
-        elif continue_last:
-            cmd.append("--continue")
+        async for message in query(prompt=prompt, options=options):
 
-        # Verbose mode
-        if self.verbose:
-            cmd.append("--verbose")
+            if isinstance(message, ResultMessage):
+                result = message
 
-        # Output configuration
-        cmd.extend(["-p", prompt])
+            else:
+                if self.verbose:
+                    if isinstance(message, AssistantMessage):
 
-        logger.debug(f"Executing query with cmd: {cmd}")
-        logger.debug(f"Built command: {' '.join(cmd[:10])}..." if len(' '.join(cmd)) > 100 else f"Built command: {' '.join(cmd)}")
-        return cmd
+                        for block in message.content:
+                            if isinstance(block,ToolResultBlock):
+                                print(f"\033[90m[Tool result: {"\u2705" if not block.is_error else "\u274C"}]\033[0m", flush=True)
+                            elif isinstance(block, TextBlock):
+                                print(f"\033[90m{block.text}\033[0m", flush=True)
+                            elif isinstance(block, ToolUseBlock):
+                                format_tool_use(block)
+                            else:
+                                print(f"\033[90mUnknown block: {block}\033[0m", flush=True)
+                    elif isinstance(message, SystemMessage):
+                        if message.subtype == "init":
+                            print(f"\033[38;5;95m[System message: {message.subtype}]\033[0m", flush=True)
+                            print(f"\033[38;5;95m[System message: {message.data['cwd']}]\033[0m", flush=True)
+                        else:
+                            print(f"\033[38;5;95m[System message: {message.subtype}]\033[0m", flush=True)
+                            print(f"\033[38;5;95m[System message: {message.data}]\033[0m", flush=True)
+
+                    elif isinstance(message, UserMessage):
+                        for content in message.content:
+                            if isinstance(content, ToolResultBlock):
+                                if content.is_error:
+                                    print(f"\033[91m[User message: {content.content}]\033[0m", flush=True)
+                                else:
+                                    if content.content and isinstance(content.content, str):
+                                        preview = content.content[:30] + "..." if len(content.content) > 30 else content.content
+                                        print(f"\033[90m{preview}\033[0m", flush=True)
+                            else:
+                                print(f"\033[91m[User message: {content}]\033[0m", flush=True)
+
+                    else:
+                        print(f"\033[38;5;95m[Unknown message: {message}]\033[0m", flush=True)
+
+        if result is None:
+            # Should never happen, but just in case
+            return ClaudeCodeResponse(
+                content=f"Command failed",
+                raw_output="",
+                tool_calls=[],
+                success=False,
+            )
+
+
+        return ClaudeCodeResponse(
+                content=result.result if result.result else "",
+                raw_output=result.result if result.result else "",
+                tool_calls=result.usage if isinstance(result.usage, list) else [result.usage] if result.usage else [],
+                success=result.subtype == "success",
+                cost=result.total_cost_usd or 0.0,
+                duration=result.duration_ms or 0,
+                num_turns=result.num_turns or 0,
+                session_id=result.session_id or "",
+                is_finished=result.subtype == "success"
+            )
+
 
     def query(
         self,
@@ -196,88 +291,16 @@ class ClaudeCodeSession:
         Returns:
             ClaudeCodeResponse with the result
         """
-        logger.debug(f"Executing query (format={output_format}, max_turns={max_turns}, continue_session={continue_session}, prompt={prompt[:100]}...)")
-
-        # Determine if we should resume a session
-        resume_session_id = None
-        if continue_session and self.last_session_id:
-            resume_session_id = self.last_session_id
-            logger.debug(f"Continuing session: {resume_session_id}")
-
-        cmd = self._build_command(
+        # Use asyncio.run to call the async version
+        return asyncio.run(self.query_async(
             prompt=prompt,
             output_format=output_format,
             max_turns=max_turns,
-            resume_session=resume_session_id
-        )
+            input_data=input_data,
+            continue_session=continue_session
+        ))
 
-        try:
-            # Prepare input
-            stdin_input = input_data.encode() if input_data else None
 
-            # Execute command
-            logger.debug(f"Executing subprocess: {cmd}")
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                input=stdin_input.decode() if stdin_input else None,
-                cwd=self.execution_dir,
-                check=False
-            )
-            output = result.stderr if len(result.stderr) > 0 else result.stdout
-
-            # Parse response based on format
-            if output_format == "json":
-                if len(result.stdout) > 0:
-                    try:
-                        response = ClaudeCodeResponse.from_json(result.stdout)
-                        if not response.success:
-                            logger.error(f"Command failed: {response.content}")
-                            return response
-
-                        logger.debug(f"Query completed: cost=${response.cost:.4f}, turns={response.num_turns}, finished={response.is_finished}")
-
-                        # Save session_id if this was the first query (not a continuation)
-                        if response.session_id and not continue_session:
-                            self.last_session_id = response.session_id
-                            self.session_history.append(response.session_id)
-                            logger.debug(f"Saved session ID: {self.last_session_id}")
-
-                        return response
-                    except json.JSONDecodeError as e:
-                        logger.debug(f"Failed to parse JSON response: {e}")
-
-                logger.error(f"Command failed with return code {result.returncode}")
-                logger.error(f"output: {output}")
-                return ClaudeCodeResponse(
-                    content=f"Command failed: {output}",
-                    raw_output=output,
-                    tool_calls=[],
-                    success=False,
-                )
-            else:
-                if result.returncode != 0:
-                    logger.error(f"Command failed with return code {result.returncode}")
-                    logger.error(f"output: {output}")
-                    return ClaudeCodeResponse(
-                        content=f"Command failed: {output}",
-                        raw_output=output,
-                        tool_calls=[],
-                        success=False,
-                    )
-
-                logger.debug("Query completed (text format)")
-                return ClaudeCodeResponse.from_text(result.stdout)
-
-        except Exception as e:
-            logger.error(f"Exception during query execution: {e}")
-            return ClaudeCodeResponse(
-                content=str(e),
-                raw_output=str(e),
-                tool_calls=[],
-                success=False,
-            )
 
     def query_with_cost(self, prompt: str, cost_limit: float, turn_step: int = 50, continue_session: bool = False) -> ClaudeCodeResponse:
         """Query with cost tracking.
@@ -335,44 +358,14 @@ class ClaudeCodeSession:
             iteration += 1
             logger.debug(f"Iteration {iteration}: Continuing session (current_cost=${total_cost:.4f}, limit=${cost_limit:.2f})")
 
-            # Build command to resume the session
-            cmd = self._build_command(
-                prompt="continue",
-                output_format="json",
-                max_turns=turn_step,
-                resume_session=session_id
-            )
-
             try:
-                logger.debug(f"Executing subprocess: {cmd}")
-                result = subprocess.run(
-                    cmd,
-                    capture_output=True,
-                    text=True,
-                    cwd=self.execution_dir,
-                    check=False
+                ## TODO: the result of response.is_finished is not progress but it might also showing help. it might good to rerun same prompt with different session.
+                response = self.query(
+                    prompt="continue",
+                    output_format="json",
+                    max_turns=turn_step,
+                    continue_session=True
                 )
-                output = result.stderr if len(result.stderr) > 0 else result.stdout
-                parse_error = False
-
-                if len(result.stdout) > 0:
-                    try:
-                        response = ClaudeCodeResponse.from_json(result.stdout)
-                        if not response.success:
-                            logger.error(f"Command failed: {response.content}")
-                            return response
-                    except json.JSONDecodeError as e:
-                        logger.debug(f"Failed to parse JSON response: {e}")
-                        parse_error = True
-
-                if result.returncode != 0 or parse_error:
-                    logger.error(f"Iteration {iteration} failed: {output}")
-                    return ClaudeCodeResponse(
-                        content=f"Command failed: {output}",
-                        raw_output=output,
-                        tool_calls=[],
-                        success=False,
-                    )
 
                 last_response = response
 
@@ -407,44 +400,13 @@ class ClaudeCodeSession:
         while finish_tries < max_finish_tries and not last_response.is_finished:
             logger.debug(f"Finish attempt {finish_tries + 1}/{max_finish_tries}")
 
-            # Build command to resume the session
-            cmd = self._build_command(
-                prompt=f"you are running out of time, please finish the task as quickly as possible. this is the {finish_tries}/{max_finish_tries} try (after {max_finish_tries}th warning, the task will be aborted)",
-                output_format="json",
-                max_turns=turn_step,
-                resume_session=session_id
-            )
-
             try:
-                logger.debug(f"Executing subprocess: {cmd}")
-                result = subprocess.run(
-                    cmd,
-                    capture_output=True,
-                    text=True,
-                    cwd=self.execution_dir,
-                    check=False
+                response = self.query(
+                    prompt=f"you are running out of time, please finish the task as quickly as possible. this is the {finish_tries}/{max_finish_tries} try (after {max_finish_tries}th warning, the task will be aborted)",
+                    output_format="json",
+                    max_turns=turn_step,
+                    continue_session=True
                 )
-                output = result.stderr if len(result.stderr) > 0 else result.stdout
-                parse_error = False
-
-                if len(result.stdout) > 0:
-                    try:
-                        response = ClaudeCodeResponse.from_json(result.stdout)
-                        if not response.success:
-                            logger.error(f"Command failed: {response.content}")
-                            return response
-                    except json.JSONDecodeError as e:
-                        logger.debug(f"Failed to parse JSON response: {e}")
-                        parse_error = True
-
-                if result.returncode != 0 or parse_error:
-                    logger.error(f"Finish attempt {finish_tries + 1} failed: {output}")
-                    return ClaudeCodeResponse(
-                        content=f"Command failed: {output}",
-                        raw_output=output,
-                        tool_calls=[],
-                        success=False,
-                    )
 
                 last_response = response
 
