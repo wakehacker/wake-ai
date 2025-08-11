@@ -242,7 +242,7 @@ if __name__ == "__main__":
     main()
 
 @main.result_callback()
-def factory_callback(workflow: AIWorkflow, model: str, resume: bool, working_dir: str | None, execution_dir: str | None, no_cleanup: bool, export: str | None, **kwargs):
+def factory_callback(workflow: AIWorkflow, model: str, resume: bool, working_dir: str | None, execution_dir: str | None, no_cleanup: bool, export: str | None, verbose: bool, **kwargs):
     ctx = click.get_current_context()
     workflow_name = ctx.invoked_subcommand
 
@@ -255,6 +255,7 @@ def factory_callback(workflow: AIWorkflow, model: str, resume: bool, working_dir
             working_dir=working_dir,
             execution_dir=execution_dir,
             cleanup_working_dir=not no_cleanup,
+            verbose=verbose
         )
 
         # Display working directory and cleanup info

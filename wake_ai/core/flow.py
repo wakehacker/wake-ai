@@ -143,6 +143,7 @@ class AIWorkflow(ABC):
     steps: List[WorkflowStep]
     state: WorkflowState
     _dynamic_generators: Dict[str, Callable[[ClaudeCodeResponse, Dict[str, Any]], List[WorkflowStep]]]
+    verbose: bool
 
     def _pre_init(
         self,
@@ -154,7 +155,8 @@ class AIWorkflow(ABC):
         execution_dir: Optional[Union[str, Path]] = None,
         allowed_tools: Optional[List[str]] = None,
         disallowed_tools: Optional[List[str]] = None,
-        cleanup_working_dir: Optional[bool] = None
+        cleanup_working_dir: Optional[bool] = None,
+        verbose: bool = False
     ):
         """Initialize workflow.
 
@@ -172,6 +174,8 @@ class AIWorkflow(ABC):
         """
         self.name = name
         self.result_class = result_class or MessageResult
+
+        self.verbose = verbose
 
         # Set cleanup behavior (use instance value if provided, else class default)
         self.cleanup_working_dir = cleanup_working_dir if cleanup_working_dir is not None else self.__class__.cleanup_working_dir
@@ -237,7 +241,8 @@ class AIWorkflow(ABC):
                 working_dir=self.working_dir,
                 execution_dir=self.execution_dir,
                 allowed_tools=tools_allowed,
-                disallowed_tools=tools_disallowed
+                disallowed_tools=tools_disallowed,
+                verbose=self.verbose
             )
         else:
             # Default to creating a session with default model
@@ -245,7 +250,8 @@ class AIWorkflow(ABC):
                 working_dir=self.working_dir,
                 execution_dir=self.execution_dir,
                 allowed_tools=tools_allowed,
-                disallowed_tools=tools_disallowed
+                disallowed_tools=tools_disallowed,
+                verbose=self.verbose
             )
 
         self.steps: List[WorkflowStep] = []

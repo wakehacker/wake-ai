@@ -180,6 +180,8 @@ class ClaudeCodeSession:
     ) -> ClaudeCodeResponse:
         """Execute a query with Claude Code asynchronously."""
 
+        print("is verbose set", self.verbose)
+
         # Determine if we should resume a session
         resume_session_id = None
         if continue_session and self.last_session_id:
