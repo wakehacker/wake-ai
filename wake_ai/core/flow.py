@@ -32,6 +32,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
 
+import rich_click as click
 from jinja2 import Environment, StrictUndefined, Template, meta
 from pydantic import BaseModel
 
@@ -144,9 +145,9 @@ class AIWorkflow(ABC):
     state: WorkflowState
     _dynamic_generators: Dict[str, Callable[[ClaudeCodeResponse, Dict[str, Any]], List[WorkflowStep]]]
 
-    def _pre_init(
+    def __init__(
         self,
-        name: str,
+        name: Optional[str] = None,
         result_class: Optional[Type[AIResult]] = None,
         session: Optional[ClaudeCodeSession] = None,
         model: Optional[str] = None,
@@ -170,11 +171,28 @@ class AIWorkflow(ABC):
             disallowed_tools: Override default disallowed tools
             cleanup_working_dir: Whether to remove working_dir after completion (default: True)
         """
-        self.name = name
+        ctx = click.get_current_context(silent=True)
+        if ctx is None:
+            cli = {}
+        else:
+            ctx.ensure_object(dict)
+            cli = ctx.obj
+
+        if "name" not in cli and name is None:
+            raise ValueError("Workflow name is required")
+
+        self.name = cli.get("name", name)
         self.result_class = result_class or MessageResult
 
+        if model is None:
+            model = cli.get("model", None)
+        if working_dir is None:
+            working_dir = cli.get("working_dir", None)
+        if execution_dir is None:
+            execution_dir = cli.get("execution_dir", None)
+
         # Set cleanup behavior (use instance value if provided, else class default)
-        self.cleanup_working_dir = cleanup_working_dir if cleanup_working_dir is not None else self.__class__.cleanup_working_dir
+        self.cleanup_working_dir = cleanup_working_dir if cleanup_working_dir is not None else cli.get("cleanup_working_dir", True)
 
         # Set up working directory
         if working_dir is not None:

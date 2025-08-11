@@ -126,8 +126,8 @@ class SimpleDetector(AIWorkflow):
     2. Handling the workflow setup and validation automatically
     3. Parsing results into standardized AIDetection format
     """
-    def _pre_init(self, *args, **kwargs):
-        super()._pre_init(*args, **kwargs, result_class=SimpleDetectorResult)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs, result_class=SimpleDetectorResult)
 
     @abstractmethod
     def get_detector_prompt(self) -> str:
