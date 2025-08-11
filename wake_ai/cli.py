@@ -237,6 +237,14 @@ def main(ctx: click.Context, working_dir: str | None, model: str, resume: bool, 
         set_debug(True)
         console.print("[dim]Debug logging enabled[/dim]")
 
+    if ctx.invoked_subcommand is not None:
+        ctx.ensure_object(dict)
+        ctx.obj["name"] = ctx.invoked_subcommand
+        ctx.obj["model"] = model
+        ctx.obj["working_dir"] = working_dir
+        ctx.obj["execution_dir"] = execution_dir
+        ctx.obj["cleanup_working_dir"] = not no_cleanup
+
 
 if __name__ == "__main__":
     main()
@@ -248,14 +256,6 @@ def factory_callback(workflow: AIWorkflow, model: str, resume: bool, working_dir
 
     try:
         console.print(f"[blue]Starting {workflow_name} workflow[/blue]")
-
-        workflow._pre_init(
-            name=workflow_name,
-            model=model,
-            working_dir=working_dir,
-            execution_dir=execution_dir,
-            cleanup_working_dir=not no_cleanup,
-        )
 
         # Display working directory and cleanup info
         console.print(f"[blue]Working directory:[/blue] {workflow.working_dir}")
