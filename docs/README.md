@@ -112,21 +112,23 @@ wake-ai --resume
 
 The easiest way to create a custom detector is using the `SimpleDetector` template:
 
-// todo: update when the detector loading will be implemented
-
 ```python
 import rich_click as click
 from wake_ai.templates import SimpleDetector
 from wake_ai import workflow
 
+@workflow.command("access-control")
+@click.option("--scope", "-s", multiple=True, type=click.Path(exists=True), help="Files to analyze")
+def factory(scope):
+    """Detect access control vulnerabilities in smart contracts."""
+    detector = AccessControlDetector()
+    detector.scope = list(scope)
+    return detector
+
 class AccessControlDetector(SimpleDetector):
     """Detect access control vulnerabilities."""
 
-    @workflow.command("access-control")
-    @click.option("--scope", "-s", multiple=True, type=click.Path(exists=True), help="Files to analyze")
-    def cli(self, scope):
-        """Detect access control vulnerabilities in smart contracts."""
-        self.scope = list(scope)
+    scope: list = []
 
     def get_detector_prompt(self) -> str:
         return """
@@ -291,14 +293,18 @@ import rich_click as click
 from wake_ai import AIWorkflow, WorkflowStep, workflow
 from wake_ai.core.utils import validate_yaml_output
 
+@workflow.command("test-gen")
+@click.option("--framework", "-f", type=click.Choice(["foundry", "hardhat"]), default="foundry", help="Test framework to use")
+def factory(framework):
+    """Generate comprehensive test suites for smart contracts."""
+    workflow = TestGeneratorWorkflow()
+    workflow.framework = framework
+    return workflow
+
 class TestGeneratorWorkflow(AIWorkflow):
     """Generate comprehensive test suites."""
 
-    @workflow.command("test-gen")
-    @click.option("--framework", "-f", type=click.Choice(["foundry", "hardhat"]), default="foundry", help="Test framework to use")
-    def cli(self, framework):
-        """Generate comprehensive test suites for smart contracts."""
-        self.framework = framework
+    framework: str
 
     def _setup_steps(self):
         # Step 1: Analyze contract structure
@@ -315,7 +321,7 @@ class TestGeneratorWorkflow(AIWorkflow):
 
             Create a file 'analysis.md' with your findings.
             """,
-            tools=["Read", "Grep", "Write"],
+            allowed_tools=["Read", "Grep", "Write"],
             max_cost=5.0
         )
 
@@ -330,7 +336,7 @@ class TestGeneratorWorkflow(AIWorkflow):
 
             Add these scenarios to 'test-scenarios.md'.
             """,
-            tools=["Write"],
+            allowed_tools=["Write"],
             max_cost=3.0,
             continue_session=True  # Needs memory of specific functions found
         )
@@ -344,7 +350,7 @@ class TestGeneratorWorkflow(AIWorkflow):
 
             Create a structured test plan in YAML format in the {{working_dir}}/test-plan.yaml file.
             """,
-            tools=["Read", "Write"],
+            allowed_tools=["Read", "Write"],
             validator=validate_yaml_output,
             max_cost=5.0,
             continue_session=False  # Fresh session for clean YAML generation
@@ -353,16 +359,18 @@ class TestGeneratorWorkflow(AIWorkflow):
 
 ### Adding CLI Options
 
-CLI options are added using click decorators on the `cli` method:
+CLI options are added using click decorators on the factory function:
 
 ```python
 @workflow.command("test-gen")
 @click.option("--framework", "-f", type=click.Choice(["foundry", "hardhat"]), default="foundry", help="Test framework to use")
 @click.option("--scope", "-s", multiple=True, type=click.Path(exists=True), help="Files to analyze")
-def cli(self, framework, scope):
+def factory(framework, scope):
     """Generate comprehensive test suites for smart contracts."""
-    self.framework = framework
-    self.scope = list(scope)
+    workflow = TestGeneratorWorkflow()
+    workflow.framework = framework
+    workflow.scope = list(scope)
+    return workflow
 ```
 
 ## Advanced Features
@@ -529,9 +537,10 @@ self.add_step(
     continue_session=True  # Needs to know what issues were found
 )
 
-# Python usage for programmatic access
+# Python usage for programmatic access - construct manually
 workflow = MyWorkflow()
-workflow.cli(scope=["contract.sol"], custom_param=True)
+workflow.scope = ["contract.sol"]
+workflow.custom_param = True
 # Working directory and cleanup are handled automatically
 results, formatted = workflow.execute()
 ```
