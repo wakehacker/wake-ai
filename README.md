@@ -259,14 +259,29 @@ class AuditWorkflow(AIWorkflow):
 Wake AI makes it trivial to prototype new vulnerability detectors with the `SimpleDetector` helper class:
 
 ```python
+import rich_click as click
+from wake_ai import workflow
 from wake_ai.templates import SimpleDetector
 
+@workflow.command("flashloan")
+@click.option("--focus-area", "-f", help="Specific area to focus analysis")
+def factory(focus_area):
+    """Detect flash loan attack vectors."""
+    detector = FlashLoanDetector()
+    detector.focus_area = focus_area
+    return detector
+
 class FlashLoanDetector(SimpleDetector):
-    name = "flashloan"
+    """Flash loan vulnerability detector."""
+
+    focus_area: str = None
 
     def get_detector_prompt(self) -> str:
-        return """
+        focus_context = f"Focus specifically on: {self.focus_area}" if self.focus_area else ""
+        
+        return f"""
         Analyze this codebase for flash loan attack vectors.
+        {focus_context}
 
         Focus on:
         1. Price manipulation opportunities

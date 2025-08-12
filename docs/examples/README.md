@@ -101,9 +101,10 @@ These examples are for educational purposes. To run them in a real project:
 ```python
 from docs.examples.conditional_workflow import ConditionalWorkflow
 
-# Create and configure
+# Create and configure manually for programmatic usage
 workflow = ConditionalWorkflow()
-workflow.cli(threshold=10)  # Configure via CLI method
+workflow.threshold = 10  # Set parameters directly
+workflow.add_context("threshold", 10)  # Add to context
 
 # Execute workflow
 results, formatted = workflow.execute()

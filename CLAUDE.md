@@ -166,14 +166,25 @@ The workflow state is saved after each step:
 
 ## Creating Custom Workflows
 
-To create a new workflow, inherit from `AIWorkflow`:
+To create a new workflow, inherit from `AIWorkflow` and create a factory function:
 
 ```python
-from wake_ai import AIWorkflow, WorkflowStep
+import rich_click as click
+from wake_ai import workflow, AIWorkflow, WorkflowStep
 from wake_ai.core.utils import validate_yaml_output
+
+@workflow.command("my-workflow")
+@click.option("--target", "-t", type=click.Path(exists=True), help="Target file or directory")
+def factory(target):
+    """Custom workflow implementation."""
+    workflow = MyWorkflow()
+    workflow.target = target
+    return workflow
 
 class MyWorkflow(AIWorkflow):
     """Custom workflow implementation."""
+
+    target: str
 
     def _setup_steps(self):
         """Define workflow steps."""
@@ -181,37 +192,19 @@ class MyWorkflow(AIWorkflow):
         self.add_step(
             name="analyze",
             prompt_template=self._load_prompt("analyze.md"),
-            tools=["file_search", "file_read"],
+            allowed_tools=["Read", "Grep", "Write"],
             max_retries=2,
-            max_cost_limit=5.0
+            max_cost=5.0
         )
 
         # Step 2: Generate results
         self.add_step(
             name="generate",
             prompt_template=self._load_prompt("generate.md"),
-            tools=["file_write"],
+            allowed_tools=["Write"],
             validator=validate_yaml_output,
             max_retries=3
         )
-
-    @classmethod
-    def get_cli_options(cls):
-        """Define CLI options for this workflow."""
-        return {
-            "target": {
-                "param_decls": ["-t", "--target"],
-                "type": click.Path(exists=True),
-                "help": "Target file or directory"
-            }
-        }
-
-    @classmethod
-    def process_cli_args(cls, **kwargs):
-        """Process CLI arguments into workflow initialization args."""
-        return {
-            "target": kwargs.get("target", ".")
-        }
 ```
 
 ## Package Configuration
@@ -246,15 +239,16 @@ The AI module has been extracted from Wake with the following changes:
 4. **No Detector Integration**: Pure workflow execution
 5. **Portable Workflows**: Can be used in any project
 
-### Import Changes
+### CLI Registration Changes
 ```python
-# Old (within Wake)
-from wake.ai import AIWorkflow
-from wake_ai.audit import AuditWorkflow
-
-# New (standalone)
-from wake_ai import AIWorkflow
-from flows.audit import AuditWorkflow
+# Current approach - factory function pattern
+@workflow.command("audit")
+@click.option("--scope", "-s", multiple=True, help="Files to audit")
+def factory(scope):
+    """Run audit workflow."""
+    workflow = AuditWorkflow()
+    workflow.scope_files = scope
+    return workflow
 ```
 
 ## Prompt Writing Guidelines
