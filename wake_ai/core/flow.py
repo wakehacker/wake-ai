@@ -24,6 +24,7 @@ Tools not requiring permission (always available):
 """
 
 import json
+import logging
 import re
 import shutil
 from abc import ABC, abstractmethod
@@ -42,6 +43,7 @@ from ..utils.logging import get_logger
 
 # Set up logging
 logger = get_logger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 @dataclass

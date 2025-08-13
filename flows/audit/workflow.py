@@ -50,6 +50,7 @@ class AuditWorkflow(AIWorkflow):
 
     def __init__(self):
         """Initialize security audit workflow."""
+        super().__init__()
 
         # Load prompts from markdown files before parent init
         self._load_prompts()

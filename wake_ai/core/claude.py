@@ -11,6 +11,7 @@ from ..utils.logging import get_logger
 
 # Set up logging
 logger = get_logger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 @dataclass
