@@ -35,6 +35,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
 import rich_click as click
 from jinja2 import Environment, StrictUndefined, Template, meta
 from pydantic import BaseModel
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeRemainingColumn
 
 from ..results import AIResult, MessageResult
 from .claude import ClaudeCodeResponse, ClaudeCodeSession
@@ -60,6 +61,7 @@ class WorkflowStep:
         max_retries: Maximum number of retries if validation fails
         continue_session: Whether to continue the Claude session from previous step (default: False)
         condition: Optional function that takes context and returns bool. Step is skipped if False.
+        progress_weight: Weight of this step for progress calculation (default: 1.0)
         _post_hook: Internal post-processing function (not exposed to users)
     """
 
@@ -73,6 +75,7 @@ class WorkflowStep:
     max_retries: int = 3
     continue_session: bool = False
     condition: Optional[Callable[[Dict[str, Any]], bool]] = None
+    progress_weight: float = 1.0
     _post_hook: Optional[Callable[['AIWorkflow', ClaudeCodeResponse], None]] = field(default=None, repr=False)
 
     def format_prompt(self, context: Dict[str, Any]) -> str:
@@ -130,6 +133,8 @@ class WorkflowState:
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     cumulative_cost: float = 0.0
+    progress_percentage: float = 0.0
+    step_weights: Dict[str, float] = field(default_factory=dict)
 
 
 class AIWorkflow(ABC):
@@ -155,7 +160,8 @@ class AIWorkflow(ABC):
         execution_dir: Optional[Union[str, Path]] = None,
         allowed_tools: Optional[List[str]] = None,
         disallowed_tools: Optional[List[str]] = None,
-        cleanup_working_dir: Optional[bool] = None
+        cleanup_working_dir: Optional[bool] = None,
+        show_progress: Optional[bool] = None
     ):
         """Initialize workflow.
 
@@ -170,6 +176,7 @@ class AIWorkflow(ABC):
                           Can restrict Bash to specific commands: ["Bash(git *)", "Bash(wake *)"]
             disallowed_tools: Override default disallowed tools
             cleanup_working_dir: Whether to remove working_dir after completion (default: True)
+            show_progress: Whether to show progress bar during execution (default: True)
         """
         ctx = click.get_current_context(silent=True)
         if ctx is None:
@@ -193,6 +200,9 @@ class AIWorkflow(ABC):
 
         # Set cleanup behavior (use instance value if provided, else class default)
         self.cleanup_working_dir = cleanup_working_dir if cleanup_working_dir is not None else cli.get("cleanup_working_dir", True)
+        
+        # Set progress behavior (use instance value if provided, else CLI or default)
+        self._show_progress = show_progress if show_progress is not None else cli.get("show_progress", True)
 
         # Set up working directory
         if working_dir is not None:
@@ -269,6 +279,11 @@ class AIWorkflow(ABC):
         self.steps: List[WorkflowStep] = []
         self.state = WorkflowState()
         self._dynamic_generators: Dict[str, Callable[[ClaudeCodeResponse, Dict[str, Any]], List[WorkflowStep]]] = {}
+        
+        # Progress tracking
+        self._progress: Optional[Progress] = None
+        self._task_id: Optional[int] = None
+        self._progress_hook: Optional[Callable[[float, str], None]] = None
 
     @abstractmethod
     def _setup_steps(self):
@@ -283,6 +298,7 @@ class AIWorkflow(ABC):
                  max_retry_cost: Optional[float] = None,
                  continue_session: bool = False,
                  condition: Optional[Callable[[Dict[str, Any]], bool]] = None,
+                 progress_weight: float = 1.0,
                  after_step: Optional[str] = None):
         """Add a step to the workflow.
 
@@ -298,6 +314,7 @@ class AIWorkflow(ABC):
             max_retry_cost: Maximum cost for retry attempts (defaults to max_cost)
             continue_session: Whether to continue the Claude session from previous step (default: False)
             condition: Optional function that takes context and returns bool. Step is skipped if False.
+            progress_weight: Weight of this step for progress calculation (default: 1.0)
             after_step: Optional step name after which to insert this step. If None, appends to end.
         """
         step = WorkflowStep(
@@ -310,7 +327,8 @@ class AIWorkflow(ABC):
             max_retries=max_retries,
             max_retry_cost=max_retry_cost,
             continue_session=continue_session,
-            condition=condition
+            condition=condition,
+            progress_weight=progress_weight
         )
 
         if after_step is None:
@@ -377,6 +395,13 @@ class AIWorkflow(ABC):
 
         logger.debug(f"Starting workflow '{self.name}' execution (resume={resume})")
 
+        # Initialize progress tracking
+        try:
+            self._init_progress_bar()
+            self.update_progress("Initializing workflow...")
+        except Exception as e:
+            logger.debug(f"Failed to initialize progress bar: {e}")
+
         if resume and (self.working_dir / f"{self.name}_state.json").exists():
             logger.info(f"Resuming workflow from saved state in: {self.working_dir / f'{self.name}_state.json'}")
             self._load_state()
@@ -406,6 +431,13 @@ class AIWorkflow(ABC):
                     continue
 
             logger.info(f"Executing step {self.state.current_step + 1}/{len(self.steps)}: '{step.name}'")
+            
+            # Update progress message at step start (percentage based on completed steps)
+            try:
+                step_msg = f"Starting '{step.name}' ({self.state.current_step + 1}/{len(self.steps)})"
+                self.update_progress(step_msg)
+            except Exception as e:
+                logger.debug(f"Failed to update progress: {e}")
 
             try:
                 # Execute step with retry logic
@@ -451,6 +483,13 @@ class AIWorkflow(ABC):
                             error_prompt += f"- {error}\n"
                         prompt = error_prompt
                         logger.info(f"Retrying step '{step.name}' (attempt {retry_count}/{step.max_retries}) with error correction")
+                        
+                        # Update progress message for retry (don't change percentage)
+                        try:
+                            retry_msg = f"Retrying '{step.name}' (attempt {retry_count}/{step.max_retries})"
+                            self.update_progress_message(retry_msg)
+                        except Exception as e:
+                            logger.debug(f"Failed to update progress message: {e}")
 
                         # Always continue session for retries
                         if step.max_retry_cost:
@@ -469,6 +508,16 @@ class AIWorkflow(ABC):
                     if self.state.current_step == 0 and retry_count == 0 and response.session_id:
                         logger.debug(f"Claude session ID: {response.session_id}")
 
+                    # Update progress message for validation (don't change percentage)
+                    try:
+                        if retry_count == 0:
+                            validation_msg = f"Validating '{step.name}' output"
+                        else:
+                            validation_msg = f"Validating retry of '{step.name}' (attempt {retry_count}/{step.max_retries})"
+                        self.update_progress_message(validation_msg)
+                    except Exception as e:
+                        logger.debug(f"Failed to update progress message: {e}")
+                    
                     # Validate response
                     success, validation_errors = step.validate_response(response)
 
@@ -491,6 +540,14 @@ class AIWorkflow(ABC):
 
                         self.state.current_step += 1
                         self._save_state()
+                        
+                        # Update progress after step completion
+                        try:
+                            step_msg = f"Completed step '{step.name}' ({self.state.current_step}/{len(self.steps)})"
+                            self.update_progress(step_msg)
+                        except Exception as e:
+                            logger.debug(f"Failed to update progress: {e}")
+                        
                         # Step completion already logged above with retry info
                         break
                     else:
@@ -525,6 +582,12 @@ class AIWorkflow(ABC):
         results = self._prepare_results()
         logger.info(f"Workflow '{self.name}' completed successfully in {results.get('duration', 0):.2f} seconds (total cost: ${self.state.cumulative_cost:.4f})")
 
+        # Complete progress tracking
+        try:
+            self.update_progress("Workflow completed!", force_percentage=1.0)
+        except Exception as e:
+            logger.debug(f"Failed to update final progress: {e}")
+
         # Format results before cleanup
         formatted_results = self.format_results(results)
 
@@ -537,6 +600,12 @@ class AIWorkflow(ABC):
                 logger.warning(f"Failed to clean up working directory {self.working_dir}: {e}")
         elif not self.cleanup_working_dir:
             logger.debug(f"Preserving working directory: {self.working_dir}")
+
+        # Cleanup progress bar
+        try:
+            self._cleanup_progress_bar()
+        except Exception as e:
+            logger.debug(f"Failed to cleanup progress bar: {e}")
 
         return results, formatted_results
 
@@ -582,6 +651,13 @@ class AIWorkflow(ABC):
                         logger.debug(f"Inserted dynamic step '{new_step.name}' at position {insert_pos + i}")
 
                     logger.info(f"Added {len(new_steps)} dynamic steps. Total steps now: {len(self.steps)}")
+                    
+                    # Update progress after dynamic steps are added
+                    try:
+                        dynamic_msg = f"Added {len(new_steps)} dynamic steps"
+                        self.update_progress(dynamic_msg)
+                    except Exception as e:
+                        logger.debug(f"Failed to update progress after dynamic steps: {e}")
                 else:
                     logger.debug(f"Dynamic generator for '{step.name}' returned no new steps")
 
@@ -653,7 +729,9 @@ class AIWorkflow(ABC):
             "skipped_steps": self.state.skipped_steps,
             "context": self.state.context,
             "errors": self.state.errors,
-            "cumulative_cost": self.state.cumulative_cost
+            "cumulative_cost": self.state.cumulative_cost,
+            "progress_percentage": self.state.progress_percentage,
+            "step_weights": self.state.step_weights
         }
         state_file = self.working_dir / f"{self.name}_state.json"
         state_file.write_text(json.dumps(state_data, indent=2))
@@ -670,7 +748,15 @@ class AIWorkflow(ABC):
         self.state.context = data["context"]
         self.state.errors = data["errors"]
         self.state.cumulative_cost = data.get("cumulative_cost", 0.0)  # Backwards compatibility
+        self.state.progress_percentage = data.get("progress_percentage", 0.0)  # Backwards compatibility
+        self.state.step_weights = data.get("step_weights", {})  # Backwards compatibility
         logger.debug(f"Loaded state: step {self.state.current_step}/{len(self.steps)}, completed: {len(self.state.completed_steps)}")
+        
+        # Update progress bar if resuming
+        try:
+            self.update_progress(f"Resumed at step {self.state.current_step + 1}/{len(self.steps)}")
+        except Exception as e:
+            logger.debug(f"Failed to update progress on resume: {e}")
 
     def add_context(self, key: str, value: Any):
         """Add a context variable."""
@@ -687,6 +773,114 @@ class AIWorkflow(ABC):
     def get_cumulative_cost(self) -> float:
         """Get the cumulative cost of all steps executed so far."""
         return self.state.cumulative_cost
+
+    def set_progress_hook(self, hook: Optional[Callable[[float, str], None]]) -> None:
+        """Set external progress update hook.
+        
+        Args:
+            hook: Callback function(percentage: float, message: str)
+        """
+        self._progress_hook = hook
+
+    def update_progress_message(self, message: str) -> None:
+        """Update only the progress message without changing percentage.
+        
+        This is useful for providing status updates during step execution 
+        (e.g., retries, validation) without moving the progress forward.
+        
+        Args:
+            message: Progress message to display
+        """
+        # Update Rich progress bar message if active
+        if self._progress and self._task_id is not None:
+            # Keep the same completed value, only update description
+            self._progress.update(self._task_id, description=message)
+        
+        # Call external hook with current percentage if set
+        if self._progress_hook:
+            try:
+                # Use the stored percentage without recalculating
+                current_percentage = self.state.progress_percentage
+                self._progress_hook(current_percentage, message)
+            except Exception as e:
+                logger.warning(f"Progress hook failed: {e}")
+
+    def update_progress(self, message: str = "", force_percentage: Optional[float] = None) -> None:
+        """Update workflow progress.
+        
+        Args:
+            message: Optional progress message
+            force_percentage: Override calculated percentage (0.0-1.0)
+        """
+        # Calculate progress percentage
+        if force_percentage is not None:
+            percentage = max(0.0, min(1.0, force_percentage))
+        else:
+            # Calculate based on completed steps and weights
+            if not self.steps:
+                percentage = 0.0
+            else:
+                total_weight = sum(step.progress_weight for step in self.steps)
+                completed_weight = sum(
+                    step.progress_weight for step in self.steps 
+                    if step.name in self.state.completed_steps
+                )
+                
+                percentage = completed_weight / total_weight if total_weight > 0 else 0.0
+                percentage = max(0.0, min(1.0, percentage))
+
+        # Update state
+        self.state.progress_percentage = percentage
+        
+        # Update Rich progress bar if active
+        if self._progress and self._task_id is not None:
+            # Rich Progress expects completed units, not percentage
+            total_units = 100
+            completed_units = int(percentage * total_units)
+            self._progress.update(self._task_id, completed=completed_units, description=message or "Processing...")
+        
+        # Call external hook if set
+        if self._progress_hook:
+            try:
+                self._progress_hook(percentage, message)
+            except Exception as e:
+                logger.warning(f"Progress hook failed: {e}")
+
+    def _init_progress_bar(self) -> None:
+        """Initialize Rich progress bar."""
+        if not self._show_progress or self._progress is not None:
+            return
+            
+        self._progress = Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.1f}%"),
+            TimeRemainingColumn(),
+            console=None,  # Use default console
+        )
+        self._progress.start()
+        
+        # Create task with total of 100 units for percentage-based progress
+        self._task_id = self._progress.add_task(
+            description="Initializing workflow...", 
+            total=100,
+            completed=0
+        )
+        
+        logger.debug("Initialized progress bar")
+
+    def _cleanup_progress_bar(self) -> None:
+        """Clean up Rich progress bar."""
+        if self._progress is not None:
+            try:
+                self._progress.stop()
+            except Exception as e:
+                logger.debug(f"Error stopping progress bar: {e}")
+            finally:
+                self._progress = None
+                self._task_id = None
+                logger.debug("Cleaned up progress bar")
 
     def format_results(self, results: Dict[str, Any]) -> AIResult:
         """Convert workflow results to an AIResult object.

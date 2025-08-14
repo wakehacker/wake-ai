@@ -22,6 +22,7 @@
     -   [Conditional Step Execution](#conditional-step-execution)
     -   [Structured Data Extraction](#structured-data-extraction)
     -   [Cost Management](#cost-management)
+    -   [Progress Tracking](#progress-tracking)
     -   [Session Management](#session-management)
     -   [Technical Notes](#technical-notes)
 -   [Tools Configuration](#tools-configuration)
@@ -47,6 +48,7 @@ Wake AI is a framework for building AI-powered workflows to analyze smart contra
 -   **Cost Management**: Set per-step cost limits to control spending
 -   **Validation & Retry**: Automatic validation with configurable retries
 -   **Session Persistence**: Resume workflows from where they left off
+-   **Progress Tracking**: Visual progress bars with Rich integration and external hooks
 -   **Tool Control**: Fine-grained control over which tools Claude can use
 -   **Working Directory**: Isolated workspace for each workflow run
 
@@ -517,6 +519,149 @@ flowchart TD
     style FinalizePath fill:transparent,stroke:#ff6b6b,stroke-width:2px
     style NormalPath fill:transparent,stroke:#339af0,stroke-width:2px
 ```
+
+### Progress Tracking
+
+Wake AI provides comprehensive progress tracking with visual Rich progress bars and external integration hooks for long-running workflows.
+
+#### Basic Progress Tracking
+
+Progress tracking is enabled by default and shows:
+- Beautiful Rich progress bars with percentage completion
+- Status messages for each step and operation
+- Time remaining estimation
+- Step execution feedback
+
+```bash
+# Progress bar shown by default
+wake-ai audit
+
+# Disable progress bar (useful for CI/CD)
+wake-ai audit --no-progress
+```
+
+#### Step Weighting
+
+Steps can have different weights to provide more accurate progress calculation:
+
+```python
+class MyWorkflow(AIWorkflow):
+    def _setup_steps(self):
+        # Light analysis step (default weight: 1.0)
+        self.add_step(
+            name="quick_scan",
+            prompt_template="Quick vulnerability scan...",
+            progress_weight=1.0
+        )
+
+        # Heavy analysis step (counts 3x more)
+        self.add_step(
+            name="deep_analysis",
+            prompt_template="Comprehensive analysis...",
+            progress_weight=3.0  # This step represents 75% of total work
+        )
+
+        # Final report (light step)
+        self.add_step(
+            name="report",
+            prompt_template="Generate report...",
+            progress_weight=1.0
+        )
+        # Total weight: 1.0 + 3.0 + 1.0 = 5.0
+        # Progress: 0% → 20% → 80% → 100%
+```
+
+#### Progress Behavior
+
+Progress tracking follows these principles:
+- **Progress only moves forward when steps complete** - no confusing jumps during retries
+- **Status messages update during execution** - users see validation, retries, etc.
+- **Accurate percentage calculation** - based on step weights and completion
+- **Resume support** - progress state is preserved across workflow interruptions
+
+```python
+# Example progress flow:
+# 0%   - Starting workflow
+# 0%   - Starting 'analyze' (1/3)       [message only]
+# 0%   - Executing 'analyze' with Claude [message only]
+# 0%   - Validating 'analyze' output     [message only]
+# 33%  - Completed 'analyze' (1/3)       [progress advances]
+# 33%  - Starting 'detect' (2/3)         [message only]
+# 33%  - Retrying 'detect' (attempt 2/3) [message only]
+# 67%  - Completed 'detect' (2/3)        [progress advances]
+# 100% - Workflow completed!
+```
+
+#### External Progress Hooks
+
+Integrate progress tracking with external applications using progress hooks:
+
+```python
+def my_progress_callback(percentage: float, message: str):
+    """Called whenever progress updates."""
+    print(f"App Progress: {percentage*100:.1f}% - {message}")
+
+    # Update your app's UI, database, etc.
+    update_ui_progress_bar(percentage)
+    log_workflow_progress(percentage, message)
+
+# Set the hook before execution
+workflow = AuditWorkflow()
+workflow.set_progress_hook(my_progress_callback)
+results = workflow.execute()
+```
+
+#### Programmatic Progress Updates
+
+For custom workflows, you can manually control progress:
+
+```python
+class CustomWorkflow(AIWorkflow):
+    def _setup_steps(self):
+        # Define your steps...
+        pass
+
+    def _post_step_hook(self, step, response):
+        """Called after each step completion."""
+        # Custom progress message
+        if step.name == "analysis":
+            self.update_progress_message(f"Analysis complete, found {self.vulnerability_count} issues")
+        elif step.name == "validation":
+            self.update_progress_message("Validation passed, generating report...")
+
+        super()._post_step_hook(step, response)
+
+    def custom_operation(self):
+        """Example of manual progress updates."""
+        # Update message without changing percentage
+        self.update_progress_message("Processing custom operation...")
+
+        # Force specific percentage (rarely needed)
+        self.update_progress("Custom milestone reached", force_percentage=0.5)
+```
+
+#### CLI Options
+
+Control progress behavior from the command line:
+
+```bash
+# Default - show progress bar
+wake-ai audit
+
+# Disable progress (useful for scripting/CI)
+wake-ai audit --no-progress
+```
+
+#### Technical Implementation
+
+Progress tracking uses:
+- **Rich library** for beautiful terminal progress bars
+- **Weighted step calculation** for accurate percentages
+- **State persistence** for resume capability
+- **Hook system** for external integration
+- **Message-only updates** during retries and validation
+
+The implementation ensures progress only moves forward when steps complete, providing a smooth and predictable user experience while still showing detailed status information during step execution.
 
 ### Session Management
 

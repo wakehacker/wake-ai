@@ -55,7 +55,15 @@ Real-world AI usage requires cost management:
 -   Efficient prompt optimization when approaching limits
 -   Track total workflow costs
 
-### 4. **Security Workflows Included**
+### 4. **Progress Tracking**
+
+Visual feedback for long-running workflows:
+
+-   Rich progress bars with percentage completion
+-   Status messages during retries and validation
+-   External progress hooks for app integration
+
+### 5. **Security Workflows Included**
 
 -   Pre-built audit and detector workflows to get you started
 -   Standardized detection output format with JSON export
@@ -278,7 +286,7 @@ class FlashLoanDetector(SimpleDetector):
 
     def get_detector_prompt(self) -> str:
         focus_context = f"Focus specifically on: {self.focus_area}" if self.focus_area else ""
-        
+
         return f"""
         Analyze this codebase for flash loan attack vectors.
         {focus_context}

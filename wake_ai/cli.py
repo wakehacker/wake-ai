@@ -257,13 +257,18 @@ def get_class_that_defined_method(meth):
     help="Enable verbose logging (debug level)"
 )
 @click.option(
+    "--no-progress",
+    is_flag=True,
+    help="Disable progress bar during workflow execution"
+)
+@click.option(
     "--list",
     "-l",
     is_flag=True,
     help="List all available workflows"
 )
 @click.pass_context
-def main(ctx: click.Context, working_dir: str | None, model: str, resume: bool, execution_dir: str | None, export: str | None, no_cleanup: bool, verbose: bool, list: bool):
+def main(ctx: click.Context, working_dir: str | None, model: str, resume: bool, execution_dir: str | None, export: str | None, no_cleanup: bool, verbose: bool, no_progress: bool, list: bool):
     """AI-powered smart contract security analysis.
 
     This command runs various AI workflows for smart contract analysis
@@ -294,13 +299,14 @@ def main(ctx: click.Context, working_dir: str | None, model: str, resume: bool, 
         ctx.obj["working_dir"] = working_dir
         ctx.obj["execution_dir"] = execution_dir
         ctx.obj["cleanup_working_dir"] = not no_cleanup
+        ctx.obj["show_progress"] = not no_progress
 
 
 if __name__ == "__main__":
     main()
 
 @main.result_callback()
-def factory_callback(workflow: AIWorkflow, model: str, resume: bool, working_dir: str | None, execution_dir: str | None, no_cleanup: bool, export: str | None, **kwargs):
+def factory_callback(workflow: AIWorkflow, model: str, resume: bool, working_dir: str | None, execution_dir: str | None, no_cleanup: bool, export: str | None, no_progress: bool, **kwargs):
     ctx = click.get_current_context()
     workflow_name = ctx.invoked_subcommand
 
