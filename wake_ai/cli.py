@@ -300,6 +300,7 @@ def main(ctx: click.Context, working_dir: str | None, model: str, resume: bool, 
         ctx.obj["execution_dir"] = execution_dir
         ctx.obj["cleanup_working_dir"] = not no_cleanup
         ctx.obj["show_progress"] = not no_progress
+        ctx.obj["console"] = console  # Pass console for coordinated output
 
 
 if __name__ == "__main__":
