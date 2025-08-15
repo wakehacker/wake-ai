@@ -36,6 +36,7 @@ import rich_click as click
 from jinja2 import Environment, StrictUndefined, Template, meta
 from pydantic import BaseModel
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeRemainingColumn
+from rich.console import Console
 
 from ..results import AIResult, MessageResult
 from .claude import ClaudeCodeResponse, ClaudeCodeSession
@@ -161,7 +162,8 @@ class AIWorkflow(ABC):
         allowed_tools: Optional[List[str]] = None,
         disallowed_tools: Optional[List[str]] = None,
         cleanup_working_dir: Optional[bool] = None,
-        show_progress: Optional[bool] = None
+        show_progress: Optional[bool] = None,
+        console: Optional[Console] = None
     ):
         """Initialize workflow.
 
@@ -177,6 +179,7 @@ class AIWorkflow(ABC):
             disallowed_tools: Override default disallowed tools
             cleanup_working_dir: Whether to remove working_dir after completion (default: True)
             show_progress: Whether to show progress bar during execution (default: True)
+            console: Rich Console instance for coordinated output (optional)
         """
         ctx = click.get_current_context(silent=True)
         if ctx is None:
@@ -203,6 +206,9 @@ class AIWorkflow(ABC):
         
         # Set progress behavior (use instance value if provided, else CLI or default)
         self._show_progress = show_progress if show_progress is not None else cli.get("show_progress", True)
+        
+        # Set console for coordinated output
+        self._console = console if console is not None else cli.get("console")
 
         # Set up working directory
         if working_dir is not None:
@@ -847,7 +853,12 @@ class AIWorkflow(ABC):
                 logger.warning(f"Progress hook failed: {e}")
 
     def _init_progress_bar(self) -> None:
-        """Initialize Rich progress bar."""
+        """Initialize Rich progress bar with logging coordination.
+        
+        Uses the same console instance as logging to ensure proper coordination.
+        The transient=True option ensures the progress bar clears when log 
+        messages appear, preventing visual interference.
+        """
         if not self._show_progress or self._progress is not None:
             return
             
@@ -857,7 +868,8 @@ class AIWorkflow(ABC):
             BarColumn(),
             TextColumn("[progress.percentage]{task.percentage:>3.1f}%"),
             TimeRemainingColumn(),
-            console=None,  # Use default console
+            console=self._console,  # Use shared console for coordination
+            transient=True,  # Clear progress bar when logging occurs
         )
         self._progress.start()
         
