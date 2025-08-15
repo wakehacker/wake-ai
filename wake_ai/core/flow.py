@@ -474,15 +474,15 @@ class AIWorkflow(ABC):
                     # Validate response
                     success, validation_errors = step.validate_response(response)
 
+                    # Update cumulative cost
+                    self.state.cumulative_cost += response.cost
+
                     if success:
                         # Validation passed
                         self.state.completed_steps.append(step.name)
                         self.state.responses[step.name] = response
                         self.state.context[f"{step.name}_output"] = response.content
                         self._custom_context_update(step.name, response)
-
-                        # Update cumulative cost
-                        self.state.cumulative_cost += response.cost
 
                         # Call step-specific post-processing if defined (used internally)
                         if step._post_hook:
