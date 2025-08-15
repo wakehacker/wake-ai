@@ -12,7 +12,7 @@ def get_logger(name: str, override_level: Optional[int] = None) -> logging.Logge
         logger.setLevel(override_level)
     else:
         _created_logger_names.add(name)
-        logger.setLevel(logging.DEBUG if _debug else logging.WARNING)
+        logger.setLevel(logging.DEBUG if _debug else logging.INFO)
     return logger
 
 
