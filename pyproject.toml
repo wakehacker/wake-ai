@@ -50,7 +50,7 @@ wake-ai = "wake_ai.cli:main"
 [project.entry-points."wake.plugins.printers"]
 printers = "printers"
 
-[project.entry-points."wake-ai.plugins.workflows"]
+[project.entry-points."wake_ai.plugins.workflows"]
 workflows = "flows"
 
 [project.urls]
