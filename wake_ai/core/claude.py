@@ -1,7 +1,6 @@
 """Claude Code CLI wrapper for Python integration."""
 
 import json
-import logging
 import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Union
@@ -11,7 +10,6 @@ from ..utils.logging import get_logger
 
 # Set up logging
 logger = get_logger(__name__)
-logger.setLevel(logging.DEBUG)
 
 
 @dataclass
