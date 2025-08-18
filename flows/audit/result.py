@@ -35,7 +35,7 @@ class AuditDetection:
             "detection_type": self.detection_type,
             "description": self.description,
         }
-        
+
         if self.source:
             data["source"] = self.source
 

@@ -34,7 +34,7 @@ Work in the assigned directory `{{working_dir}}` where the audit plan and result
 3. **Update plan with validation results** (`{{working_dir}}/plan.yaml`)
     - Modify the YAML structure to include validation status
     - Update each issue with the `status` field, adding a `comment` field to explain the validation results
-    - Consider updating the `severity` field based on the validation results if the issue is not a false positive
+    - Consider updating the `impact` and `confidence` fields based on the validation results if the issue is not a false positive
     ```yaml
     contracts:
         - name: ContractA
@@ -53,7 +53,7 @@ Work in the assigned directory `{{working_dir}}` where the audit plan and result
 4. **Create detailed issue files** (only for true positives)
 
     - Create `{{working_dir}}/issues/` directory if needed
-    - File naming: `[severity]-[contract]-[brief-description].yaml`
+    - File naming: `[impact]-[contract]-[brief-description].yaml`
     - Each issue file must be a valid YAML file with markdown/asciidoc content embedded
     - Example structure:
 
@@ -150,7 +150,7 @@ Work in the assigned directory `{{working_dir}}` where the audit plan and result
 5. **Double validation and quality control**
     - Re-examine every true positive for accuracy
     - Verify exploitability claims with technical evidence
-    - Ensure severity ratings match actual impact and likelihood
+    - Ensure impact and confidence ratings match actual exploitability and likelihood
     - Confirm all recommendations are specific and actionable
     - Cross-check that no generic findings were included
 
@@ -179,7 +179,7 @@ Use these tools for thorough code analysis during validation:
 -   Attack vector is technically feasible given the code implementation
 -   Economic incentive exists for exploitation
 -   No existing mitigations prevent the attack
--   Real-world impact justifies the severity rating
+-   Real-world impact justifies the impact rating
 
 **Impact Classification Guidelines**:
 

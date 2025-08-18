@@ -23,7 +23,7 @@ Work in the assigned directory `{{working_dir}}` where all audit artifacts are s
    - Read `{{working_dir}}/overview.md` for codebase architecture understanding
    - Read `{{working_dir}}/plan.yaml` for complete validation results and status
    - Read all issue files in `{{working_dir}}/issues/` for detailed true positive findings
-   - Extract severity counts and key technical details from validated issues
+   - Extract impact and confidence counts and key technical details from validated issues
 
 2. **Create comprehensive executive summary** (`{{working_dir}}/executive-summary.md`)
    Structure:
@@ -54,14 +54,14 @@ Work in the assigned directory `{{working_dir}}` where all audit artifacts are s
 
 3. **Technical accuracy validation**
    - Cross-reference all findings with issue files to ensure accuracy
-   - Verify severity classifications match validation results
+   - Verify impact and confidence classifications match validation results
    - Confirm technical details and locations are precise
    - Ensure recommendations are specific and actionable
 
 4. **Professional reporting standards**
    - Use precise technical language with specific code references
    - Focus on concrete findings rather than theoretical risks
-   - Maintain clear severity rationale based on exploitability and impact
+   - Maintain clear impact rationale based on exploitability
    - Be technical and not speculative.
    - Report should be consice and to the point, without extra verbosity.
 </steps>

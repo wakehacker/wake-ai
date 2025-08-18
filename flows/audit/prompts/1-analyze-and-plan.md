@@ -49,7 +49,8 @@ You have access to the whole codebase, but have assigned a working directory to 
      - status: `pending`, as the issue will be validated later by another agent
      - location: the location of the issue
      - description: the description of the issue
-     - severity: the severity of the issue
+     - impact: the impact of the issue
+     - confidence: the confidence in the issue
    - Follow the structure below:
    Structure:
    ```yaml
@@ -62,14 +63,16 @@ You have access to the whole codebase, but have assigned a working directory to 
              lines: "45-52"
              function: withdraw
            description: Function allows reentrant call before state update
-           severity: high
+           impact: high | medium | low | info | warning
+           confidence: high | medium | low
          - title: Reentrancy vulnerability
            status: pending
            location:
              lines: "45-52"
              function: mint
            description: Function allows minting tokens without proper validation
-           severity: high
+           impact: high | medium | low | info | warning
+           confidence: high | medium | low
 
      - name: ContractB
        issues:
@@ -79,7 +82,8 @@ You have access to the whole codebase, but have assigned a working directory to 
              lines: "88"
              function: transferTokens
            description: ERC20 transfer return value not checked
-           severity: medium
+           impact: high | medium | low | info | warning
+           confidence: high | medium | low
    ```
 
 </steps>

@@ -203,10 +203,10 @@ class AIWorkflow(ABC):
 
         # Set cleanup behavior (use instance value if provided, else class default)
         self.cleanup_working_dir = cleanup_working_dir if cleanup_working_dir is not None else cli.get("cleanup_working_dir", True)
-        
+
         # Set progress behavior (use instance value if provided, else CLI or default)
         self._show_progress = show_progress if show_progress is not None else cli.get("show_progress", True)
-        
+
         # Set console for coordinated output
         self._console = console if console is not None else cli.get("console")
 
@@ -285,7 +285,7 @@ class AIWorkflow(ABC):
         self.steps: List[WorkflowStep] = []
         self.state = WorkflowState()
         self._dynamic_generators: Dict[str, Callable[[ClaudeCodeResponse, Dict[str, Any]], List[WorkflowStep]]] = {}
-        
+
         # Progress tracking
         self._progress: Optional[Progress] = None
         self._task_id: Optional[int] = None
@@ -437,7 +437,7 @@ class AIWorkflow(ABC):
                     continue
 
             logger.info(f"Executing step {self.state.current_step + 1}/{len(self.steps)}: '{step.name}'")
-            
+
             # Update progress message at step start (percentage based on completed steps)
             try:
                 step_msg = f"Starting '{step.name}' ({self.state.current_step + 1}/{len(self.steps)})"
@@ -489,7 +489,7 @@ class AIWorkflow(ABC):
                             error_prompt += f"- {error}\n"
                         prompt = error_prompt
                         logger.info(f"Retrying step '{step.name}' (attempt {retry_count}/{step.max_retries}) with error correction")
-                        
+
                         # Update progress message for retry (don't change percentage)
                         try:
                             retry_msg = f"Retrying '{step.name}' (attempt {retry_count}/{step.max_retries})"
@@ -505,11 +505,6 @@ class AIWorkflow(ABC):
                             logger.debug(f"Querying retry for step '{step.name}'")
                             response = self.session.query(prompt, continue_session=True)
 
-                    # Log response details
-                    retry_msg = f" after {retry_count} retries" if retry_count > 0 else ""
-                    logger.info(f"Step '{step.name}' completed{retry_msg} - cost: ${response.cost:.4f}, turns: {response.num_turns}")
-                    logger.debug(f"Response: {response.content}")
-
                     # Log session ID after first step's first query
                     if self.state.current_step == 0 and retry_count == 0 and response.session_id:
                         logger.debug(f"Claude session ID: {response.session_id}")
@@ -523,7 +518,7 @@ class AIWorkflow(ABC):
                         self.update_progress_message(validation_msg)
                     except Exception as e:
                         logger.debug(f"Failed to update progress message: {e}")
-                    
+
                     # Validate response
                     success, validation_errors = step.validate_response(response)
 
@@ -531,6 +526,11 @@ class AIWorkflow(ABC):
                     self.state.cumulative_cost += response.cost
 
                     if success:
+                        # Log response details
+                        retry_msg = f" after {retry_count} retries" if retry_count > 0 else ""
+                        logger.info(f"Step '{step.name}' completed{retry_msg} - cost: ${response.cost:.4f}, turns: {response.num_turns}")
+                        logger.debug(f"Response: {response.content}")
+
                         # Validation passed
                         self.state.completed_steps.append(step.name)
                         self.state.responses[step.name] = response
@@ -546,14 +546,14 @@ class AIWorkflow(ABC):
 
                         self.state.current_step += 1
                         self._save_state()
-                        
+
                         # Update progress after step completion
                         try:
                             step_msg = f"Completed step '{step.name}' ({self.state.current_step}/{len(self.steps)})"
                             self.update_progress(step_msg)
                         except Exception as e:
                             logger.debug(f"Failed to update progress: {e}")
-                        
+
                         # Step completion already logged above with retry info
                         break
                     else:
@@ -657,7 +657,7 @@ class AIWorkflow(ABC):
                         logger.debug(f"Inserted dynamic step '{new_step.name}' at position {insert_pos + i}")
 
                     logger.info(f"Added {len(new_steps)} dynamic steps. Total steps now: {len(self.steps)}")
-                    
+
                     # Update progress after dynamic steps are added
                     try:
                         dynamic_msg = f"Added {len(new_steps)} dynamic steps"
@@ -757,7 +757,7 @@ class AIWorkflow(ABC):
         self.state.progress_percentage = data.get("progress_percentage", 0.0)  # Backwards compatibility
         self.state.step_weights = data.get("step_weights", {})  # Backwards compatibility
         logger.debug(f"Loaded state: step {self.state.current_step}/{len(self.steps)}, completed: {len(self.state.completed_steps)}")
-        
+
         # Update progress bar if resuming
         try:
             self.update_progress(f"Resumed at step {self.state.current_step + 1}/{len(self.steps)}")
@@ -782,7 +782,7 @@ class AIWorkflow(ABC):
 
     def set_progress_hook(self, hook: Optional[Callable[[float, str], None]]) -> None:
         """Set external progress update hook.
-        
+
         Args:
             hook: Callback function(percentage: float, message: str)
         """
@@ -790,10 +790,10 @@ class AIWorkflow(ABC):
 
     def update_progress_message(self, message: str) -> None:
         """Update only the progress message without changing percentage.
-        
-        This is useful for providing status updates during step execution 
+
+        This is useful for providing status updates during step execution
         (e.g., retries, validation) without moving the progress forward.
-        
+
         Args:
             message: Progress message to display
         """
@@ -801,7 +801,7 @@ class AIWorkflow(ABC):
         if self._progress and self._task_id is not None:
             # Keep the same completed value, only update description
             self._progress.update(self._task_id, description=message)
-        
+
         # Call external hook with current percentage if set
         if self._progress_hook:
             try:
@@ -813,7 +813,7 @@ class AIWorkflow(ABC):
 
     def update_progress(self, message: str = "", force_percentage: Optional[float] = None) -> None:
         """Update workflow progress.
-        
+
         Args:
             message: Optional progress message
             force_percentage: Override calculated percentage (0.0-1.0)
@@ -828,23 +828,23 @@ class AIWorkflow(ABC):
             else:
                 total_weight = sum(step.progress_weight for step in self.steps)
                 completed_weight = sum(
-                    step.progress_weight for step in self.steps 
+                    step.progress_weight for step in self.steps
                     if step.name in self.state.completed_steps
                 )
-                
+
                 percentage = completed_weight / total_weight if total_weight > 0 else 0.0
                 percentage = max(0.0, min(1.0, percentage))
 
         # Update state
         self.state.progress_percentage = percentage
-        
+
         # Update Rich progress bar if active
         if self._progress and self._task_id is not None:
             # Rich Progress expects completed units, not percentage
             total_units = 100
             completed_units = int(percentage * total_units)
             self._progress.update(self._task_id, completed=completed_units, description=message or "Processing...")
-        
+
         # Call external hook if set
         if self._progress_hook:
             try:
@@ -854,14 +854,14 @@ class AIWorkflow(ABC):
 
     def _init_progress_bar(self) -> None:
         """Initialize Rich progress bar with logging coordination.
-        
+
         Uses the same console instance as logging to ensure proper coordination.
-        The transient=True option ensures the progress bar clears when log 
+        The transient=True option ensures the progress bar clears when log
         messages appear, preventing visual interference.
         """
         if not self._show_progress or self._progress is not None:
             return
-            
+
         self._progress = Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
@@ -872,14 +872,14 @@ class AIWorkflow(ABC):
             transient=True,  # Clear progress bar when logging occurs
         )
         self._progress.start()
-        
+
         # Create task with total of 100 units for percentage-based progress
         self._task_id = self._progress.add_task(
-            description="Initializing workflow...", 
+            description="Initializing workflow...",
             total=100,
             completed=0
         )
-        
+
         logger.debug("Initialized progress bar")
 
     def _cleanup_progress_bar(self) -> None:
