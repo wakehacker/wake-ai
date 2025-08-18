@@ -537,7 +537,7 @@ Progress tracking is enabled by default and shows:
 wake-ai audit
 
 # Disable progress bar (useful for CI/CD)
-wake-ai audit --no-progress
+wake-ai --no-progress audit
 ```
 
 #### Step Weighting
@@ -649,7 +649,7 @@ Control progress behavior from the command line:
 wake-ai audit
 
 # Disable progress (useful for scripting/CI)
-wake-ai audit --no-progress
+wake-ai --no-progress audit
 ```
 
 #### Technical Implementation
