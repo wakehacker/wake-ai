@@ -2,6 +2,8 @@
 
 An LLM orchestration framework that wraps terminal-based AI agents (like Claude Code) to provide structured, multi-step workflows for smart contract security analysis and beyond, making agentic execution more predictable and reliable through validation and progressive task decomposition.
 
+![Wake AI](./demo.gif)
+
 ## The Problem
 
 Traditional approaches to AI-powered code analysis suffer from unpredictability. You write a prompt, cross your fingers, and hope the AI completes all the work correctly in one go. When working with complex security audits or vulnerability detection, this approach is fundamentally flawed. AI agents are powerful but inherently non-deterministic – they might miss steps, produce inconsistent outputs, or fail partway through execution.
