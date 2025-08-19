@@ -5,7 +5,7 @@ description = "AI-powered smart contract security analysis framework"
 license = { text = "ISC" }
 authors = [{ name = "Ackee Blockchain" }]
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 keywords = [
     "ethereum",
     "solidity",
@@ -20,8 +20,6 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: ISC License (ISCL)",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -35,10 +33,9 @@ dependencies = [
     "pyyaml>=6.0",
     "jinja2>=3.1",
     "pydantic>=2.0",
-    "typing-extensions>=4.12; python_version<'3.10'",
-    "importlib-metadata>=4.13,<5; python_version<'3.10'",
     "eth-wake>=4.20.0",
     "rich-click>=1.8.9",
+    "claude-code-sdk>=0.0.20",
 ]
 
 [project.optional-dependencies]
@@ -65,7 +62,7 @@ build-backend = "hatchling.build"
 packages = ["wake_ai"]
 
 [tool.black]
-target-version = ["py38"]
+target-version = ["py310"]
 line-length = 88
 
 [tool.isort]
