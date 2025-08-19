@@ -170,6 +170,41 @@ class ClaudeCodeSession:
         validate_claude_cli()
 
 
+    def handle_verbose_message(self, message) -> None:
+        """Handle verbose message formatting."""
+        if isinstance(message, AssistantMessage):
+            for block in message.content:
+                if isinstance(block, ToolResultBlock):
+                    icon = "\u2705" if not block.is_error else "\u274C"
+                    print(f"\033[90m[Tool result: {icon}]\033[0m", flush=True)
+                elif isinstance(block, TextBlock):
+                    print(f"\033[90m{block.text}\033[0m", flush=True)
+                elif isinstance(block, ToolUseBlock):
+                    format_tool_use(block)
+                else:
+                    print(f"\033[90mUnknown block: {block}\033[0m", flush=True)
+        
+        elif isinstance(message, SystemMessage):
+            if message.subtype == "init":
+                print(f"\033[38;5;95m[System message: {message.subtype}]\033[0m", flush=True)
+                print(f"\033[38;5;95m[System message: {message.data['cwd']}]\033[0m", flush=True)
+            else:
+                print(f"\033[38;5;95m[System message: {message.subtype}]\033[0m", flush=True)
+                print(f"\033[38;5;95m[System message: {message.data}]\033[0m", flush=True)
+        
+        elif isinstance(message, UserMessage):
+            for content in message.content:
+                if isinstance(content, ToolResultBlock):
+                    color = "\033[91m" if content.is_error else "\033[90m"
+                    if content.content and isinstance(content.content, str):
+                        preview = content.content[:30] + "..." if len(content.content) > 30 else content.content
+                        print(f"{color}[User message: {preview}]\033[0m", flush=True)
+                else:
+                    print(f"\033[91m[User message: {content}]\033[0m", flush=True)
+        
+        else:
+            print(f"\033[38;5;95m[Unknown message: {message}]\033[0m", flush=True)
+
     async def query_async(
         self,
         prompt: str,
@@ -198,9 +233,8 @@ class ClaudeCodeSession:
             # mcp_servers={
             # }
             # max_thinking_tokens=
-            # mcp_tools
-            # permission_prompt_tool_name
-            # settings
+            # mcp_tools=
+            # settings=
             # add_dirs=
             # append_system_prompt !!!!!
         )
@@ -213,43 +247,12 @@ class ClaudeCodeSession:
                     result = message
                 else:
                     if self.verbose:
-                        if isinstance(message, AssistantMessage):
-                            for block in message.content:
-                                if isinstance(block,ToolResultBlock):
-                                    print(f"\033[90m[Tool result: {"\u2705" if not block.is_error else "\u274C"}]\033[0m", flush=True)
-                                elif isinstance(block, TextBlock):
-                                    print(f"\033[90m{block.text}\033[0m", flush=True)
-                                elif isinstance(block, ToolUseBlock):
-                                    format_tool_use(block)
-                                else:
-                                    print(f"\033[90mUnknown  block: {block}\033[0m", flush=True)
-                        elif isinstance(message, SystemMessage):
-                            if message.subtype == "init":
-                                print(f"\033[38;5;95m[System message: {message.subtype}]\033[0m", flush=True)
-                                print(f"\033[38;5;95m[System message: {message.data['cwd']}]\033[0m", flush=True)
-                            else:
-                                print(f"\033[38;5;95m[System message: {message.subtype}]\033[0m", flush=True)
-                                print(f"\033[38;5;95m[System message: {message.data}]\033[0m", flush=True)
-
-                        elif isinstance(message, UserMessage):
-                            for content in message.content:
-                                if isinstance(content, ToolResultBlock):
-                                    if content.is_error:
-                                        print(f"\033[91m[User message: {content.content}]\033[0m", flush=True)
-                                    else:
-                                        if content.content and isinstance(content.content, str):
-                                            preview = content.content[:30] + "..." if len(content.content) > 30 else content.content
-                                            print(f"\033[90m{preview}\033[0m", flush=True)
-                                else:
-                                    print(f"\033[91m[User message: {content}]\033[0m", flush=True)
-
-                        else:
-                            print(f"\033[38;5;95m[Unknown message: {message}]\033[0m", flush=True)
+                        self.handle_verbose_message(message)
         # official excpetion branch.
         # https://github.com/anthropics/claude-code-sdk-python
 
         except CLINotFoundError:
-            logger.error("Claude Code CLI not found. Please install it: https://docs.anthropic.com/en/docs/claude-code")
+            logger.error("Claude Code CLI not found. Please install it.")
             return ClaudeCodeResponse(
                 content="Claude Code CLI not found. Please install it.",
                 raw_output="",
@@ -404,14 +407,6 @@ class ClaudeCodeSession:
 
             try:
                 ## TODO: the result of response.is_finished is not progress but it might also showing help. it might good to rerun same prompt with different session.
-                # response = self.query(
-                #     prompt="continue",
-                #     output_format="json",
-                #     max_turns=turn_step,
-                #     continue_session=True,
-                #     resume_session=session_id # resume. as retry.
-                # )
-
                 # Use asyncio.run to call the async version
                 response = asyncio.run(self.query_async(
                     prompt="continue",
