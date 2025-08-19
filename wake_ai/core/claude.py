@@ -49,6 +49,56 @@ def format_tool_use(block: ToolUseBlock) -> None:
         for key, value in block.input.items():
             print(f"  \033[90m[Tool input: {key}: {value}]\033[0m", flush=True)
 
+def format_tool_result(block: ToolResultBlock) -> None:
+    """Format and print tool result information."""
+    color = "\033[91m" if block.is_error else "\033[90m"
+    import json
+
+    if isinstance(block.content, str):
+        # Try to parse as JSON for pretty printing
+        # string result
+        try:
+            parsed = json.loads(block.content)
+            print(f"{color}[Tool Result (JSON)]:\033[0m", flush=True)
+            # Pretty print with indentation
+            formatted = json.dumps(parsed, indent=2, ensure_ascii=False)
+            for line in formatted.split('\n'):
+                print(f"{color}  {line}\033[0m", flush=True)
+        except (json.JSONDecodeError, ValueError) as e:
+            # Not JSON, show as regular string with preview
+            print(f"{color}[Tool Result]\033[0m", flush=True)
+            print(f"{color}{block.content}\033[0m", flush=True)
+    elif isinstance(block.content, list):
+        #  list[dict[str, Any]] result.
+        for item in block.content:
+            # Try to get text field if it exists
+            text_content = item.get('text') if hasattr(item, 'get') else None
+
+            try:
+                if text_content:
+                    # Try to parse as JSON
+                    parsed = json.loads(text_content)
+                    print(f"{color}[Tool Result (JSON)]:\033[0m", flush=True)
+                    formatted = json.dumps(parsed, indent=2, ensure_ascii=False)
+                    for line in formatted.split('\n'):
+                        print(f"{color}  {line}\033[0m", flush=True)
+                else:
+                    # No text field or not a dict, show as-is
+                    print(f"{color}[Tool Result]\033[0m", flush=True)
+                    print(f"{color}{item}\033[0m", flush=True)
+            except json.JSONDecodeError:
+                # Text exists but isn't valid JSON, show as plain text
+                print(f"{color}[Tool Result]\033[0m", flush=True)
+                print(f"{color}{text_content}\033[0m", flush=True)
+            except Exception:
+                # Any other error, show the item as-is
+                print(f"{color}[Tool Result]\033[0m", flush=True)
+                print(f"{color}{item}\033[0m", flush=True)
+
+
+    else: # None
+        print(f"{color}[Tool Result: Without any result]\033[0m", flush=True)
+
 
 @dataclass
 class ClaudeCodeResponse:
@@ -114,9 +164,10 @@ class ClaudeCodeSession:
         if isinstance(message, AssistantMessage):
             for block in message.content:
                 if isinstance(block, ToolResultBlock):
-                    icon = "\u2705" if not block.is_error else "\u274C"
-                    print(f"\033[90m[Tool result: {icon}]\033[0m", flush=True)
+                    # general tool result.
+                    format_tool_result(block)
                 elif isinstance(block, TextBlock):
+                    # general thinking text.
                     print(f"\033[90m{block.text}\033[0m", flush=True)
                 elif isinstance(block, ToolUseBlock):
                     format_tool_use(block)
@@ -124,30 +175,23 @@ class ClaudeCodeSession:
                     print(f"\033[90mUnknown block: {block}\033[0m", flush=True)
 
         elif isinstance(message, SystemMessage):
-            print("system message: ", message)
             if message.subtype == "init":
                 print(f"\033[38;5;95m[System message: {message.subtype}]\033[0m", flush=True)
                 print(f"    \033[38;5;95m[CWD: {message.data['cwd']}]\033[0m", flush=True)
                 print(f"    \033[38;5;95m[Session ID: {message.data['session_id']}]\033[0m", flush=True)
-                print(f"    \033[38;5;95m[Tools: {message.data['tools']}]\033[0m", flush=True)
             else:
                 print(f"\033[38;5;95m[System message: {message.subtype}]\033[0m", flush=True)
                 print(f"    \033[38;5;95m[System message: {message.data}]\033[0m", flush=True)
 
         elif isinstance(message, UserMessage):
-            # print("user message: ", message)
             for content in message.content:
                 if isinstance(content, ToolResultBlock):
-                    color = "\033[91m" if content.is_error else "\033[90m"
-                    if isinstance(content.content, str):
-                        preview = content.content[:100] + "..." if len(content.content) > 100 else content.content
-                        print(f"{color}[Tool Result: {preview}]\033[0m", flush=True)
-                    else:
-                        print(f"{color}[Tool Result: {content.content}]\033[0m", flush=True)
+                    # special tool result. like mcp server.
+                    format_tool_result(content)
                 else:
-                    print(f"\033[91m[User message: {content}]\033[0m", flush=True)
+                    print(f"\033[91m[UnknownUser message: {content}]\033[0m", flush=True)
         else:
-            print("unknown message: ", message)
+            print(f"\033[38;5;95munknown message: {message}\033[0m")
             print(f"\033[38;5;95m[Unknown message: {message}]\033[0m", flush=True)
 
     async def query_async(
