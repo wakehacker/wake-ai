@@ -301,7 +301,7 @@ class AIWorkflow(ABC):
             return 1
         else:
             return 2  # Unknown model - assume opus level
-    
+
     @classmethod
     def _validate_model_downgrade(cls, workflow_model: str, step_model: str) -> bool:
         """Check if step model is allowed (only downgrades permitted)."""
@@ -480,7 +480,7 @@ class AIWorkflow(ABC):
                 original_allowed = self.session.allowed_tools
                 original_disallowed = self.session.disallowed_tools
                 original_model = getattr(self.session, 'model', None)
-                
+
                 # Change model for this step if specified
                 if step.model is not None and step.model != original_model:
                     logger.debug(f"Switching from model '{original_model}' to '{step.model}' for step '{step.name}'")
@@ -625,7 +625,10 @@ class AIWorkflow(ABC):
 
         self.state.completed_at = datetime.now()
         results = self._prepare_results()
-        logger.info(f"Workflow '{self.name}' completed successfully in {results.get('duration', 0):.2f} seconds (total cost: ${self.state.cumulative_cost:.4f})")
+        if results.get('duration') is not None:
+            logger.info(f"Workflow '{self.name}' completed successfully in {results.get('duration')} seconds (total cost: ${self.state.cumulative_cost:.4f})")
+        else:
+            logger.info(f"Workflow '{self.name}' completed successfully (total cost: ${self.state.cumulative_cost:.4f})")
 
         # Complete progress tracking
         try:
