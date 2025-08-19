@@ -62,6 +62,7 @@ class WorkflowStep:
         max_retries: Maximum number of retries if validation fails
         continue_session: Whether to continue the Claude session from previous step (default: False)
         condition: Optional function that takes context and returns bool. Step is skipped if False.
+        model: Optional model name to use for this step (must not be higher capability than workflow model)
         _post_hook: Internal post-processing function (not exposed to users)
     """
 
@@ -75,6 +76,7 @@ class WorkflowStep:
     max_retries: int = 3
     continue_session: bool = False
     condition: Optional[Callable[[Dict[str, Any]], bool]] = None
+    model: Optional[str] = None
     _post_hook: Optional[Callable[['AIWorkflow', ClaudeCodeResponse], None]] = field(default=None, repr=False)
 
     def format_prompt(self, context: Dict[str, Any]) -> str:
@@ -137,6 +139,7 @@ class WorkflowState:
 
 class AIWorkflow(ABC):
     """Base class for fixed AI workflows."""
+
 
     name: str
     result_class: Type[AIResult]
@@ -288,6 +291,23 @@ class AIWorkflow(ABC):
         self._task_id: Optional[int] = None
         self._progress_hook: Optional[Callable[[float, str], None]] = None
 
+    @classmethod
+    def _get_model_rank(cls, model: str) -> int:
+        """Get the hierarchy rank of a model."""
+        normalized = model.lower().strip()
+        if "opus" in normalized:
+            return 2
+        elif "sonnet" in normalized:
+            return 1
+        else:
+            return 2  # Unknown model - assume opus level
+    
+    @classmethod
+    def _validate_model_downgrade(cls, workflow_model: str, step_model: str) -> bool:
+        """Check if step model is allowed (only downgrades permitted)."""
+        return cls._get_model_rank(step_model) <= cls._get_model_rank(workflow_model)
+
+
     @abstractmethod
     def _setup_steps(self):
         """Setup workflow steps. Must be implemented by subclasses."""
@@ -301,6 +321,7 @@ class AIWorkflow(ABC):
                  max_retry_cost: Optional[float] = None,
                  continue_session: bool = False,
                  condition: Optional[Callable[[Dict[str, Any]], bool]] = None,
+                 model: Optional[str] = None,
                  after_step: Optional[str] = None):
         """Add a step to the workflow.
 
@@ -316,8 +337,15 @@ class AIWorkflow(ABC):
             max_retry_cost: Maximum cost for retry attempts (defaults to max_cost)
             continue_session: Whether to continue the Claude session from previous step (default: False)
             condition: Optional function that takes context and returns bool. Step is skipped if False.
+            model: Optional model name to use for this step (must not be higher capability than workflow model)
             after_step: Optional step name after which to insert this step. If None, appends to end.
         """
+        # Validate model if specified
+        if model and hasattr(self.session, 'model') and self.session.model:
+            if not self._validate_model_downgrade(self.session.model, model):
+                logger.warning(f"Cannot upgrade from '{self.session.model}' to '{model}' - using workflow model instead")
+                model = None
+
         step = WorkflowStep(
             name=name,
             prompt_template=prompt_template,
@@ -328,7 +356,8 @@ class AIWorkflow(ABC):
             max_retries=max_retries,
             max_retry_cost=max_retry_cost,
             continue_session=continue_session,
-            condition=condition
+            condition=condition,
+            model=model
         )
 
         if after_step is None:
@@ -447,9 +476,15 @@ class AIWorkflow(ABC):
                 step_total_cost = 0.0
                 step_total_turns = 0
 
-                # Save original tools
+                # Save original tools and model
                 original_allowed = self.session.allowed_tools
                 original_disallowed = self.session.disallowed_tools
+                original_model = getattr(self.session, 'model', None)
+                
+                # Change model for this step if specified
+                if step.model is not None and step.model != original_model:
+                    logger.debug(f"Switching from model '{original_model}' to '{step.model}' for step '{step.name}'")
+                    self.session.model = step.model
 
                 while retry_count <= step.max_retries:
                     # Set tools if specified (step overrides workflow defaults)
@@ -473,10 +508,10 @@ class AIWorkflow(ABC):
                         should_continue = step.continue_session
 
                         if step.max_cost:
-                            logger.debug(f"Querying with cost limit ${step.max_cost} for step '{step.name}' (continue_session={should_continue})")
+                            logger.debug(f"Querying with cost limit ${step.max_cost} for step '{step.name}' (continue_session={should_continue}, model={getattr(self.session, 'model', 'default')})")
                             response = self.session.query_with_cost(prompt, step.max_cost, continue_session=should_continue)
                         else:
-                            logger.debug(f"Querying step '{step.name}' (continue_session={should_continue})")
+                            logger.debug(f"Querying step '{step.name}' (continue_session={should_continue}, model={getattr(self.session, 'model', 'default')})")
                             response = self.session.query(prompt, continue_session=should_continue)
                     else:
                          # Retry attempt - add error correction prompt
@@ -495,10 +530,10 @@ class AIWorkflow(ABC):
 
                         # Always continue session for retries
                         if step.max_retry_cost:
-                            logger.debug(f"Querying retry with cost limit ${step.max_retry_cost} for step '{step.name}'")
+                            logger.debug(f"Querying retry with cost limit ${step.max_retry_cost} for step '{step.name}' (model={getattr(self.session, 'model', 'default')})")
                             response = self.session.query_with_cost(prompt, step.max_retry_cost, continue_session=True)
                         else:
-                            logger.debug(f"Querying retry for step '{step.name}'")
+                            logger.debug(f"Querying retry for step '{step.name}' (model={getattr(self.session, 'model', 'default')})")
                             response = self.session.query(prompt, continue_session=True)
 
                     # Log session ID after first step's first query
@@ -520,7 +555,7 @@ class AIWorkflow(ABC):
                     step_total_cost += response.cost
                     step_total_turns += response.num_turns
 
-                    # Validate response  
+                    # Validate response
                     success, validation_errors = step.validate_response(response)
 
                     if success:
@@ -567,14 +602,18 @@ class AIWorkflow(ABC):
 
                         retry_count += 1
 
-                # Restore original tools after step completes
+                # Restore original tools and model after step completes
                 self.session.allowed_tools = original_allowed
                 self.session.disallowed_tools = original_disallowed
+                if original_model is not None:
+                    self.session.model = original_model
 
             except Exception as e:
-                # Restore original tools even on error
+                # Restore original tools and model even on error
                 self.session.allowed_tools = original_allowed
                 self.session.disallowed_tools = original_disallowed
+                if original_model is not None:
+                    self.session.model = original_model
 
                 logger.error(f"Error in step '{step.name}': {str(e)}")
                 self.state.errors.append({
@@ -826,7 +865,7 @@ class AIWorkflow(ABC):
             else:
                 total_steps = len(self.steps)
                 completed_steps = len(self.state.completed_steps)
-                
+
                 percentage = completed_steps / total_steps if total_steps > 0 else 0.0
                 percentage = max(0.0, min(1.0, percentage))
 
