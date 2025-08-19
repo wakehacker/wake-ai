@@ -99,7 +99,7 @@ class AuditWorkflow(AIWorkflow):
             name="analyze_and_plan",
             prompt_template=self._build_prompt("analyze_and_plan"),
             allowed_tools=None,  # Use secure defaults from parent class (includes TodoWrite)
-            max_cost=15.0,
+            max_cost=10.0,
             validator=self._validate_analyze_and_plan,
             max_retries=3,
             max_retry_cost=5.0
@@ -110,7 +110,7 @@ class AuditWorkflow(AIWorkflow):
             name="manual_review",
             prompt_template=self._build_prompt("manual_review"),
             allowed_tools=None,  # Use secure defaults from parent class
-            max_cost=20.0,
+            max_cost=10.0,
             validator=self._validate_manual_review,
             max_retries=3,
             max_retry_cost=10.0
@@ -121,7 +121,7 @@ class AuditWorkflow(AIWorkflow):
             name="executive_summary",
             prompt_template=self._build_prompt("executive_summary"),
             allowed_tools=None,  # Use secure defaults from parent class
-            max_cost=10.0,
+            max_cost=5.0,
             validator=self._validate_executive_summary,
             max_retries=2,
             max_retry_cost=5.0
