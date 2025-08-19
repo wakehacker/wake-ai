@@ -183,7 +183,7 @@ class ClaudeCodeSession:
                     format_tool_use(block)
                 else:
                     print(f"\033[90mUnknown block: {block}\033[0m", flush=True)
-        
+
         elif isinstance(message, SystemMessage):
             if message.subtype == "init":
                 print(f"\033[38;5;95m[System message: {message.subtype}]\033[0m", flush=True)
@@ -191,7 +191,7 @@ class ClaudeCodeSession:
             else:
                 print(f"\033[38;5;95m[System message: {message.subtype}]\033[0m", flush=True)
                 print(f"\033[38;5;95m[System message: {message.data}]\033[0m", flush=True)
-        
+
         elif isinstance(message, UserMessage):
             for content in message.content:
                 if isinstance(content, ToolResultBlock):
@@ -201,7 +201,7 @@ class ClaudeCodeSession:
                         print(f"{color}[User message: {preview}]\033[0m", flush=True)
                 else:
                     print(f"\033[91m[User message: {content}]\033[0m", flush=True)
-        
+
         else:
             print(f"\033[38;5;95m[Unknown message: {message}]\033[0m", flush=True)
 
@@ -314,13 +314,11 @@ class ClaudeCodeSession:
         max_turns: Optional[int] = None,
         input_data: Optional[str] = None,
         continue_session: bool = False,
-        resume_session: Optional[str] = None
     ) -> ClaudeCodeResponse:
         """Execute a query with Claude Code.
 
         Args:
             prompt: The prompt to send
-            non_interactive: Use non-interactive mode
             output_format: Output format (json, text, stream-json)
             max_turns: Maximum number of turns for agentic mode
             input_data: Optional input data to pipe to Claude
