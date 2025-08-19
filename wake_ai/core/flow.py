@@ -236,6 +236,9 @@ class AIWorkflow(ABC):
             # Read-only tools (always safe)
             "Read", "Grep", "Glob", "LS", "Task", "TodoWrite",
 
+            # Wake MCP
+            "mcp__wake",
+
             # Write tools (needed for results - cannot be path-restricted)
             f"Write(/{self.working_dir}/**)", f"Edit(/{self.working_dir}/**)", f"MultiEdit(/{self.working_dir}/**)",
 
