@@ -19,12 +19,15 @@ if TYPE_CHECKING:
 console = Console()
 
 # Configure logging to use rich handler for pretty console output
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(message)s",
-    datefmt="[%X]",
-    handlers=[RichHandler(console=console, rich_tracebacks=True)]
-)
+# Only configure if not already configured to avoid duplicate handlers
+root_logger = logging.getLogger()
+if not root_logger.handlers:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(message)s",
+        datefmt="[%X]",
+        handlers=[RichHandler(console=console, rich_tracebacks=True, show_path=False)]
+    )
 logger = get_logger(__name__)
 
 

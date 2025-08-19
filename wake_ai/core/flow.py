@@ -104,8 +104,8 @@ class WorkflowStep:
             Tuple of (success: bool, errors: List[str])
         """
         if not response.success:
-            logger.warning(f"Step '{self.name}' response failed: {response.content}")
-            return (False, [response.content or "Response failed"])
+            logger.debug(f"Step '{self.name}' Claude query failed: {response.content}")
+            return (False, [response.content or "Claude query failed"])
 
         if self.validator:
             result = self.validator(response)
@@ -444,6 +444,8 @@ class AIWorkflow(ABC):
                 retry_count = 0
                 validation_errors = []
                 response = None
+                step_total_cost = 0.0
+                step_total_turns = 0
 
                 # Save original tools
                 original_allowed = self.session.allowed_tools
@@ -482,7 +484,7 @@ class AIWorkflow(ABC):
                         for error in validation_errors:
                             error_prompt += f"- {error}\n"
                         prompt = error_prompt
-                        logger.info(f"Retrying step '{step.name}' (attempt {retry_count}/{step.max_retries}) with error correction")
+                        logger.info(f"Retrying step '{step.name}' (attempt {retry_count}/{step.max_retries}) - previous attempt failed validation")
 
                         # Update progress message for retry (don't change percentage)
                         try:
@@ -513,19 +515,21 @@ class AIWorkflow(ABC):
                     except Exception as e:
                         logger.debug(f"Failed to update progress message: {e}")
 
-                    # Validate response
+                    # Update cumulative cost and step totals
+                    self.state.cumulative_cost += response.cost
+                    step_total_cost += response.cost
+                    step_total_turns += response.num_turns
+
+                    # Validate response  
                     success, validation_errors = step.validate_response(response)
 
-                    # Update cumulative cost
-                    self.state.cumulative_cost += response.cost
-
                     if success:
-                        # Log response details
+                        # Validation passed - log successful completion with total cost/turns
                         retry_msg = f" after {retry_count} retries" if retry_count > 0 else ""
-                        logger.info(f"Step '{step.name}' completed{retry_msg} - cost: ${response.cost:.4f}, turns: {response.num_turns}")
+                        logger.info(f"Step '{step.name}' completed{retry_msg} - cost: ${step_total_cost:.4f}, turns: {step_total_turns}")
                         logger.debug(f"Response: {response.content}")
 
-                        # Validation passed
+                        # Update workflow state
                         self.state.completed_steps.append(step.name)
                         self.state.responses[step.name] = response
                         self.state.context[f"{step.name}_output"] = response.content
@@ -548,14 +552,16 @@ class AIWorkflow(ABC):
                         except Exception as e:
                             logger.debug(f"Failed to update progress: {e}")
 
-                        # Step completion already logged above with retry info
                         break
                     else:
-                        # Validation failed
+                        # Validation failed - log query completion but note validation failure
+                        attempt_msg = f"attempt {retry_count + 1}" if retry_count > 0 else "initial attempt"
+                        logger.debug(f"Step '{step.name}' {attempt_msg} completed but validation failed - cost: ${response.cost:.4f}, turns: {response.num_turns}")
                         logger.warning(f"Step '{step.name}' validation failed: {validation_errors}")
 
                         if retry_count >= step.max_retries:
                             # Max retries reached
+                            logger.error(f"Step '{step.name}' failed after {step.max_retries} retries - final errors: {validation_errors}")
                             error_msg = f"Step '{step.name}' validation failed after {step.max_retries} retries. Errors: {'; '.join(validation_errors)}"
                             raise RuntimeError(error_msg)
 
