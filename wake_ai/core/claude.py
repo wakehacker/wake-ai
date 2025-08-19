@@ -197,7 +197,7 @@ class ClaudeCodeSession:
                 if isinstance(content, ToolResultBlock):
                     color = "\033[91m" if content.is_error else "\033[90m"
                     if content.content and isinstance(content.content, str):
-                        preview = content.content[:30] + "..." if len(content.content) > 30 else content.content
+                        preview = content.content[:100] + "..." if len(content.content) > 100 else content.content
                         print(f"{color}[User message: {preview}]\033[0m", flush=True)
                 else:
                     print(f"\033[91m[User message: {content}]\033[0m", flush=True)
@@ -230,8 +230,7 @@ class ClaudeCodeSession:
             model=self.model,
             cwd=str(self.execution_dir),  # Use working_dir for SDK since it's the scratch space
             permission_mode="default",
-            # mcp_servers={
-            # }
+            # mcp_servers = # custom mcp server. Here assume already installed as project or user.
             # max_thinking_tokens=
             # mcp_tools=
             # settings=
