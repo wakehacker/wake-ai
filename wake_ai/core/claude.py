@@ -7,11 +7,13 @@ import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Union, AsyncIterator
 from dataclasses import dataclass
+from wake_ai.utils.logging import get_debug
+
+from claude_code_sdk import (ClaudeCodeOptions, AssistantMessage, ResultMessage, ToolUseBlock, TextBlock, query, SystemMessage, ToolResultBlock, UserMessage, CLINotFoundError, ProcessError, CLIJSONDecodeError)
 
 # Set up logging
 logger = logging.getLogger(__name__)
 
-from claude_code_sdk import (ClaudeCodeOptions, AssistantMessage, ResultMessage, ToolUseBlock, TextBlock, query, SystemMessage, ToolResultBlock, UserMessage, CLINotFoundError, ProcessError, CLIJSONDecodeError)
 
 def format_todo_list(todos: List[Dict[str, Any]]) -> None:
     """Format and print a todo list with icons and colors."""
@@ -53,7 +55,6 @@ class ClaudeCodeResponse:
     """Parsed response from Claude Code CLI."""
 
     content: str
-    raw_output: str
     tool_calls: List[Dict[str, Any]]
     success: bool
     cost: float = 0.0
@@ -61,65 +62,6 @@ class ClaudeCodeResponse:
     num_turns: int = 0
     session_id: str = ""
     is_finished: bool = True
-
-    @classmethod
-    def from_json(cls, json_str: str) -> "ClaudeCodeResponse":
-        """Parse JSON output from Claude Code.
-
-        Emitted as the last message
-        {
-            type: "result";
-            subtype: "success";
-            duration_ms: float;
-            duration_api_ms: float;
-            is_error: boolean;
-            num_turns: int;
-            result: string;
-            session_id: string;
-            total_cost_usd: float;
-        }
-
-        Emitted as the last message, when we've reached the maximum number of turns
-        {
-            type: "result";
-            subtype: "error_max_turns" | "error_during_execution";
-            duration_ms: float;
-            duration_api_ms: float;
-            is_error: boolean;
-            num_turns: int;
-            session_id: string;
-            total_cost_usd: float;
-        }
-        """
-        data = json.loads(json_str)
-        logger.debug(f"Parsed JSON response: type={data.get('type')}, subtype={data.get('subtype')}, cost=${data.get('total_cost_usd', 0):.4f}")
-
-        return cls(
-            content=data.get("result", ""),
-            raw_output=json_str,
-            tool_calls=[],
-            success=not data.get("is_error", False),
-            cost=data.get("total_cost_usd", 0.0),
-            duration=data.get("duration_ms", 0),
-            num_turns=data.get("num_turns", 0),
-            session_id=data.get("session_id", ""),
-            is_finished=data.get("subtype", "success") == "success"
-        )
-
-    @classmethod
-    def from_text(cls, text: str) -> "ClaudeCodeResponse":
-        """Create response from plain text output."""
-        return cls(
-            content=text,
-            raw_output=text,
-            tool_calls=[],
-            success=True,
-            cost=0.0,
-            duration=0.0,
-            num_turns=0,
-            session_id="",
-            is_finished=True
-        )
 
 
 class ClaudeCodeSession:
@@ -132,7 +74,6 @@ class ClaudeCodeSession:
         disallowed_tools: Optional[List[str]] = None,
         working_dir: Optional[Union[str, Path]] = None,
         execution_dir: Optional[Union[str, Path]] = None,
-        verbose: bool = False,
         session_id: Optional[str] = None
     ):
         """Initialize Claude Code session.
@@ -143,7 +84,6 @@ class ClaudeCodeSession:
             disallowed_tools: List of disallowed tools
             working_dir: Scratch space directory for AI to create files
             execution_dir: Directory where Claude CLI is executed (cwd)
-            verbose: Enable verbose output
             session_id: Optional session ID to continue a previous conversation
         """
         self.model = model
@@ -151,7 +91,6 @@ class ClaudeCodeSession:
         self.disallowed_tools = disallowed_tools or []
         self.working_dir = Path(working_dir) if working_dir else Path.cwd()
         self.execution_dir = Path(execution_dir) if execution_dir else Path.cwd()
-        from ..utils.logging import get_debug
         self.verbose = get_debug()
         self.last_session_id = session_id
         self.session_history: List[str] = []  # Track all session IDs
@@ -185,24 +124,30 @@ class ClaudeCodeSession:
                     print(f"\033[90mUnknown block: {block}\033[0m", flush=True)
 
         elif isinstance(message, SystemMessage):
+            print("system message: ", message)
             if message.subtype == "init":
                 print(f"\033[38;5;95m[System message: {message.subtype}]\033[0m", flush=True)
-                print(f"\033[38;5;95m[System message: {message.data['cwd']}]\033[0m", flush=True)
+                print(f"    \033[38;5;95m[CWD: {message.data['cwd']}]\033[0m", flush=True)
+                print(f"    \033[38;5;95m[Session ID: {message.data['session_id']}]\033[0m", flush=True)
+                print(f"    \033[38;5;95m[Tools: {message.data['tools']}]\033[0m", flush=True)
             else:
                 print(f"\033[38;5;95m[System message: {message.subtype}]\033[0m", flush=True)
-                print(f"\033[38;5;95m[System message: {message.data}]\033[0m", flush=True)
+                print(f"    \033[38;5;95m[System message: {message.data}]\033[0m", flush=True)
 
         elif isinstance(message, UserMessage):
+            # print("user message: ", message)
             for content in message.content:
                 if isinstance(content, ToolResultBlock):
                     color = "\033[91m" if content.is_error else "\033[90m"
-                    if content.content and isinstance(content.content, str):
+                    if isinstance(content.content, str):
                         preview = content.content[:100] + "..." if len(content.content) > 100 else content.content
-                        print(f"{color}[User message: {preview}]\033[0m", flush=True)
+                        print(f"{color}[Tool Result: {preview}]\033[0m", flush=True)
+                    else:
+                        print(f"{color}[Tool Result: {content.content}]\033[0m", flush=True)
                 else:
                     print(f"\033[91m[User message: {content}]\033[0m", flush=True)
-
         else:
+            print("unknown message: ", message)
             print(f"\033[38;5;95m[Unknown message: {message}]\033[0m", flush=True)
 
     async def query_async(
@@ -254,15 +199,13 @@ class ClaudeCodeSession:
             logger.error("Claude Code CLI not found. Please install it.")
             return ClaudeCodeResponse(
                 content="Claude Code CLI not found. Please install it.",
-                raw_output="",
                 tool_calls=[],
                 success=False,
             )
         except ProcessError as e:
             logger.error(f"Claude Code process failed with exit code: {e.exit_code}")
             return ClaudeCodeResponse(
-                content=f"Process failed with exit code: {e.exit_code}",
-                raw_output=str(e),
+                content=f"Process failed with exit code: {e.exit_code} \n {e}",
                 tool_calls=[],
                 success=False,
             )
@@ -270,7 +213,6 @@ class ClaudeCodeSession:
             logger.error(f"Failed to parse Claude Code response: {e}")
             return ClaudeCodeResponse(
                 content=f"Failed to parse response: {e}",
-                raw_output=str(e),
                 tool_calls=[],
                 success=False,
             )
@@ -278,7 +220,6 @@ class ClaudeCodeSession:
             logger.error(f"Unexpected error: {e}")
             return ClaudeCodeResponse(
                 content=f"Unexpected error: {e}",
-                raw_output=str(e),
                 tool_calls=[],
                 success=False,
             )
@@ -287,21 +228,18 @@ class ClaudeCodeSession:
             # Should never happen, but just in case
             return ClaudeCodeResponse(
                 content=f"Command failed",
-                raw_output="",
                 tool_calls=[],
                 success=False,
             )
 
-
         return ClaudeCodeResponse(
                 content=result.result if result.result else "",
-                raw_output=result.result if result.result else "",
-                tool_calls=result.usage if isinstance(result.usage, list) else [result.usage] if result.usage else [],
+                tool_calls=[result.usage] if result.usage else [],
                 success=result.subtype == "success",
                 cost=result.total_cost_usd or 0.0,
-                duration=result.duration_ms or 0,
-                num_turns=result.num_turns or 0,
-                session_id=result.session_id or "",
+                duration=result.duration_ms,
+                num_turns=result.num_turns,
+                session_id=result.session_id,
                 is_finished=result.subtype == "success"
             )
 
@@ -431,7 +369,6 @@ class ClaudeCodeSession:
                 logger.error(f"Exception in iteration {iteration}: {e}")
                 return ClaudeCodeResponse(
                     content=str(e),
-                    raw_output=str(e),
                     tool_calls=[],
                     success=False,
                 )
@@ -470,7 +407,6 @@ class ClaudeCodeSession:
                 logger.error(f"Exception in finish attempt {finish_tries + 1}: {e}")
                 return ClaudeCodeResponse(
                     content=str(e),
-                    raw_output=str(e),
                     tool_calls=[],
                     success=False,
                 )
