@@ -197,14 +197,16 @@ class ClaudeCodeSession:
     async def query_async(
         self,
         prompt: str,
-        output_format: str = "json",
         max_turns: Optional[int] = None,
-        input_data: Optional[str] = None,
         resume_session: Optional[str] = None, # put sesision id when continue or reusme the sesison.
+        continue_session: bool = False, # always show the continuation by resume session id.
     ) -> ClaudeCodeResponse:
         """Execute a query with Claude Code asynchronously."""
 
-        # Determine if we should resume a session
+        if resume_session and continue_session:
+            raise ValueError("resume_session and continue_session cannot be used together")
+
+        # # Determine if we should resume a session
         resume_session_id = None
         if resume_session:
             resume_session_id = resume_session
@@ -215,7 +217,7 @@ class ClaudeCodeSession:
             disallowed_tools=self.disallowed_tools,
             max_turns=max_turns,
             resume=resume_session_id,
-            # continue_conversation=continue_session, # always show the continuation by resume session id.
+            continue_conversation=continue_session, # always show the continuation by resume session id.
             model=self.model,
             cwd=str(self.execution_dir),  # Use working_dir for SDK since it's the scratch space
             permission_mode="default",
@@ -291,9 +293,7 @@ class ClaudeCodeSession:
     def query(
         self,
         prompt: str,
-        output_format: str = "json",
         max_turns: Optional[int] = None,
-        input_data: Optional[str] = None,
         continue_session: bool = False,
     ) -> ClaudeCodeResponse:
         """Execute a query with Claude Code.
@@ -309,18 +309,16 @@ class ClaudeCodeSession:
             ClaudeCodeResponse with the result
         """
 
-        resume_session_id = None
-        if continue_session and self.last_session_id:
-            resume_session_id = self.last_session_id
-            logger.debug(f"Continuing session: {resume_session_id}")
+        # resume_session_id = None
+        # if continue_session and self.last_session_id:
+        #     resume_session_id = self.last_session_id
+        #     logger.debug(f"Continuing session: {resume_session_id}")
 
         # Use asyncio.run to call the async version
         return asyncio.run(self.query_async(
             prompt=prompt,
-            output_format=output_format,
             max_turns=max_turns,
-            input_data=input_data,
-            resume_session=resume_session_id
+            continue_session=continue_session
         ))
 
 
@@ -345,7 +343,6 @@ class ClaudeCodeSession:
         logger.debug(f"Starting cost-limited query (limit=${cost_limit:.2f}, turn_step={turn_step}, continue_session={continue_session})")
 
         total_cost = 0.0
-        session_id = self.last_session_id if continue_session else None
         last_response = None
         iteration = 0
 
@@ -355,12 +352,11 @@ class ClaudeCodeSession:
 
         response = asyncio.run(self.query_async(
             prompt=prompt,
-            output_format="json",
             max_turns=turn_step,
-            # input_data=None,
-            resume_session=session_id # this will continue true for always.
+            continue_session=continue_session # this will continue true for always.
         ))
 
+        session_id = response.session_id
 
         if not response.success:
             return response
@@ -389,7 +385,6 @@ class ClaudeCodeSession:
                 # Use asyncio.run to call the async version
                 response = asyncio.run(self.query_async(
                     prompt="continue",
-                    output_format="json",
                     max_turns=turn_step,
                     resume_session=session_id # this will continue true for always.
                 ))
@@ -431,7 +426,6 @@ class ClaudeCodeSession:
 
                 response = asyncio.run(self.query_async(
                     prompt=prompt,
-                    output_format="json",
                     max_turns=turn_step,
                     resume_session=session_id # this will continue true for always.
                 ))
