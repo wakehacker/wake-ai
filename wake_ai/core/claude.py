@@ -235,7 +235,6 @@ class ClaudeCodeSession:
                             for content in message.content:
                                 if isinstance(content, ToolResultBlock):
                                     if content.is_error:
-                                        subprocess.run(["say", "shit"])
                                         print(f"\033[91m[User message: {content.content}]\033[0m", flush=True)
                                     else:
                                         if content.content and isinstance(content.content, str):
