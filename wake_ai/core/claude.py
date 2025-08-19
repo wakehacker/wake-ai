@@ -198,16 +198,17 @@ class ClaudeCodeSession:
         logger.debug(f"Executing query (format={output_format}, max_turns={max_turns}, continue_session={continue_session}, prompt={prompt[:100]}...)")
 
         # Determine if we should resume a session
-        resume_session_id = None
-        if continue_session and self.last_session_id:
-            resume_session_id = self.last_session_id
-            logger.debug(f"Continuing session: {resume_session_id}")
+        # resume_session_id = None
+        # if continue_session and self.last_session_id:
+        #     resume_session_id = self.last_session_id
+        #     logger.debug(f"Continuing session: {resume_session_id}")
 
         cmd = self._build_command(
             prompt=prompt,
             output_format=output_format,
             max_turns=max_turns,
-            resume_session=resume_session_id
+            resume_session=None,
+            continue_last=continue_session
         )
 
         try:
