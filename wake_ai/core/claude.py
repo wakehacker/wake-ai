@@ -246,13 +246,41 @@ class ClaudeCodeSession:
 
                         else:
                             print(f"\033[38;5;95m[Unknown message: {message}]\033[0m", flush=True)
+        # official excpetion branch.
+        # https://github.com/anthropics/claude-code-sdk-python
 
         except CLINotFoundError:
-            print("Please install Claude Code")
+            logger.error("Claude Code CLI not found. Please install it: https://docs.anthropic.com/en/docs/claude-code")
+            return ClaudeCodeResponse(
+                content="Claude Code CLI not found. Please install it.",
+                raw_output="",
+                tool_calls=[],
+                success=False,
+            )
         except ProcessError as e:
-            print(f"Process failed with exit code: {e.exit_code}")
+            logger.error(f"Claude Code process failed with exit code: {e.exit_code}")
+            return ClaudeCodeResponse(
+                content=f"Process failed with exit code: {e.exit_code}",
+                raw_output=str(e),
+                tool_calls=[],
+                success=False,
+            )
         except CLIJSONDecodeError as e:
-            print(f"Failed to parse response: {e}")
+            logger.error(f"Failed to parse Claude Code response: {e}")
+            return ClaudeCodeResponse(
+                content=f"Failed to parse response: {e}",
+                raw_output=str(e),
+                tool_calls=[],
+                success=False,
+            )
+        except Exception as e:
+            logger.error(f"Unexpected error: {e}")
+            return ClaudeCodeResponse(
+                content=f"Unexpected error: {e}",
+                raw_output=str(e),
+                tool_calls=[],
+                success=False,
+            )
 
         if result is None:
             # Should never happen, but just in case
