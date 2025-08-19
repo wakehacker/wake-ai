@@ -40,10 +40,10 @@ def format_todo_list(todos: List[Dict[str, Any]]) -> None:
 
         print(f"    {color}{icon} [{todo_id}] {content}\033[0m")
 
-def print_top_and_bottom(content: Any, color: str = "\033[38;5;18m") -> None:
+def print_top_and_bottom(content: Any, color: str) -> None:
 
     ### CONSTANT CONFIGURATIONS ###
-    max_lines: int = 20
+    max_lines: int = 10
     show_full_content: bool = False
 
     string_content = str(content)
@@ -56,7 +56,7 @@ def print_top_and_bottom(content: Any, color: str = "\033[38;5;18m") -> None:
             # Show first max_lines lines
             for line in lines[:max_lines]:
                 print(f"{color}{line}\033[0m", flush=True)
-            print(f"{color}... ({len(lines) - max_lines * 2} lines omitted) ...\033[0m", flush=True)
+            print(f"{color}... ({len(lines) - max_lines * 2} lines omitted skip by wake-ai/core/claude.py) ...\033[0m", flush=True)
             # Show last max_lines lines
             for line in lines[-max_lines:]:
                 print(f"{color}{line}\033[0m", flush=True)
@@ -66,22 +66,26 @@ def print_top_and_bottom(content: Any, color: str = "\033[38;5;18m") -> None:
 
 def format_tool_use(block: ToolUseBlock) -> None:
     """Format and print tool usage information."""
-    print(f"\033[90m[Using tool: {block.name}]\033[0m", flush=True)
 
     # Special formatting for TodoWrite
     if block.name == "TodoWrite" and "todos" in block.input:
+        print(f"\033[90m[Using tool: {block.name}]\033[0m", flush=True)
         format_todo_list(block.input.get("todos", []))
     else:
+        slight_pink = "\033[38;5;169m"
+        print(f"{slight_pink}[Using tool: {block.name}]\033[0m", flush=True)
         # Default formatting for other tools
         for key, value in block.input.items():
-            print(f"\033[90m[Tool input: {key}]\033[0m", flush=True)
-            print_top_and_bottom(value)
+            print(f"{slight_pink}[Tool input: {key}]\033[0m", flush=True)
+            print_top_and_bottom(value, slight_pink) # blue is default for tool result.
 
 
 
 def format_tool_result(block: ToolResultBlock) -> None:
     """Format and print tool result information."""
-    color = "\033[91m" if block.is_error else "\033[90m"
+    slight_blue = "\033[38;5;18m"
+    red = "\033[91m"
+    color = red if block.is_error else slight_blue # blue is default for tool result.
     import json
 
     if isinstance(block.content, str):
@@ -92,11 +96,11 @@ def format_tool_result(block: ToolResultBlock) -> None:
             print(f"{color}[Tool Result (JSON)]:\033[0m", flush=True)
             # Pretty print with indentation
             formatted = json.dumps(parsed, indent=2, ensure_ascii=False)
-            print_top_and_bottom(formatted)
+            print_top_and_bottom(formatted, color)
         except (json.JSONDecodeError, ValueError) as e:
             # Not JSON, show as regular string with preview
             print(f"{color}[Tool Result]\033[0m", flush=True)
-            print_top_and_bottom(block.content)
+            print_top_and_bottom(block.content, color)
     elif isinstance(block.content, list):
         #  list[dict[str, Any]] result.
         for item in block.content:
@@ -109,19 +113,19 @@ def format_tool_result(block: ToolResultBlock) -> None:
                     parsed = json.loads(text_content)
                     print(f"{color}[Tool Result (JSON)]:\033[0m", flush=True)
                     formatted = json.dumps(parsed, indent=2, ensure_ascii=False)
-                    print_top_and_bottom(formatted)
+                    print_top_and_bottom(formatted, color)
                 else:
                     # No text field or not a dict, show as-is
                     print(f"{color}[Tool Result]\033[0m", flush=True)
-                    print_top_and_bottom(item)
+                    print_top_and_bottom(item, color)
             except json.JSONDecodeError:
                 # Text exists but isn't valid JSON, show as plain text
                 print(f"{color}[Tool Result]\033[0m", flush=True)
-                print_top_and_bottom(text_content)
+                print_top_and_bottom(text_content, color)
             except Exception:
                 # Any other error, show the item as-is
                 print(f"{color}[Tool Result]\033[0m", flush=True)
-                print_top_and_bottom(item)
+                print_top_and_bottom(item, color)
 
 
     else: # None
@@ -340,7 +344,9 @@ class ClaudeCodeSession:
         # resume_session_id = None
         # if continue_session and self.last_session_id:
         #     resume_session_id = self.last_session_id
-        #     logger.debug(f"Continuing session: {resume_session_id}")
+
+        if continue_session:
+            logger.debug(f"Continuing session: {continue_session}")
 
         # Use asyncio.run to call the async version
         return asyncio.run(self.query_async(
