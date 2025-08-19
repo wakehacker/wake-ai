@@ -21,3 +21,7 @@ def set_debug(debug: bool) -> None:
     _debug = debug
     for name in _created_logger_names:
         get_logger(name).setLevel(logging.DEBUG if _debug else logging.INFO)
+
+
+def get_debug() -> bool:
+    return _debug
