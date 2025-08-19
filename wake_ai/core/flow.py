@@ -62,7 +62,6 @@ class WorkflowStep:
         max_retries: Maximum number of retries if validation fails
         continue_session: Whether to continue the Claude session from previous step (default: False)
         condition: Optional function that takes context and returns bool. Step is skipped if False.
-        progress_weight: Weight of this step for progress calculation (default: 1.0)
         _post_hook: Internal post-processing function (not exposed to users)
     """
 
@@ -76,7 +75,6 @@ class WorkflowStep:
     max_retries: int = 3
     continue_session: bool = False
     condition: Optional[Callable[[Dict[str, Any]], bool]] = None
-    progress_weight: float = 1.0
     _post_hook: Optional[Callable[['AIWorkflow', ClaudeCodeResponse], None]] = field(default=None, repr=False)
 
     def format_prompt(self, context: Dict[str, Any]) -> str:
@@ -135,7 +133,6 @@ class WorkflowState:
     completed_at: Optional[datetime] = None
     cumulative_cost: float = 0.0
     progress_percentage: float = 0.0
-    step_weights: Dict[str, float] = field(default_factory=dict)
 
 
 class AIWorkflow(ABC):
@@ -304,7 +301,6 @@ class AIWorkflow(ABC):
                  max_retry_cost: Optional[float] = None,
                  continue_session: bool = False,
                  condition: Optional[Callable[[Dict[str, Any]], bool]] = None,
-                 progress_weight: float = 1.0,
                  after_step: Optional[str] = None):
         """Add a step to the workflow.
 
@@ -320,7 +316,6 @@ class AIWorkflow(ABC):
             max_retry_cost: Maximum cost for retry attempts (defaults to max_cost)
             continue_session: Whether to continue the Claude session from previous step (default: False)
             condition: Optional function that takes context and returns bool. Step is skipped if False.
-            progress_weight: Weight of this step for progress calculation (default: 1.0)
             after_step: Optional step name after which to insert this step. If None, appends to end.
         """
         step = WorkflowStep(
@@ -333,8 +328,7 @@ class AIWorkflow(ABC):
             max_retries=max_retries,
             max_retry_cost=max_retry_cost,
             continue_session=continue_session,
-            condition=condition,
-            progress_weight=progress_weight
+            condition=condition
         )
 
         if after_step is None:
@@ -549,7 +543,7 @@ class AIWorkflow(ABC):
 
                         # Update progress after step completion
                         try:
-                            step_msg = f"Completed step '{step.name}' ({self.state.current_step}/{len(self.steps)})"
+                            step_msg = f"Completed step '{step.name}' ({len(self.state.completed_steps)}/{len(self.steps)})"
                             self.update_progress(step_msg)
                         except Exception as e:
                             logger.debug(f"Failed to update progress: {e}")
@@ -736,8 +730,7 @@ class AIWorkflow(ABC):
             "context": self.state.context,
             "errors": self.state.errors,
             "cumulative_cost": self.state.cumulative_cost,
-            "progress_percentage": self.state.progress_percentage,
-            "step_weights": self.state.step_weights
+            "progress_percentage": self.state.progress_percentage
         }
         state_file = self.working_dir / f"{self.name}_state.json"
         state_file.write_text(json.dumps(state_data, indent=2))
@@ -750,12 +743,11 @@ class AIWorkflow(ABC):
         data = json.loads(state_file.read_text())
         self.state.current_step = data["current_step"]
         self.state.completed_steps = data["completed_steps"]
-        self.state.skipped_steps = data.get("skipped_steps", [])  # Backwards compatibility
+        self.state.skipped_steps = data["skipped_steps"]
         self.state.context = data["context"]
         self.state.errors = data["errors"]
-        self.state.cumulative_cost = data.get("cumulative_cost", 0.0)  # Backwards compatibility
-        self.state.progress_percentage = data.get("progress_percentage", 0.0)  # Backwards compatibility
-        self.state.step_weights = data.get("step_weights", {})  # Backwards compatibility
+        self.state.cumulative_cost = data["cumulative_cost"]
+        self.state.progress_percentage = data["progress_percentage"]
         logger.debug(f"Loaded state: step {self.state.current_step}/{len(self.steps)}, completed: {len(self.state.completed_steps)}")
 
         # Update progress bar if resuming
@@ -822,17 +814,14 @@ class AIWorkflow(ABC):
         if force_percentage is not None:
             percentage = max(0.0, min(1.0, force_percentage))
         else:
-            # Calculate based on completed steps and weights
+            # Calculate based on completed steps (simple step counting)
             if not self.steps:
                 percentage = 0.0
             else:
-                total_weight = sum(step.progress_weight for step in self.steps)
-                completed_weight = sum(
-                    step.progress_weight for step in self.steps
-                    if step.name in self.state.completed_steps
-                )
-
-                percentage = completed_weight / total_weight if total_weight > 0 else 0.0
+                total_steps = len(self.steps)
+                completed_steps = len(self.state.completed_steps)
+                
+                percentage = completed_steps / total_steps if total_steps > 0 else 0.0
                 percentage = max(0.0, min(1.0, percentage))
 
         # Update state
