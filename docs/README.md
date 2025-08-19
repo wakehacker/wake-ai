@@ -540,58 +540,6 @@ wake-ai audit
 wake-ai --no-progress audit
 ```
 
-#### Step Weighting
-
-Steps can have different weights to provide more accurate progress calculation:
-
-```python
-class MyWorkflow(AIWorkflow):
-    def _setup_steps(self):
-        # Light analysis step (default weight: 1.0)
-        self.add_step(
-            name="quick_scan",
-            prompt_template="Quick vulnerability scan...",
-            progress_weight=1.0
-        )
-
-        # Heavy analysis step (counts 3x more)
-        self.add_step(
-            name="deep_analysis",
-            prompt_template="Comprehensive analysis...",
-            progress_weight=3.0  # This step represents 75% of total work
-        )
-
-        # Final report (light step)
-        self.add_step(
-            name="report",
-            prompt_template="Generate report...",
-            progress_weight=1.0
-        )
-        # Total weight: 1.0 + 3.0 + 1.0 = 5.0
-        # Progress: 0% → 20% → 80% → 100%
-```
-
-#### Progress Behavior
-
-Progress tracking follows these principles:
-- **Progress only moves forward when steps complete** - no confusing jumps during retries
-- **Status messages update during execution** - users see validation, retries, etc.
-- **Accurate percentage calculation** - based on step weights and completion
-- **Resume support** - progress state is preserved across workflow interruptions
-
-```python
-# Example progress flow:
-# 0%   - Starting workflow
-# 0%   - Starting 'analyze' (1/3)       [message only]
-# 0%   - Executing 'analyze' with Claude [message only]
-# 0%   - Validating 'analyze' output     [message only]
-# 33%  - Completed 'analyze' (1/3)       [progress advances]
-# 33%  - Starting 'detect' (2/3)         [message only]
-# 33%  - Retrying 'detect' (attempt 2/3) [message only]
-# 67%  - Completed 'detect' (2/3)        [progress advances]
-# 100% - Workflow completed!
-```
-
 #### External Progress Hooks
 
 Integrate progress tracking with external applications using progress hooks:
