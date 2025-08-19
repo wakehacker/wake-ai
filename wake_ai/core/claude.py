@@ -4,6 +4,9 @@ import asyncio
 import json
 import logging
 import subprocess
+import signal
+import sys
+import atexit
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Union, AsyncIterator
 from dataclasses import dataclass
@@ -13,6 +16,7 @@ from claude_code_sdk import (ClaudeCodeOptions, AssistantMessage, ResultMessage,
 
 # Set up logging
 logger = logging.getLogger(__name__)
+
 
 
 def format_todo_list(todos: List[Dict[str, Any]]) -> None:
@@ -36,6 +40,29 @@ def format_todo_list(todos: List[Dict[str, Any]]) -> None:
 
         print(f"    {color}{icon} [{todo_id}] {content}\033[0m")
 
+def print_top_and_bottom(content: Any, color: str = "\033[38;5;18m") -> None:
+
+    ### CONSTANT CONFIGURATIONS ###
+    max_lines: int = 20
+    show_full_content: bool = False
+
+    string_content = str(content)
+    if show_full_content:
+        for line in string_content.split('\n'):
+            print(f"{color}{line}\033[0m", flush=True)
+    else:
+        lines = string_content.split('\n')
+        if len(lines) > max_lines * 2:
+            # Show first max_lines lines
+            for line in lines[:max_lines]:
+                print(f"{color}{line}\033[0m", flush=True)
+            print(f"{color}... ({len(lines) - max_lines * 2} lines omitted) ...\033[0m", flush=True)
+            # Show last max_lines lines
+            for line in lines[-max_lines:]:
+                print(f"{color}{line}\033[0m", flush=True)
+        else:
+            print(f"{color}{string_content}\033[0m", flush=True)
+
 
 def format_tool_use(block: ToolUseBlock) -> None:
     """Format and print tool usage information."""
@@ -47,7 +74,10 @@ def format_tool_use(block: ToolUseBlock) -> None:
     else:
         # Default formatting for other tools
         for key, value in block.input.items():
-            print(f"  \033[90m[Tool input: {key}: {value}]\033[0m", flush=True)
+            print(f"\033[90m[Tool input: {key}]\033[0m", flush=True)
+            print_top_and_bottom(value)
+
+
 
 def format_tool_result(block: ToolResultBlock) -> None:
     """Format and print tool result information."""
@@ -62,12 +92,11 @@ def format_tool_result(block: ToolResultBlock) -> None:
             print(f"{color}[Tool Result (JSON)]:\033[0m", flush=True)
             # Pretty print with indentation
             formatted = json.dumps(parsed, indent=2, ensure_ascii=False)
-            for line in formatted.split('\n'):
-                print(f"{color}  {line}\033[0m", flush=True)
+            print_top_and_bottom(formatted)
         except (json.JSONDecodeError, ValueError) as e:
             # Not JSON, show as regular string with preview
             print(f"{color}[Tool Result]\033[0m", flush=True)
-            print(f"{color}{block.content}\033[0m", flush=True)
+            print_top_and_bottom(block.content)
     elif isinstance(block.content, list):
         #  list[dict[str, Any]] result.
         for item in block.content:
@@ -80,20 +109,19 @@ def format_tool_result(block: ToolResultBlock) -> None:
                     parsed = json.loads(text_content)
                     print(f"{color}[Tool Result (JSON)]:\033[0m", flush=True)
                     formatted = json.dumps(parsed, indent=2, ensure_ascii=False)
-                    for line in formatted.split('\n'):
-                        print(f"{color}  {line}\033[0m", flush=True)
+                    print_top_and_bottom(formatted)
                 else:
                     # No text field or not a dict, show as-is
                     print(f"{color}[Tool Result]\033[0m", flush=True)
-                    print(f"{color}{item}\033[0m", flush=True)
+                    print_top_and_bottom(item)
             except json.JSONDecodeError:
                 # Text exists but isn't valid JSON, show as plain text
                 print(f"{color}[Tool Result]\033[0m", flush=True)
-                print(f"{color}{text_content}\033[0m", flush=True)
+                print_top_and_bottom(text_content)
             except Exception:
                 # Any other error, show the item as-is
                 print(f"{color}[Tool Result]\033[0m", flush=True)
-                print(f"{color}{item}\033[0m", flush=True)
+                print_top_and_bottom(item)
 
 
     else: # None
