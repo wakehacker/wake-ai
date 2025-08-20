@@ -30,7 +30,7 @@ pip install wake-ai
 wake-ai audit
 
 # Detect reentrancy vulnerabilities
-wake-ai detect-reentrancy
+wake-ai reentrancy
 ```
 
 ## Why Wake AI?
@@ -95,7 +95,7 @@ Communication happens through files. One agent writes findings, another reads an
 By default, workflows are configured to automatically clean up their working directories after successful completion. This behavior can be overridden either within the `Workflow` class for specific workflows, or on the command line:
 
 ```bash
-wake-ai audit --working-dir .audit/ --no-cleanup  # Preserve working directory
+wake-ai --working-dir .audit/ --no-cleanup audit  # Preserve working directory
 ```
 
 Some workflows might not require structured outputs and instead provide results within the working directory. An example of this could be a specialized `audit` workflow, where the output is written to markdown files in the working directory, which a human auditor can then review after the workflow has finished.

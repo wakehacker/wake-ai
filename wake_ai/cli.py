@@ -31,7 +31,7 @@ if not root_logger.handlers:
 logger = get_logger(__name__)
 
 
-class WorkflowGroup(click.Group):
+class WorkflowGroup(click.RichGroup):
     _current_plugin: Optional[str] = None
     _loading_from_plugins: bool = False
     _plugins_loaded: bool = False
