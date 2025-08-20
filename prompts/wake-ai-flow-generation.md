@@ -968,7 +968,7 @@ When asked to create a workflow, provide:
 3. **Usage Example**:
    ```bash
    # CLI usage
-   wake-ai my-workflow --scope contract.sol --verbose
+   wake-ai --verbose my-workflow --scope contract.sol
 
    # Python usage (for programmatic access)
    from flows.my_workflow import MyWorkflow

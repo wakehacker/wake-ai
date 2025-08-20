@@ -104,7 +104,7 @@ wake-ai uniswap
 wake-ai audit -s contracts/Token.sol -s contracts/Vault.sol
 
 # Export results
-wake-ai audit --export results.json
+wake-ai --export results.json audit
 
 # Resume interrupted workflow
 wake-ai --resume
