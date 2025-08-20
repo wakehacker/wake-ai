@@ -31,6 +31,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
+from functools import wraps
 
 import rich_click as click
 from jinja2 import Environment, StrictUndefined, Template, meta
@@ -44,6 +45,19 @@ from ..utils.logging import get_logger
 
 # Set up logging
 logger = get_logger(__name__)
+
+
+def require_initialized(func):
+    """Decorator to ensure __init__ was called on AIWorkflow instances."""
+    @wraps(func)
+    def wrapper(self, *args, **kwargs):
+        if isinstance(self, AIWorkflow) and not getattr(self, '_init_called', False):
+            raise RuntimeError(
+                f"AIWorkflow.__init__() was not called. "
+                f"Make sure to call super().__init__(...) in {self.__class__.__name__}.__init__()"
+            )
+        return func(self, *args, **kwargs)
+    return wrapper
 
 
 @dataclass
@@ -150,6 +164,7 @@ class AIWorkflow(ABC):
     steps: List[WorkflowStep]
     state: WorkflowState
     _dynamic_generators: Dict[str, Callable[[ClaudeCodeResponse, Dict[str, Any]], List[WorkflowStep]]]
+    _init_called: bool
 
     def __init__(
         self,
@@ -294,6 +309,9 @@ class AIWorkflow(ABC):
         self._task_id: Optional[int] = None
         self._progress_hook: Optional[Callable[[float, str], None]] = None
 
+        # Mark that __init__ was called
+        self._init_called = True
+
     @classmethod
     def _get_model_rank(cls, model: str) -> int:
         """Get the hierarchy rank of a model."""
@@ -316,6 +334,7 @@ class AIWorkflow(ABC):
         """Setup workflow steps. Must be implemented by subclasses."""
         pass
 
+    @require_initialized
     def add_step(self, name: str, prompt_template: str, allowed_tools: Optional[List[str]] = None,
                  disallowed_tools: Optional[List[str]] = None,
                  max_cost: Optional[float] = None,
@@ -381,6 +400,7 @@ class AIWorkflow(ABC):
 
         logger.debug(f"Added step '{name}' to workflow (allowed_tools: {allowed_tools}, max_cost: {max_cost}, after: {after_step})")
 
+    @require_initialized
     def add_dynamic_steps(self, name: str, generator: Callable[[ClaudeCodeResponse, Dict[str, Any]], List[WorkflowStep]],
                          after_step: Optional[str] = None):
         """Add a dynamic step generator that creates new steps at runtime.
@@ -413,6 +433,7 @@ class AIWorkflow(ABC):
         self._dynamic_generators[after_step] = generator
         logger.debug(f"Added dynamic step generator '{name}' after step '{after_step}'")
 
+    @require_initialized
     def execute(self, context: Optional[Dict[str, Any]] = None, resume: bool = False) -> Tuple[Dict[str, Any], AIResult]:
         """Execute the workflow.
 
@@ -807,22 +828,27 @@ class AIWorkflow(ABC):
         except Exception as e:
             logger.debug(f"Failed to update progress on resume: {e}")
 
+    @require_initialized
     def add_context(self, key: str, value: Any):
         """Add a context variable."""
         self.state.context[key] = value
 
+    @require_initialized
     def get_context(self, key: str) -> Any:
         """Get a context variable."""
         return self.state.context.get(key)
 
+    @require_initialized
     def get_context_keys(self) -> List[str]:
         """Get all context keys."""
         return list(self.state.context.keys())
 
+    @require_initialized
     def get_cumulative_cost(self) -> float:
         """Get the cumulative cost of all steps executed so far."""
         return self.state.cumulative_cost
 
+    @require_initialized
     def set_progress_hook(self, hook: Optional[Callable[[float, str], None]]) -> None:
         """Set external progress update hook.
 
@@ -831,6 +857,7 @@ class AIWorkflow(ABC):
         """
         self._progress_hook = hook
 
+    @require_initialized
     def update_progress_message(self, message: str) -> None:
         """Update only the progress message without changing percentage.
 
@@ -854,6 +881,7 @@ class AIWorkflow(ABC):
             except Exception as e:
                 logger.warning(f"Progress hook failed: {e}")
 
+    @require_initialized
     def update_progress(self, message: str = "", force_percentage: Optional[float] = None) -> None:
         """Update workflow progress.
 
@@ -934,6 +962,7 @@ class AIWorkflow(ABC):
                 self._task_id = None
                 logger.debug("Cleaned up progress bar")
 
+    @require_initialized
     def format_results(self, results: Dict[str, Any]) -> AIResult:
         """Convert workflow results to an AIResult object.
 
@@ -1000,6 +1029,7 @@ class AIWorkflow(ABC):
                 return (False, [f"Schema validation failed: {str(e)}"])
         return validator
 
+    @require_initialized
     def add_extraction_step(
         self,
         after_step: str,
