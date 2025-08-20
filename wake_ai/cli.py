@@ -310,13 +310,13 @@ if __name__ == "__main__":
     main()
 
 @main.result_callback()
-def factory_callback(workflow: AIWorkflow, model: str, resume: bool, working_dir: str | None, execution_dir: str | None, no_cleanup: bool, export: str | None, no_progress: bool, **kwargs):
+def factory_callback(workflow: Optional[AIWorkflow], model: str, resume: bool, working_dir: str | None, execution_dir: str | None, no_cleanup: bool, export: str | None, no_progress: bool, **kwargs):
     ctx = click.get_current_context()
     workflow_name = ctx.invoked_subcommand
 
     # Skip if no workflow was invoked
     if workflow is None:
-        console.print("[yellow]No workflow was selected. Use --help to see available workflows.[/yellow]")
+        click.echo(ctx.get_help())
         return
 
     try:
