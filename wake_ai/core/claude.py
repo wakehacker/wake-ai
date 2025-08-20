@@ -12,125 +12,32 @@ from typing import Dict, List, Optional, Any, Union, AsyncIterator
 from dataclasses import dataclass
 from wake_ai.utils.logging import get_debug
 
-from claude_code_sdk import (ClaudeCodeOptions, AssistantMessage, ResultMessage, ToolUseBlock, TextBlock, query, SystemMessage, ToolResultBlock, UserMessage, CLINotFoundError, ProcessError, CLIJSONDecodeError)
+from rich.console import Console
+
+from claude_code_sdk import (ClaudeCodeOptions, AssistantMessage, ResultMessage, ToolUseBlock, TextBlock, query, SystemMessage, ToolResultBlock, UserMessage, CLINotFoundError, ProcessError, CLIJSONDecodeError, Message)
 
 # Set up logging
 logger = logging.getLogger(__name__)
 
 
-
-def format_todo_list(todos: List[Dict[str, Any]]) -> None:
-    """Format and print a todo list with icons and colors."""
-    if not todos:
-        return
-
-    print(f"\033[94m  📋 Todo List:\033[0m")
-    for todo in todos:
-        status = todo.get("status", "pending")
-        content = todo.get("content", "")
-        todo_id = todo.get("id", "")
-
-        # Choose icon and color based on status
-        if status == "completed":
-            icon, color = "✅", "\033[92m"  # Green
-        elif status == "in_progress":
-            icon, color = "🔄", "\033[93m"  # Yellow
-        else:  # pending
-            icon, color = "⏳", "\033[90m"  # Gray
-
-        print(f"    {color}{icon} [{todo_id}] {content}\033[0m")
-
-def print_top_and_bottom(content: Any, color: str) -> None:
-
-    ### CONSTANT CONFIGURATIONS ###
-    max_lines: int = 10
-    show_full_content: bool = False
-
-    string_content = str(content)
-    if show_full_content:
-        for line in string_content.split('\n'):
-            print(f"{color}{line}\033[0m", flush=True)
-    else:
-        lines = string_content.split('\n')
-        if len(lines) > max_lines * 2:
-            # Show first max_lines lines
-            for line in lines[:max_lines]:
-                print(f"{color}{line}\033[0m", flush=True)
-            print(f"{color}... ({len(lines) - max_lines * 2} lines omitted skip by wake-ai/core/claude.py) ...\033[0m", flush=True)
-            # Show last max_lines lines
-            for line in lines[-max_lines:]:
-                print(f"{color}{line}\033[0m", flush=True)
-        else:
-            print(f"{color}{string_content}\033[0m", flush=True)
-
-
-def format_tool_use(block: ToolUseBlock) -> None:
-    """Format and print tool usage information."""
-
-    # Special formatting for TodoWrite
-    if block.name == "TodoWrite" and "todos" in block.input:
-        print(f"\033[90m[Using tool: {block.name}]\033[0m", flush=True)
-        format_todo_list(block.input.get("todos", []))
-    else:
-        slight_pink = "\033[38;5;169m"
-        print(f"{slight_pink}[Using tool: {block.name}]\033[0m", flush=True)
-        # Default formatting for other tools
-        for key, value in block.input.items():
-            print(f"{slight_pink}[Tool input: {key}]\033[0m", flush=True)
-            print_top_and_bottom(value, slight_pink) # blue is default for tool result.
-
-
-
-def format_tool_result(block: ToolResultBlock) -> None:
-    """Format and print tool result information."""
-    slight_blue = "\033[38;5;18m"
-    red = "\033[91m"
-    color = red if block.is_error else slight_blue # blue is default for tool result.
-    import json
-
-    if isinstance(block.content, str):
-        # Try to parse as JSON for pretty printing
-        # string result
-        try:
-            parsed = json.loads(block.content)
-            print(f"{color}[Tool Result (JSON)]:\033[0m", flush=True)
-            # Pretty print with indentation
-            formatted = json.dumps(parsed, indent=2, ensure_ascii=False)
-            print_top_and_bottom(formatted, color)
-        except (json.JSONDecodeError, ValueError) as e:
-            # Not JSON, show as regular string with preview
-            print(f"{color}[Tool Result]\033[0m", flush=True)
-            print_top_and_bottom(block.content, color)
-    elif isinstance(block.content, list):
-        #  list[dict[str, Any]] result.
-        for item in block.content:
-            # Try to get text field if it exists
-            text_content = item.get('text') if hasattr(item, 'get') else None
-
-            try:
-                if text_content:
-                    # Try to parse as JSON
-                    parsed = json.loads(text_content)
-                    print(f"{color}[Tool Result (JSON)]:\033[0m", flush=True)
-                    formatted = json.dumps(parsed, indent=2, ensure_ascii=False)
-                    print_top_and_bottom(formatted, color)
-                else:
-                    # No text field or not a dict, show as-is
-                    print(f"{color}[Tool Result]\033[0m", flush=True)
-                    print_top_and_bottom(item, color)
-            except json.JSONDecodeError:
-                # Text exists but isn't valid JSON, show as plain text
-                print(f"{color}[Tool Result]\033[0m", flush=True)
-                print_top_and_bottom(text_content, color)
-            except Exception:
-                # Any other error, show the item as-is
-                print(f"{color}[Tool Result]\033[0m", flush=True)
-                print_top_and_bottom(item, color)
-
-
-    else: # None
-        print(f"{color}[Tool Result: Without any result]\033[0m", flush=True)
-
+## VERBOSE MODE CONFIGURATIONS ###
+MAX_TOOL_RESULT_LINES: int = 10
+SHOW_FULL_TOOL_RESULT: bool = False
+COLORS = {
+    "todo_header": "bold blue",
+    "todo_complete": "bold green",
+    "todo_progress": "yellow",
+    "todo_pending": "dim white",
+    "tool_use": "bright_magenta",
+    "tool_input": "magenta",
+    "tool_result": "bright_cyan",
+    "tool_result_json": "cyan",
+    "tool_error": "bold red",
+    "system_msg": "purple",
+    "thinking": "dim white",
+    "unknown": "dim red",
+    "truncation": "dim italic yellow"
+}
 
 @dataclass
 class ClaudeCodeResponse:
@@ -151,12 +58,14 @@ class ClaudeCodeSession:
 
     def __init__(
         self,
+        console: Console,
         model: str = "sonnet",
         allowed_tools: Optional[List[str]] = None,
         disallowed_tools: Optional[List[str]] = None,
         working_dir: Optional[Union[str, Path]] = None,
         execution_dir: Optional[Union[str, Path]] = None,
-        session_id: Optional[str] = None
+        session_id: Optional[str] = None,
+
     ):
         """Initialize Claude Code session.
 
@@ -176,6 +85,7 @@ class ClaudeCodeSession:
         self.verbose = get_debug()
         self.last_session_id = session_id
         self.session_history: List[str] = []  # Track all session IDs
+        self.console = console
 
         if session_id:
             self.session_history.append(session_id)
@@ -191,40 +101,159 @@ class ClaudeCodeSession:
         validate_claude_cli()
 
 
-    def handle_verbose_message(self, message) -> None:
-        """Handle verbose message formatting."""
+    def format_todo_list(self, todos: List[Dict[str, Any]]) -> None:
+        """Format and print a todo list with Rich colors."""
+
+        # Use console.print with no_wrap to work with progress bars
+        self.console.print(f"  📋 [{COLORS['todo_header']}]Todo List:[/{COLORS['todo_header']}]", highlight=False)
+        for todo in todos:
+            status = todo.get("status", "pending")
+            content = todo.get("content", "")
+            todo_id = todo.get("id", "")
+
+            # Choose icon and style based on status
+            if status == "completed":
+                icon = "✅"
+                style = COLORS['todo_complete']
+            elif status == "in_progress":
+                icon = "🔄"
+                style = COLORS['todo_progress']
+            else:  # pending
+                icon = "⏳"
+                style = COLORS['todo_pending']
+
+            self.console.print(f"    {icon} [[{style}]{todo_id}[/{style}]] {content}", highlight=False)
+
+    def print_top_and_bottom(self, content: Any, style: str) -> None:
+        """Print content with truncation using Rich."""
+
+        if style is None:
+            style = COLORS['tool_result']
+
+        string_content = str(content)
+        lines = string_content.split('\n')
+
+        if SHOW_FULL_TOOL_RESULT or len(lines) <= MAX_TOOL_RESULT_LINES * 2:
+            # Show all content
+            for line in lines:
+                self.console.print(line, style=style, highlight=False)
+        else:
+            # Show truncated content
+            # First lines
+            for line in lines[:MAX_TOOL_RESULT_LINES]:
+                self.console.print(line, style=style, highlight=False)
+
+            # Omission message
+            omitted = len(lines) - MAX_TOOL_RESULT_LINES * 2
+            self.console.print(
+                f"[{COLORS['truncation']}]... ({omitted} lines omitted by wake-ai) ...[/{COLORS['truncation']}]",
+                highlight=False
+            )
+
+            # Last lines
+            for line in lines[-MAX_TOOL_RESULT_LINES:]:
+                self.console.print(line, style=style, highlight=False)
+
+
+    def format_tool_use(self, block: ToolUseBlock) -> None:
+        """Format and print tool usage with Rich."""
+
+        # Special formatting for TodoWrite
+        if block.name == "TodoWrite" and "todos" in block.input:
+            self.console.print(f"[{COLORS['tool_use']}]Using tool: {block.name}[/{COLORS['tool_use']}]")
+            self.format_todo_list(block.input.get("todos", []))
+        else:
+            self.console.print(f"[{COLORS['tool_use']}]Using tool: {block.name}[/{COLORS['tool_use']}]")
+            # Default formatting for other tools
+            for key, value in block.input.items():
+                self.console.print(f"[{COLORS['tool_input']}]Tool input: {key}[/{COLORS['tool_input']}]")
+                self.print_top_and_bottom(value, style=COLORS['tool_input'])
+
+
+
+    def format_tool_result(self, block: ToolResultBlock) -> None:
+        """Format and print tool results with Rich."""
+
+        # Choose style based on error state
+        if block.is_error:
+            header_style = COLORS['tool_error']
+            content_style = "red"
+        else:
+            header_style = COLORS['tool_result']
+            content_style = COLORS['tool_result_json']
+
+        if isinstance(block.content, str):
+            # Try to parse as JSON for pretty printing
+            try:
+                parsed = json.loads(block.content)
+                self.console.print(f"[{header_style}]Tool Result (JSON):[/{header_style}]")
+                # Use Rich's built-in JSON formatter with log
+                from rich.json import JSON
+                self.console.print(JSON(json.dumps(parsed), indent=2))
+            except (json.JSONDecodeError, ValueError):
+                # Not JSON, show as regular text
+                self.console.print(f"[{header_style}]Tool Result:[/{header_style}]")
+                self.print_top_and_bottom(block.content, style=content_style)
+        elif isinstance(block.content, list):
+            # Handle list results
+            for item in block.content:
+                text_content = item.get('text') if hasattr(item, 'get') else None
+
+                try:
+                    if text_content:
+                        parsed = json.loads(text_content)
+                        self.console.print(f"[{header_style}]Tool Result (JSON):[/{header_style}]")
+                        self.console.print_json(json.dumps(parsed), indent=2)
+                    else:
+                        self.console.print(f"[{header_style}]Tool Result:[/{header_style}]")
+                        self.print_top_and_bottom(item, style=content_style)
+                except json.JSONDecodeError:
+                    self.console.print(f"[{header_style}]Tool Result:[/{header_style}]")
+                    self.print_top_and_bottom(text_content, style=content_style)
+                except Exception:
+                    self.console.print(f"[{header_style}]Tool Result:[/{header_style}]")
+                    self.print_top_and_bottom(item, style=content_style)
+        else:
+            # None or other type
+            self.console.print(f"[{header_style}]Tool Result: No content[/{header_style}]")
+
+
+    def handle_verbose_message(self, message: Message) -> None:
+        """Handle verbose message formatting with Rich."""
         if isinstance(message, AssistantMessage):
             for block in message.content:
                 if isinstance(block, ToolResultBlock):
                     # general tool result.
-                    format_tool_result(block)
+                    self.format_tool_result(block)
                 elif isinstance(block, TextBlock):
                     # general thinking text.
-                    print(f"\033[90m{block.text}\033[0m", flush=True)
+                    self.console.print(block.text, style=COLORS['thinking'])
                 elif isinstance(block, ToolUseBlock):
-                    format_tool_use(block)
+                    self.format_tool_use(block)
                 else:
-                    print(f"\033[90mUnknown block: {block}\033[0m", flush=True)
+                    self.console.print(f"[{COLORS['unknown']}]Unknown block: {block}[/{COLORS['unknown']}]")
 
         elif isinstance(message, SystemMessage):
             if message.subtype == "init":
-                print(f"\033[38;5;95m[System message: {message.subtype}]\033[0m", flush=True)
-                print(f"    \033[38;5;95m[CWD: {message.data['cwd']}]\033[0m", flush=True)
-                print(f"    \033[38;5;95m[Session ID: {message.data['session_id']}]\033[0m", flush=True)
+                self.console.print(f"[{COLORS['system_msg']}]System: {message.subtype}[/{COLORS['system_msg']}]")
+                self.console.print(f"    [{COLORS['system_msg']}]CWD: {message.data.get('cwd', 'N/A')}[/{COLORS['system_msg']}]")
+                self.console.print(f"    [{COLORS['system_msg']}]Session: {message.data.get('session_id', 'N/A')}[/{COLORS['system_msg']}]")
             else:
-                print(f"\033[38;5;95m[System message: {message.subtype}]\033[0m", flush=True)
-                print(f"    \033[38;5;95m[System message: {message.data}]\033[0m", flush=True)
+                self.console.print(f"[{COLORS['system_msg']}]System: {message.subtype}[/{COLORS['system_msg']}]")
+                self.console.print(f"    [{COLORS['system_msg']}]{message.data}[/{COLORS['system_msg']}]")
 
         elif isinstance(message, UserMessage):
             for content in message.content:
                 if isinstance(content, ToolResultBlock):
                     # special tool result. like mcp server.
-                    format_tool_result(content)
+                    self.format_tool_result(content)
                 else:
-                    print(f"\033[91m[UnknownUser message: {content}]\033[0m", flush=True)
+                    self.console.print(f"[{COLORS['unknown']}]Unknown user content: {content}[/{COLORS['unknown']}]")
         else:
-            print(f"\033[38;5;95munknown message: {message}\033[0m")
-            print(f"\033[38;5;95m[Unknown message: {message}]\033[0m", flush=True)
+            self.console.print(f"[{COLORS['unknown']}]Unknown message: {message}[/{COLORS['unknown']}]")
+
+
+
 
     async def query_async(
         self,
@@ -516,7 +545,7 @@ class ClaudeCodeSession:
         logger.debug(f"Saved session state to {state_path} (sessions={len(self.session_history)}, last={self.last_session_id})")
 
     @classmethod
-    def load_session_state(cls, state_file: Union[str, Path]) -> tuple["ClaudeCodeSession", str]:
+    def load_session_state(cls, state_file: Union[str, Path], console: Console) -> tuple["ClaudeCodeSession", str]:
         """Load a saved session state.
 
         Args:
@@ -542,7 +571,8 @@ class ClaudeCodeSession:
                 disallowed_tools=state.get("disallowed_tools", []),
                 working_dir=state.get("working_dir"),
                 execution_dir=state.get("execution_dir"),
-                session_id=last_session_id
+                session_id=last_session_id,
+                console=console
             )
 
             # Restore the full session history
