@@ -41,20 +41,8 @@ class UniswapDetector(SimpleDetector):
 
         prompt = f"""# Uniswap Integration Security Analysis
 
-<task>
-Perform comprehensive security analysis of Uniswap protocol integrations, identifying vulnerabilities specific to V2/V3 implementations
-</task>
-
-<context>
-{version_context}
 This detector identifies vulnerabilities in contracts that integrate with Uniswap, including DEX aggregators, yield farms, lending protocols, and other DeFi applications.
-</context>
-
-<working_dir>
-Work in the assigned directory `{{working_dir}}` to store analysis results.
-</working_dir>
-
-<steps>
+{version_context}
 
 1. **Initialize and identify Uniswap integrations**
    - Scan for Uniswap interface imports (IUniswapV2*, IUniswapV3*)
@@ -157,21 +145,6 @@ Work in the assigned directory `{{working_dir}}` to store analysis results.
       - Check for proper event emissions
       - Validate input parameters thoroughly
 
-</steps>
-
-<validation_requirements>
-
-**Technical Evidence Standard**:
-- Every finding must reference specific Uniswap functions being called
-- Include exact parameter values that could lead to exploitation
-- Provide concrete scenarios showing how Uniswap integration fails
-
-**Severity Classification**:
-- **Critical**: Direct loss of funds through Uniswap manipulation
-- **High**: Price manipulation leading to unfair trades or liquidations
-- **Medium**: Suboptimal integration causing user losses
-- **Low**: Best practice violations with minimal impact
-
 **Common False Positives to Avoid**:
 - Deadline parameters in test files
 - Slippage settings in example code
@@ -179,75 +152,6 @@ Work in the assigned directory `{{working_dir}}` to store analysis results.
 - Mock Uniswap contracts in test suites
 
 Only report objective security vulnerabilities. Do not report any issues if the implementation meets established security best practices and does not violate known standards or introduce exploitable conditions.
-</validation_requirements>
-
-<output_format>
-Create results.yaml with findings following this structure:
-
-```yaml
-detections:
-  - title: "Missing slippage protection in Uniswap V2 swap"
-    severity: "high"
-    type: "vulnerability"
-    description: |
-      The swapExactTokensForTokens call in the protocol's swap function does not implement
-      slippage protection, setting amountOutMin to 0. This allows MEV bots to sandwich
-      attack users, extracting value through front-running and back-running.
-
-      The vulnerability occurs in the DexAggregator contract when routing through Uniswap V2.
-
-    location:
-      target: "DexAggregator.swapTokens"
-      file: "contracts/DexAggregator.sol"
-      start_line: 125
-      end_line: 135
-      snippet: |
-        function swapTokens(address tokenIn, address tokenOut, uint256 amountIn) external {
-            IERC20(tokenIn).transferFrom(msg.sender, address(this), amountIn);
-            IERC20(tokenIn).approve(UNISWAP_V2_ROUTER, amountIn);
-
-            address[] memory path = new address[](2);
-            path[0] = tokenIn;
-            path[1] = tokenOut;
-
-            // VULNERABLE: amountOutMin set to 0
-            IUniswapV2Router02(UNISWAP_V2_ROUTER).swapExactTokensForTokens(
-                amountIn,
-                0, // No slippage protection!
-                path,
-                msg.sender,
-                block.timestamp + 300
-            );
-        }
-
-    recommendation: |
-      Implement proper slippage protection by calculating minimum output amount:
-
-      ```solidity
-      // Add slippage parameter (e.g., 50 = 0.5%)
-      function swapTokens(
-          address tokenIn,
-          address tokenOut,
-          uint256 amountIn,
-          uint256 slippageBps
-      ) external {
-          // ... existing code ...
-
-          // Calculate expected output
-          uint256[] memory amounts = IUniswapV2Router02(UNISWAP_V2_ROUTER)
-              .getAmountsOut(amountIn, path);
-          uint256 amountOutMin = amounts[1] * (10000 - slippageBps) / 10000;
-
-          IUniswapV2Router02(UNISWAP_V2_ROUTER).swapExactTokensForTokens(
-              amountIn,
-              amountOutMin, // Protected against slippage
-              path,
-              msg.sender,
-              block.timestamp + 300
-          );
-      }
-      ```
-```
-</output_format>"""
+"""
 
         return prompt
