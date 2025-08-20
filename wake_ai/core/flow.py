@@ -165,6 +165,7 @@ class AIWorkflow(ABC):
     state: WorkflowState
     _dynamic_generators: Dict[str, Callable[[ClaudeCodeResponse, Dict[str, Any]], List[WorkflowStep]]]
     _init_called: bool
+    _console: Console
 
     def __init__(
         self,
@@ -223,7 +224,15 @@ class AIWorkflow(ABC):
         self._show_progress = show_progress if show_progress is not None else cli.get("show_progress", True)
 
         # Set console for coordinated output
-        self._console = console if console is not None else cli.get("console")
+        if console is not None:
+            self._console = console
+        else:
+            cli_console = cli.get("console")
+            if cli_console is not None:
+                self._console = cli_console
+            else:
+                from rich.console import Console
+                self._console = Console()
 
         # Set up working directory
         if working_dir is not None:
@@ -289,7 +298,8 @@ class AIWorkflow(ABC):
                 working_dir=self.working_dir,
                 execution_dir=self.execution_dir,
                 allowed_tools=tools_allowed,
-                disallowed_tools=tools_disallowed
+                disallowed_tools=tools_disallowed,
+                console=self._console
             )
         else:
             # Default to creating a session with default model
@@ -297,7 +307,8 @@ class AIWorkflow(ABC):
                 working_dir=self.working_dir,
                 execution_dir=self.execution_dir,
                 allowed_tools=tools_allowed,
-                disallowed_tools=tools_disallowed
+                disallowed_tools=tools_disallowed,
+                console=self._console
             )
 
         self.steps: List[WorkflowStep] = []
