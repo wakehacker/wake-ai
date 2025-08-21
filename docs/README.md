@@ -718,21 +718,25 @@ For example, `AIDetectionResult` extends this base class to provide security-spe
 
 ## Examples
 
-The `examples/` directory contains working examples:
+Wake AI provides examples in two locations:
 
-### Basic Examples
+### Educational Examples
 
--   **[reentrancy](examples/reentrancy/)** - Security detector with Wake integration
--   **[reentrancy_test](examples/reentrancy_test/)** - Test generation workflow
+See **[examples/README.md](examples/README.md)** for educational examples demonstrating various Wake AI features:
 
-### Advanced Examples
+-   **[hooks](examples/hooks_workflow.py)** - Workflow customization with pre/post hooks
+-   **[conditional_test](examples/conditional_workflow.py)** - Conditional step execution
+-   **[dynamic_steps](examples/dynamic_workflow.py)** - Runtime step generation
+-   **[extraction_step](examples/extraction_workflow.py)** - Structured data extraction
 
--   **[hooks](examples/hooks/)** - Workflow customization with pre/post hooks
--   **[conditional_test](examples/conditional_test/)** - Conditional step execution
--   **[dynamic_steps](examples/dynamic_steps/)** - Runtime step generation
--   **[extraction_step](examples/extraction_step/)** - Structured data extraction
+### Production Workflows
 
-Each example includes its own README with detailed explanations.
+See the `../flows/` directory for complete workflow implementations:
+
+-   **[audit](../flows/audit/workflow.py)** - Comprehensive security audit workflow
+-   **[reentrancy](../flows/reentrancy/workflow.py)** - Reentrancy vulnerability detector
+-   **[donation_attack](../flows/donation_attack/workflow.py)** - Donation attack vulnerability detector
+-   **[uniswap_integration](../flows/uniswap_integration/workflow.py)** - Uniswap-specific vulnerability detector
 
 ## Best Practices
 
