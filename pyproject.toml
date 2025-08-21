@@ -54,8 +54,8 @@ printers = "printers"
 workflows = "flows"
 
 [project.urls]
-Homepage = "https://github.com/Ackee-Blockchain/wake-ai"
-Repository = "https://github.com/Ackee-Blockchain/wake-ai"
+Homepage = "https://github.com/wakehacker/wake-ai"
+Repository = "https://github.com/wakehacker/wake-ai"
 
 [build-system]
 requires = ["hatchling"]

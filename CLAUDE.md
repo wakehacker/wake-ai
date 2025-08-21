@@ -215,7 +215,7 @@ class MyWorkflow(AIWorkflow):
 pip install wake-ai
 
 # Development mode
-git clone https://github.com/Ackee-Blockchain/wake-ai
+git clone https://github.com/wakehacker/wake-ai
 cd wake-ai
 uv sync --extra dev
 ```

@@ -68,7 +68,7 @@ pip install wake-ai
 ### Install from Source
 
 ```bash
-git clone https://github.com/Ackee-Blockchain/wake-ai
+git clone https://github.com/wakehacker/wake-ai.git
 cd wake-ai
 pip install -e .
 ```
