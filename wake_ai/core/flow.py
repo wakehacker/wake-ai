@@ -588,7 +588,7 @@ class AIWorkflow(ABC):
 
                             if step.max_cost:
                                 logger.debug(f"Querying with cost limit ${step.max_cost} for step '{step.name}' (continue_session={should_continue}, model={getattr(self.session, 'model', 'default')})")
-                                response = self.session.query_with_cost(prompt, step.max_cost, continue_session=should_continue)
+                                response = self.query_with_cost(prompt, step.max_cost, continue_session=should_continue, step_info=self.state.step_info[self.state.current_step])
                             else:
                                 logger.debug(f"Querying step '{step.name}' (continue_session={should_continue}, model={getattr(self.session, 'model', 'default')})")
                                 response = self.session.query(prompt, continue_session=should_continue)
@@ -610,7 +610,7 @@ class AIWorkflow(ABC):
                             # Always continue session for retries
                             if step.max_retry_cost:
                                 logger.debug(f"Querying retry with cost limit ${step.max_retry_cost} for step '{step.name}' (model={getattr(self.session, 'model', 'default')})")
-                                response = self.session.query_with_cost(prompt, step.max_retry_cost, continue_session=True)
+                                response = self.query_with_cost(prompt, step.max_retry_cost, continue_session=True, step_info=self.state.step_info[self.state.current_step])
                             else:
                                 logger.debug(f"Querying retry for step '{step.name}' (model={getattr(self.session, 'model', 'default')})")
                                 response = self.session.query(prompt, continue_session=True)
@@ -746,6 +746,124 @@ class AIWorkflow(ABC):
 
 
         return results, formatted_results
+
+
+    def query_with_cost(self, prompt: str, cost_limit: float, turn_step: int = 50, continue_session: bool = False, step_info: Optional[StepExecutionInfo] = None) -> ClaudeCodeResponse:
+        """Query with cost tracking.
+
+        Args:
+            prompt: The prompt to send
+            cost_limit: The cost limit in USD
+            turn_step: Maximum turns per query iteration
+            continue_session: Continue the stored session if available
+
+        Note:
+            The cost limit is not strictly enforced.
+            Instead, the querying runs in a loop, each time querying with `turn_step` turns.
+            After each query, the cost is checked and the loop continues until the cost limit is reached.
+            After that, if the task has still not been finished, the AI is prompted to promptly finish the task.
+
+        Returns:
+            ClaudeCodeResponse with the result
+        """
+        logger.debug(f"Starting cost-limited query (limit=${cost_limit:.2f}, turn_step={turn_step}, continue_session={continue_session})")
+
+        total_cost = 0.0
+        last_response = None
+        iteration = 0
+
+        # First query with the initial prompt
+        logger.debug(f"Iteration {iteration}: Initial query")
+        response = self.session.query(
+            prompt=prompt,
+            max_turns=turn_step,
+            continue_session=continue_session
+        )
+
+        if not response.success:
+            return response
+
+        last_response = response
+        # Update total cost and session info from response
+        total_cost = response.cost
+        if step_info is not None:
+            step_info.cost += response.cost
+        logger.debug(f"Iteration {iteration} complete: total_cost=${total_cost:.4f}, session_id={response.session_id}")
+
+        # Check if task is already finished
+        if response.is_finished:
+            logger.debug(f"Task finished in initial query. Total cost: ${total_cost:.4f}")
+            return response
+
+        # Continue querying while under cost limit
+        while total_cost < cost_limit:
+            iteration += 1
+            logger.debug(f"Iteration {iteration}: Continuing session (current_cost=${total_cost:.4f}, limit=${cost_limit:.2f})")
+
+            response = self.session.query(
+                prompt=f"continue",
+                max_turns=turn_step,
+                continue_session=True
+            )
+
+            # ORIGINAL HANDLING,
+            # Case1, the claude code subprocess does not return 0.
+            # Case2, the claude code return json but the json is not valid.
+            if not response.success:
+                logger.error(f"Command failed: {response.content}")
+                return response
+
+            # response.session_id == session_id session id will be different even start with --resume <session_id>
+
+            last_response = response
+            total_cost += response.cost
+            if step_info is not None:
+                step_info.cost += response.cost
+
+            if response.is_finished:
+                logger.debug(f"Task finished after {iteration} iterations. Total cost: ${total_cost:.4f}")
+                return response
+
+            if total_cost >= cost_limit:
+                logger.warning(f"Cost limit reached: ${total_cost:.4f} >= ${cost_limit:.2f}")
+                break
+
+            logger.debug(f"Iteration {iteration} complete: iteration_cost=${response.cost:.4f}, total_cost=${total_cost:.4f}")
+
+
+        # If the task is not finished, we need to prompt the AI to finish it
+        if not last_response.is_finished:
+            logger.warning("Task not finished after reaching cost limit. Attempting to finish...")
+
+        finish_tries = 0
+        max_finish_tries = 3
+        while finish_tries < max_finish_tries and not last_response.is_finished:
+            logger.debug(f"Finish attempt {finish_tries + 1}/{max_finish_tries}")
+
+            response = self.session.query(
+                prompt=f"you are running out of time, please finish the task as quickly as possible. this is the {finish_tries}/{max_finish_tries} try (after {max_finish_tries}th warning, the task will be aborted)",
+                max_turns=turn_step,
+                continue_session=True
+            )
+
+            # Return code is not 0, then parse valid output is not possible.
+            last_response = response
+            total_cost += response.cost
+            if step_info is not None:
+                step_info.cost += response.cost
+            logger.debug(f"Finish attempt {finish_tries + 1} complete: cost=${response.cost:.4f}, total=${total_cost:.4f}")
+            # Check if task is finished
+            if response.is_finished:
+                logger.debug(f"Task finished after {finish_tries + 1} finish attempts. Total cost: ${total_cost:.4f}")
+                return response
+
+            finish_tries += 1
+
+        if not last_response.is_finished:
+            logger.warning(f"Task still not finished after {max_finish_tries} attempts. Returning last response.")
+
+        logger.debug(f"Returning final response. Total cost: ${total_cost:.4f}")
+        return last_response
 
     def _custom_context_update(self, step_name: str, response: ClaudeCodeResponse):
         """Hook for subclasses to update context."""
@@ -1011,11 +1129,11 @@ class AIWorkflow(ABC):
         minutes = int((seconds % 3600) // 60)
         secs = seconds % 60
         if days > 0:
-            return f"{days:02d}d {hours:02d}h {minutes:02d}m {secs:05.2f}s"
+            return f"{days:d}d {hours:02d}h {minutes:02d}m {secs:05.2f}s"
         elif hours > 0:
-            return f"{hours:02d}h {minutes:02d}m {secs:05.2f}s"
+            return f"{hours:d}h {minutes:02d}m {secs:05.2f}s"
         elif minutes > 0:
-            return f"{minutes:02d}m {secs:05.2f}s"
+            return f"{minutes:d}m {secs:05.2f}s"
         else:
             return f"{secs:.2f}s"
 
