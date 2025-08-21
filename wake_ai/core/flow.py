@@ -41,6 +41,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeRe
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
+from rich.live import Live
 
 from ..results import AIResult, MessageResult
 from .claude import ClaudeCodeResponse, ClaudeCodeSession
@@ -935,10 +936,10 @@ class AIWorkflow(ABC):
         """Update the status display."""
         if self._status_context:
             try:
-                # Always update with fresh display to show live time
+                # Update the Live display with fresh content
                 self._status_context.update(self._get_status_display())
             except Exception as e:
-                logger.debug(f"Failed to update status display: {e}")
+                logger.debug(f"Failed to update live display: {e}")
 
     def update_progress_message(self, message: str) -> None:
         """Update only the progress message without changing percentage.
@@ -1006,31 +1007,34 @@ class AIWorkflow(ABC):
     def _get_status_display(self) -> Panel:
         """Build the status display with table and progress."""
         table = Table(show_header=True, header_style="bold cyan", box=None, padding=(0, 1), width=80)
-        table.add_column("Step", style="cyan", no_wrap=True, width=30)
-        table.add_column("Status", justify="center", width=12)
-        table.add_column("Time", justify="right", width=10)
-        table.add_column("Cost", justify="right", style="green", width=12)
+        table.add_column("Step", no_wrap=True, width=40)
+        table.add_column("Time", justify="right", width=12)
+        table.add_column("Cost", justify="right", width=12)
 
         # Add rows for each step
         for i, step in enumerate(self.steps):
             if i in self.state.step_info:
                 info = self.state.step_info[i]
 
-                # Format status with color
+                # Determine row style based on status
                 if info.status == "completed":
-                    status = "[green]✓[/green]"
+                    row_style = "green"
+                    step_name = f"✓ {step.name}"
                 elif info.status == "skipped":
-                    status = "[yellow]○[/yellow]"
+                    row_style = "yellow"
+                    step_name = f"○ {step.name}"
                 elif info.status == "running":
-                    status = "[blue]⟳[/blue]"
+                    row_style = "bright_cyan"
+                    step_name = f"⟳ {step.name}"
                 else:
-                    status = "[red]✗[/red]"
+                    row_style = "red"
+                    step_name = f"✗ {step.name}"
 
                 # Format duration (show live time for running steps)
                 if info.status == "running" and info.start_time:
                     # Calculate current running time
                     running_time = (datetime.now() - info.start_time).total_seconds()
-                    duration = f"[cyan]{running_time:.1f}s[/cyan]"
+                    duration = f"{running_time:.1f}s"
                 elif info.duration > 0:
                     duration = f"{info.duration:.1f}s"
                 else:
@@ -1039,10 +1043,10 @@ class AIWorkflow(ABC):
                 # Format cost
                 cost = f"${info.cost:.4f}" if info.cost > 0 else "-"
 
-                table.add_row(step.name, status, duration, cost)
+                table.add_row(step_name, duration, cost, style=row_style)
             else:
                 # Step not yet executed
-                table.add_row(step.name, "[dim]...[/dim]", "-", "-")
+                table.add_row(f"  {step.name}", "-", "-", style="dim")
 
         # Add total row
         if self.state.step_info:
@@ -1060,7 +1064,6 @@ class AIWorkflow(ABC):
             table.add_section()
             table.add_row(
                 "[bold]Total[/bold]",
-                "",
                 f"[bold]{total_duration:.1f}s[/bold]",
                 f"[bold]${total_cost:.4f}[/bold]"
             )
@@ -1079,12 +1082,18 @@ class AIWorkflow(ABC):
         """Context manager for status display."""
         # Start the status display
         if self._show_progress and self._console:
-            self._status_context = self._console.status(
-                self._get_status_display(),
-                refresh_per_second=10  # Increase refresh rate for smoother updates
+            # Use Live display with auto-refresh for real-time updates
+            # Use get_renderable parameter for dynamic updates
+            self._status_context = Live(
+                self._get_status_display(),  # Initial renderable
+                refresh_per_second=10,  # Update 10 times per second
+                auto_refresh=True,      # Enable automatic refresh
+                console=self._console,
+                transient=True,        # Keep display after completion
+                get_renderable=lambda: self._get_status_display()  # Function to get fresh renderable
             )
-            self._status_context.__enter__()
-            logger.debug("Started status display")
+            self._status_context.start()
+            logger.debug("Started live status display")
 
         try:
             yield
@@ -1098,13 +1107,13 @@ class AIWorkflow(ABC):
                         final_display = self._get_status_display()
                         self._console.print(final_display)
 
-                    # Stop the status context
-                    self._status_context.__exit__(None, None, None)
+                    # Stop the Live display
+                    self._status_context.stop()
                 except Exception as e:
-                    logger.debug(f"Error stopping status display: {e}")
+                    logger.debug(f"Error stopping live display: {e}")
                 finally:
                     self._status_context = None
-                    logger.debug("Stopped status display")
+                    logger.debug("Stopped live status display")
 
     @require_initialized
     def format_results(self, results: Dict[str, Any]) -> AIResult:
