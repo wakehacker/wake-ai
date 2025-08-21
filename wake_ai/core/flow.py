@@ -1004,11 +1004,26 @@ class AIWorkflow(ABC):
             except Exception as e:
                 logger.warning(f"Progress hook failed: {e}")
 
+    def _format_duration(self, seconds: float) -> str:
+        """Format duration dynamically based on the time scale."""
+        days = int(seconds // 86400)
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        secs = seconds % 60
+        if days > 0:
+            return f"{days:02d}d {hours:02d}h {minutes:02d}m {secs:05.2f}s"
+        elif hours > 0:
+            return f"{hours:02d}h {minutes:02d}m {secs:05.2f}s"
+        elif minutes > 0:
+            return f"{minutes:02d}m {secs:05.2f}s"
+        else:
+            return f"{secs:.2f}s"
+
     def _get_status_display(self) -> Panel:
         """Build the status display with table and progress."""
         table = Table(show_header=True, header_style="bold cyan", box=None, padding=(0, 1), width=80)
         table.add_column("Step", no_wrap=True, width=40)
-        table.add_column("Time", justify="right", width=12)
+        table.add_column("Time", justify="right", width=15)
         table.add_column("Cost", justify="right", width=12)
 
         # Add rows for each step
@@ -1034,9 +1049,9 @@ class AIWorkflow(ABC):
                 if info.status == "running" and info.start_time:
                     # Calculate current running time
                     running_time = (datetime.now() - info.start_time).total_seconds()
-                    duration = f"{running_time:.1f}s"
+                    duration = self._format_duration(running_time)
                 elif info.duration > 0:
-                    duration = f"{info.duration:.1f}s"
+                    duration = self._format_duration(info.duration)
                 else:
                     duration = "-"
 
@@ -1064,7 +1079,7 @@ class AIWorkflow(ABC):
             table.add_section()
             table.add_row(
                 "[bold]Total[/bold]",
-                f"[bold]{total_duration:.1f}s[/bold]",
+                f"[bold]{self._format_duration(total_duration)}[/bold]",
                 f"[bold]${total_cost:.4f}[/bold]"
             )
 
