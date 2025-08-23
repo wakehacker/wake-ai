@@ -45,12 +45,12 @@ class ClaudeCodeResponse:
 
     content: str
     tool_calls: List[Dict[str, Any]]
-    success: bool
+    success: bool # THIS Does not matter with the result. fail of claude, by default, always true.
     cost: float = 0.0
     duration: float = 0.0
     num_turns: int = 0
     session_id: str = ""
-    is_finished: bool = True
+    is_finished: bool = True # THIS INDICATES subtype == "success"
 
 
 class ClaudeCodeSession:
@@ -294,6 +294,7 @@ class ClaudeCodeSession:
 
         try:
             async for message in query(prompt=prompt, options=options):
+                # ResultMessage indicates the response is complete.
                 if isinstance(message, ResultMessage):
                     result = message
                 else:
@@ -301,6 +302,8 @@ class ClaudeCodeSession:
                         self.handle_verbose_message(message)
         # official excpetion branch.
         # https://github.com/anthropics/claude-code-sdk-python
+
+        # TODO: COULD BE GOOD TO RAISE
 
         except CLINotFoundError:
             logger.error("Claude Code CLI not found. Please install it.")
@@ -334,21 +337,21 @@ class ClaudeCodeSession:
         if result is None:
             # Should never happen, but just in case
             return ClaudeCodeResponse(
-                content=f"Command failed",
+                content=f"Claude Code did not return a ResultMessage",
                 tool_calls=[],
                 success=False,
             )
 
         return ClaudeCodeResponse(
-                content=result.result if result.result else "",
-                tool_calls=[result.usage] if result.usage else [],
-                success=result.subtype == "success",
-                cost=result.total_cost_usd or 0.0,
-                duration=result.duration_ms,
-                num_turns=result.num_turns,
-                session_id=result.session_id,
-                is_finished=result.subtype == "success"
-            )
+            content=result.result if result.result else "",
+            tool_calls=[result.usage] if result.usage else [],
+            success=not result.is_error, # does not matter subtype == success or not .
+            cost=result.total_cost_usd or 0.0,
+            duration=result.duration_ms,
+            num_turns=result.num_turns,
+            session_id=result.session_id,
+            is_finished=result.subtype == "success"
+        )
 
 
     def query(
