@@ -32,12 +32,16 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
 from functools import wraps
+from contextlib import contextmanager
 
 import rich_click as click
 from jinja2 import Environment, StrictUndefined, Template, meta
 from pydantic import BaseModel
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeRemainingColumn
 from rich.console import Console
+from rich.table import Table
+from rich.panel import Panel
+from rich.live import Live
 
 from ..results import AIResult, MessageResult
 from .claude import ClaudeCodeResponse, ClaudeCodeSession
@@ -136,6 +140,18 @@ class WorkflowStep:
 
 
 @dataclass
+class StepExecutionInfo:
+    """Information about a single step execution."""
+    name: str
+    turns: int
+    cost: float
+    duration: float  # in seconds
+    retries: int
+    status: str  # "completed", "skipped", "failed", "running"
+    start_time: Optional[datetime] = None  # Track when step started
+
+
+@dataclass
 class WorkflowState:
     """State tracking for workflow execution."""
 
@@ -149,6 +165,7 @@ class WorkflowState:
     completed_at: Optional[datetime] = None
     cumulative_cost: float = 0.0
     progress_percentage: float = 0.0
+    step_info: Dict[int, StepExecutionInfo] = field(default_factory=dict)  # Key is step index
 
 
 class AIWorkflow(ABC):
@@ -316,8 +333,8 @@ class AIWorkflow(ABC):
         self._dynamic_generators: Dict[str, Callable[[ClaudeCodeResponse, Dict[str, Any]], List[WorkflowStep]]] = {}
 
         # Progress tracking
-        self._progress: Optional[Progress] = None
-        self._task_id: Optional[int] = None
+        self._status_context = None  # console.status context manager
+        self._current_step_name: Optional[str] = None
         self._progress_hook: Optional[Callable[[float, str], None]] = None
 
         # Mark that __init__ was called
@@ -459,238 +476,399 @@ class AIWorkflow(ABC):
 
         logger.debug(f"Starting workflow '{self.name}' execution (resume={resume})")
 
-        # Initialize progress tracking
-        try:
-            self._init_progress_bar()
-            self.update_progress("Initializing workflow...")
-        except Exception as e:
-            logger.debug(f"Failed to initialize progress bar: {e}")
-
-        if resume and (self.working_dir / f"{self.name}_state.json").exists():
-            logger.info(f"Resuming workflow from saved state in: {self.working_dir / f'{self.name}_state.json'}")
-            self._load_state()
-        else:
-            self.state = WorkflowState()
-            self.state.context = context or {}
-            # Add working directory to context
-            self.state.context["working_dir"] = str(self.working_dir)
-            self.state.started_at = datetime.now()
-            if resume:
-                logger.info(f"No saved state found, starting fresh workflow execution")
-            else:
-                logger.debug(f"Starting fresh workflow execution")
-
-        # Execute steps
-        while self.state.current_step < len(self.steps):
-            step = self.steps[self.state.current_step]
-
-            # Check if step should be skipped based on condition
-            if step.condition is not None:
-                should_execute = step.condition(self.state.context)
-                if not should_execute:
-                    logger.info(f"Skipping step {self.state.current_step + 1}/{len(self.steps)}: '{step.name}' (condition not met)")
-                    self.state.skipped_steps.append(step.name)
-                    self.state.current_step += 1
-                    self._save_state()
-                    continue
-
-            logger.info(f"Executing step {self.state.current_step + 1}/{len(self.steps)}: '{step.name}'")
-
-            # Update progress message at step start (percentage based on completed steps)
+        # Use status display context manager for the entire execution
+        with self._status_display():
+            # Initialize progress tracking
             try:
-                step_msg = f"Starting '{step.name}' ({self.state.current_step + 1}/{len(self.steps)})"
-                self.update_progress(step_msg)
+                self.update_progress("Initializing workflow...")
             except Exception as e:
                 logger.debug(f"Failed to update progress: {e}")
 
-            try:
-                # Execute step with retry logic
-                retry_count = 0
-                validation_errors = []
-                response = None
-                step_total_cost = 0.0
-                step_total_turns = 0
+            if resume and (self.working_dir / f"{self.name}_state.json").exists():
+                logger.info(f"Resuming workflow from saved state in: {self.working_dir / f'{self.name}_state.json'}")
+                self._load_state()
+            else:
+                self.state = WorkflowState()
+                self.state.context = context or {}
+                # Add working directory to context
+                self.state.context["working_dir"] = str(self.working_dir)
+                self.state.started_at = datetime.now()
+                if resume:
+                    logger.info(f"No saved state found, starting fresh workflow execution")
+                else:
+                    logger.debug(f"Starting fresh workflow execution")
 
-                # Save original tools and model
-                original_allowed = self.session.allowed_tools
-                original_disallowed = self.session.disallowed_tools
-                original_model = getattr(self.session, 'model', None)
+            # Execute steps
+            while self.state.current_step < len(self.steps):
+                step = self.steps[self.state.current_step]
 
-                # Change model for this step if specified
-                if step.model is not None and step.model != original_model:
-                    logger.debug(f"Switching from model '{original_model}' to '{step.model}' for step '{step.name}'")
-                    self.session.model = step.model
+                # Check if step should be skipped based on condition
+                if step.condition is not None:
+                    should_execute = step.condition(self.state.context)
+                    if not should_execute:
+                        logger.info(f"Skipping step {self.state.current_step + 1}/{len(self.steps)}: '{step.name}' (condition not met)")
+                        self.state.skipped_steps.append(step.name)
+                        # Record skipped step info
+                        self.state.step_info[self.state.current_step] = StepExecutionInfo(
+                            name=step.name,
+                            cost=0.0,
+                            turns=0,
+                            duration=0.0,
+                            retries=0,
+                            status="skipped"
+                        )
+                        # Update status display with skipped step
+                        self._update_status_display()
+                        self.state.current_step += 1
+                        self._save_state()
+                        continue
 
-                while retry_count <= step.max_retries:
-                    # Set tools if specified (step overrides workflow defaults)
-                    if step.allowed_tools is not None:
-                        self.session.allowed_tools = step.allowed_tools
-                        logger.debug(f"Set allowed tools for step '{step.name}': {step.allowed_tools}")
+                logger.info(f"Executing step {self.state.current_step + 1}/{len(self.steps)}: '{step.name}'")
 
-                    if step.disallowed_tools is not None:
-                        self.session.disallowed_tools = step.disallowed_tools
-                        logger.debug(f"Set disallowed tools for step '{step.name}': {step.disallowed_tools}")
+                # Update progress message at step start (percentage based on completed steps)
+                try:
+                    step_msg = f"Starting '{step.name}' ({self.state.current_step + 1}/{len(self.steps)})"
+                    self.update_progress(step_msg)
+                except Exception as e:
+                    logger.debug(f"Failed to update progress: {e}")
 
-                    # Execute query
-                    if retry_count == 0:
-                        # Call pre-step hook on first attempt only
-                        self._pre_step_hook(step)
+                try:
+                    # Track step execution start time
+                    step_start_time = datetime.now()
 
-                        # First attempt - use original prompt
-                        prompt = step.format_prompt(self.state.context)
+                    # Mark step as running and update display
+                    self.state.step_info[self.state.current_step] = StepExecutionInfo(
+                        name=step.name,
+                        cost=0.0,
+                        turns=0,
+                        duration=0.0,
+                        retries=0,
+                        status="running",
+                        start_time=step_start_time
+                    )
+                    self._update_status_display()
 
-                        # Continue session only if step explicitly requests it
-                        should_continue = step.continue_session
+                    # Execute step with retry logic
+                    retry_count = 0
+                    validation_errors = []
+                    response = None
+                    step_total_cost = 0.0
+                    step_total_turns = 0
 
-                        if step.max_cost:
-                            logger.debug(f"Querying with cost limit ${step.max_cost} for step '{step.name}' (continue_session={should_continue}, model={getattr(self.session, 'model', 'default')})")
-                            response = self.session.query_with_cost(prompt, step.max_cost, continue_session=should_continue)
+                    # Save original tools and model
+                    original_allowed = self.session.allowed_tools
+                    original_disallowed = self.session.disallowed_tools
+                    original_model = getattr(self.session, 'model', None)
+
+                    # Change model for this step if specified
+                    if step.model is not None and step.model != original_model:
+                        logger.debug(f"Switching from model '{original_model}' to '{step.model}' for step '{step.name}'")
+                        self.session.model = step.model
+
+                    while retry_count <= step.max_retries:
+                        # Set tools if specified (step overrides workflow defaults)
+                        if step.allowed_tools is not None:
+                            self.session.allowed_tools = step.allowed_tools
+                            logger.debug(f"Set allowed tools for step '{step.name}': {step.allowed_tools}")
+
+                        if step.disallowed_tools is not None:
+                            self.session.disallowed_tools = step.disallowed_tools
+                            logger.debug(f"Set disallowed tools for step '{step.name}': {step.disallowed_tools}")
+
+                        # Execute query
+                        if retry_count == 0:
+                            # Call pre-step hook on first attempt only
+                            self._pre_step_hook(step)
+
+                            # First attempt - use original prompt
+                            prompt = step.format_prompt(self.state.context)
+
+                            # Continue session only if step explicitly requests it
+                            should_continue = step.continue_session
+
+                            if step.max_cost:
+                                logger.debug(f"Querying with cost limit ${step.max_cost} for step '{step.name}' (continue_session={should_continue}, model={getattr(self.session, 'model', 'default')})")
+                                response = self.query_with_cost(prompt, step.max_cost, continue_session=should_continue, step_info=self.state.step_info[self.state.current_step])
+                            else:
+                                logger.debug(f"Querying step '{step.name}' (continue_session={should_continue}, model={getattr(self.session, 'model', 'default')})")
+                                response = self.session.query(prompt, continue_session=should_continue)
                         else:
-                            logger.debug(f"Querying step '{step.name}' (continue_session={should_continue}, model={getattr(self.session, 'model', 'default')})")
-                            response = self.session.query(prompt, continue_session=should_continue)
-                    else:
-                         # Retry attempt - add error correction prompt
-                        error_prompt = "The following errors occurred, please fix them:\n"
-                        for error in validation_errors:
-                            error_prompt += f"- {error}\n"
-                        prompt = error_prompt
-                        logger.info(f"Retrying step '{step.name}' (attempt {retry_count}/{step.max_retries}) - previous attempt failed validation")
+                            # Retry attempt - add error correction prompt
+                            error_prompt = "The following errors occurred, please fix them:\n"
+                            for error in validation_errors:
+                                error_prompt += f"- {error}\n"
+                            prompt = error_prompt
+                            logger.info(f"Retrying step '{step.name}' (attempt {retry_count}/{step.max_retries}) - previous attempt failed validation")
 
-                        # Update progress message for retry (don't change percentage)
+                            # Update progress message for retry (don't change percentage)
+                            try:
+                                retry_msg = f"Retrying '{step.name}' (attempt {retry_count}/{step.max_retries})"
+                                self.update_progress_message(retry_msg)
+                            except Exception as e:
+                                logger.debug(f"Failed to update progress message: {e}")
+
+                            # Always continue session for retries
+                            if step.max_retry_cost:
+                                logger.debug(f"Querying retry with cost limit ${step.max_retry_cost} for step '{step.name}' (model={getattr(self.session, 'model', 'default')})")
+                                response = self.query_with_cost(prompt, step.max_retry_cost, continue_session=True, step_info=self.state.step_info[self.state.current_step])
+                            else:
+                                logger.debug(f"Querying retry for step '{step.name}' (model={getattr(self.session, 'model', 'default')})")
+                                response = self.session.query(prompt, continue_session=True)
+
+                        # Log session ID after first step's first query
+                        if self.state.current_step == 0 and retry_count == 0 and response.session_id:
+                            logger.debug(f"Claude session ID: {response.session_id}")
+
+                        # Update progress message for validation (don't change percentage)
                         try:
-                            retry_msg = f"Retrying '{step.name}' (attempt {retry_count}/{step.max_retries})"
-                            self.update_progress_message(retry_msg)
+                            if retry_count == 0:
+                                validation_msg = f"Validating '{step.name}' output"
+                            else:
+                                validation_msg = f"Validating retry of '{step.name}' (attempt {retry_count}/{step.max_retries})"
+                            self.update_progress_message(validation_msg)
                         except Exception as e:
                             logger.debug(f"Failed to update progress message: {e}")
 
-                        # Always continue session for retries
-                        if step.max_retry_cost:
-                            logger.debug(f"Querying retry with cost limit ${step.max_retry_cost} for step '{step.name}' (model={getattr(self.session, 'model', 'default')})")
-                            response = self.session.query_with_cost(prompt, step.max_retry_cost, continue_session=True)
+                        # Update cumulative cost and step totals
+                        self.state.cumulative_cost += response.cost
+                        step_total_cost += response.cost
+                        step_total_turns += response.num_turns
+
+                        # Validate response
+                        success, validation_errors = step.validate_response(response)
+
+                        if success:
+                            # Validation passed - log successful completion with total cost/turns
+                            retry_msg = f" after {retry_count} retries" if retry_count > 0 else ""
+                            logger.info(f"Step '{step.name}' completed{retry_msg} - cost: ${step_total_cost:.4f}, turns: {step_total_turns}")
+                            logger.debug(f"Response: {response.content}")
+
+                            # Calculate step duration
+                            step_duration = (datetime.now() - step_start_time).total_seconds()
+
+                            # Record step execution info
+                            self.state.step_info[self.state.current_step] = StepExecutionInfo(
+                                name=step.name,
+                                cost=step_total_cost,
+                                turns=step_total_turns,
+                                duration=step_duration,
+                                retries=retry_count,
+                                status="completed"
+                            )
+
+                            # Update live display with completed step
+                            self._update_status_display()
+
+                            # Update workflow state
+                            self.state.completed_steps.append(step.name)
+                            self.state.responses[step.name] = response
+                            self.state.context[f"{step.name}_output"] = response.content
+                            self._custom_context_update(step.name, response)
+
+                            # Call step-specific post-processing if defined (used internally)
+                            if step._post_hook:
+                                step._post_hook(self, response)
+
+                            # Call workflow-level post-step hook
+                            self._post_step_hook(step, response)
+
+                            self.state.current_step += 1
+                            self._save_state()
+
+                            # Update progress after step completion
+                            try:
+                                step_msg = f"Completed step '{step.name}' ({len(self.state.completed_steps)}/{len(self.steps)})"
+                                self.update_progress(step_msg)
+                            except Exception as e:
+                                logger.debug(f"Failed to update progress: {e}")
+
+                            break
                         else:
-                            logger.debug(f"Querying retry for step '{step.name}' (model={getattr(self.session, 'model', 'default')})")
-                            response = self.session.query(prompt, continue_session=True)
+                            # Validation failed - log query completion but note validation failure
+                            attempt_msg = f"attempt {retry_count + 1}" if retry_count > 0 else "initial attempt"
+                            logger.debug(f"Step '{step.name}' {attempt_msg} completed but validation failed - cost: ${response.cost:.4f}, turns: {response.num_turns}")
+                            logger.warning(f"Step '{step.name}' validation failed: {validation_errors}")
 
-                    # Log session ID after first step's first query
-                    if self.state.current_step == 0 and retry_count == 0 and response.session_id:
-                        logger.debug(f"Claude session ID: {response.session_id}")
+                            if retry_count >= step.max_retries:
+                                # Max retries reached
+                                logger.error(f"Step '{step.name}' failed after {step.max_retries} retries - final errors: {validation_errors}")
+                                error_msg = f"Step '{step.name}' validation failed after {step.max_retries} retries. Errors: {'; '.join(validation_errors)}"
+                                raise RuntimeError(error_msg)
 
-                    # Update progress message for validation (don't change percentage)
-                    try:
-                        if retry_count == 0:
-                            validation_msg = f"Validating '{step.name}' output"
-                        else:
-                            validation_msg = f"Validating retry of '{step.name}' (attempt {retry_count}/{step.max_retries})"
-                        self.update_progress_message(validation_msg)
-                    except Exception as e:
-                        logger.debug(f"Failed to update progress message: {e}")
+                            retry_count += 1
 
-                    # Update cumulative cost and step totals
-                    self.state.cumulative_cost += response.cost
-                    step_total_cost += response.cost
-                    step_total_turns += response.num_turns
+                    # Restore original tools and model after step completes
+                    self.session.allowed_tools = original_allowed
+                    self.session.disallowed_tools = original_disallowed
+                    if original_model is not None:
+                        self.session.model = original_model
 
-                    # Validate response
-                    success, validation_errors = step.validate_response(response)
+                except Exception as e:
+                    # Restore original tools and model even on error
+                    self.session.allowed_tools = original_allowed
+                    self.session.disallowed_tools = original_disallowed
+                    if original_model is not None:
+                        self.session.model = original_model
 
-                    if success:
-                        # Validation passed - log successful completion with total cost/turns
-                        retry_msg = f" after {retry_count} retries" if retry_count > 0 else ""
-                        logger.info(f"Step '{step.name}' completed{retry_msg} - cost: ${step_total_cost:.4f}, turns: {step_total_turns}")
-                        logger.debug(f"Response: {response.content}")
+                    logger.error(f"Error in step '{step.name}': {str(e)}")
+                    self.state.errors.append({
+                        "step": step.name,
+                        "error": str(e),
+                        "timestamp": datetime.now().isoformat()
+                    })
+                    raise
 
-                        # Update workflow state
-                        self.state.completed_steps.append(step.name)
-                        self.state.responses[step.name] = response
-                        self.state.context[f"{step.name}_output"] = response.content
-                        self._custom_context_update(step.name, response)
+            self.state.completed_at = datetime.now()
+            results = self._prepare_results()
+            if results.get('duration') is not None:
+                logger.info(f"Workflow '{self.name}' completed successfully in {results.get('duration')} seconds (total cost: ${self.state.cumulative_cost:.4f})")
+            else:
+                logger.info(f"Workflow '{self.name}' completed successfully (total cost: ${self.state.cumulative_cost:.4f})")
 
-                        # Call step-specific post-processing if defined (used internally)
-                        if step._post_hook:
-                            step._post_hook(self, response)
-
-                        # Call workflow-level post-step hook
-                        self._post_step_hook(step, response)
-
-                        self.state.current_step += 1
-                        self._save_state()
-
-                        # Update progress after step completion
-                        try:
-                            step_msg = f"Completed step '{step.name}' ({len(self.state.completed_steps)}/{len(self.steps)})"
-                            self.update_progress(step_msg)
-                        except Exception as e:
-                            logger.debug(f"Failed to update progress: {e}")
-
-                        break
-                    else:
-                        # Validation failed - log query completion but note validation failure
-                        attempt_msg = f"attempt {retry_count + 1}" if retry_count > 0 else "initial attempt"
-                        logger.debug(f"Step '{step.name}' {attempt_msg} completed but validation failed - cost: ${response.cost:.4f}, turns: {response.num_turns}")
-                        logger.warning(f"Step '{step.name}' validation failed: {validation_errors}")
-
-                        if retry_count >= step.max_retries:
-                            # Max retries reached
-                            logger.error(f"Step '{step.name}' failed after {step.max_retries} retries - final errors: {validation_errors}")
-                            error_msg = f"Step '{step.name}' validation failed after {step.max_retries} retries. Errors: {'; '.join(validation_errors)}"
-                            raise RuntimeError(error_msg)
-
-                        retry_count += 1
-
-                # Restore original tools and model after step completes
-                self.session.allowed_tools = original_allowed
-                self.session.disallowed_tools = original_disallowed
-                if original_model is not None:
-                    self.session.model = original_model
-
-            except Exception as e:
-                # Restore original tools and model even on error
-                self.session.allowed_tools = original_allowed
-                self.session.disallowed_tools = original_disallowed
-                if original_model is not None:
-                    self.session.model = original_model
-
-                logger.error(f"Error in step '{step.name}': {str(e)}")
-                self.state.errors.append({
-                    "step": step.name,
-                    "error": str(e),
-                    "timestamp": datetime.now().isoformat()
-                })
-                raise
-
-        self.state.completed_at = datetime.now()
-        results = self._prepare_results()
-        if results.get('duration') is not None:
-            logger.info(f"Workflow '{self.name}' completed successfully in {results.get('duration')} seconds (total cost: ${self.state.cumulative_cost:.4f})")
-        else:
-            logger.info(f"Workflow '{self.name}' completed successfully (total cost: ${self.state.cumulative_cost:.4f})")
-
-        # Complete progress tracking
-        try:
-            self.update_progress("Workflow completed!", force_percentage=1.0)
-        except Exception as e:
-            logger.debug(f"Failed to update final progress: {e}")
-
-        # Format results before cleanup
-        formatted_results = self.format_results(results)
-
-        # Clean up working directory if configured
-        if self.cleanup_working_dir and self.working_dir.exists():
+            # Complete progress tracking
             try:
-                shutil.rmtree(self.working_dir)
-                logger.info(f"Cleaned up working directory: {self.working_dir}")
+                self.update_progress("Workflow completed!", force_percentage=1.0)
             except Exception as e:
-                logger.warning(f"Failed to clean up working directory {self.working_dir}: {e}")
-        elif not self.cleanup_working_dir:
-            logger.debug(f"Preserving working directory: {self.working_dir}")
+                logger.debug(f"Failed to update final progress: {e}")
 
-        # Cleanup progress bar
-        try:
-            self._cleanup_progress_bar()
-        except Exception as e:
-            logger.debug(f"Failed to cleanup progress bar: {e}")
+            # Format results before cleanup
+            formatted_results = self.format_results(results)
+
+            # Clean up working directory if configured
+            if self.cleanup_working_dir and self.working_dir.exists():
+                try:
+                    shutil.rmtree(self.working_dir)
+                    logger.info(f"Cleaned up working directory: {self.working_dir}")
+                except Exception as e:
+                    logger.warning(f"Failed to clean up working directory {self.working_dir}: {e}")
+            elif not self.cleanup_working_dir:
+                logger.debug(f"Preserving working directory: {self.working_dir}")
+
 
         return results, formatted_results
+
+
+    def query_with_cost(self, prompt: str, cost_limit: float, turn_step: int = 50, continue_session: bool = False, step_info: Optional[StepExecutionInfo] = None) -> ClaudeCodeResponse:
+        """Query with cost tracking.
+
+        Args:
+            prompt: The prompt to send
+            cost_limit: The cost limit in USD
+            turn_step: Maximum turns per query iteration
+            continue_session: Continue the stored session if available
+
+        Note:
+            The cost limit is not strictly enforced.
+            Instead, the querying runs in a loop, each time querying with `turn_step` turns.
+            After each query, the cost is checked and the loop continues until the cost limit is reached.
+            After that, if the task has still not been finished, the AI is prompted to promptly finish the task.
+
+        Returns:
+            ClaudeCodeResponse with the result
+        """
+        logger.debug(f"Starting cost-limited query (limit=${cost_limit:.2f}, turn_step={turn_step}, continue_session={continue_session})")
+
+        total_cost = 0.0
+        last_response = None
+        iteration = 0
+
+        # First query with the initial prompt
+        logger.debug(f"Iteration {iteration}: Initial query")
+        response = self.session.query(
+            prompt=prompt,
+            max_turns=turn_step,
+            continue_session=continue_session
+        )
+
+        if not response.success:
+            logger.error(f"Command failed: {response.content}")
+            return response
+
+        last_response = response
+        # Update total cost and session info from response
+        total_cost = response.cost
+        if step_info is not None:
+            step_info.cost += response.cost
+        logger.debug(f"Iteration {iteration} complete: total_cost=${total_cost:.4f}, session_id={response.session_id}")
+
+        # Check if task is already finished
+        if response.is_finished:
+            logger.debug(f"Task finished in initial query. Total cost: ${total_cost:.4f}")
+            return response
+
+        # Continue querying while under cost limit
+        while total_cost < cost_limit:
+            iteration += 1
+            logger.debug(f"Iteration {iteration}: Continuing session (current_cost=${total_cost:.4f}, limit=${cost_limit:.2f})")
+
+            response = self.session.query(
+                prompt=f"continue",
+                max_turns=turn_step,
+                continue_session=True
+            )
+
+            # ORIGINAL HANDLING,
+            # Case1, the claude code subprocess does not return 0.
+            # Case2, the claude code return json but the json is not valid.
+            if not response.success:
+                logger.error(f"Command failed: {response.content}")
+                return response
+
+            # response.session_id == session_id session id will be different even start with --resume <session_id>
+
+            last_response = response
+            total_cost += response.cost
+            if step_info is not None:
+                step_info.cost += response.cost
+
+            if response.is_finished:
+                logger.debug(f"Task finished after {iteration} iterations. Total cost: ${total_cost:.4f}")
+                return response
+
+            if total_cost >= cost_limit:
+                logger.warning(f"Cost limit reached: ${total_cost:.4f} >= ${cost_limit:.2f}")
+                break
+
+            logger.debug(f"Iteration {iteration} complete: iteration_cost=${response.cost:.4f}, total_cost=${total_cost:.4f}")
+
+
+        # If the task is not finished, we need to prompt the AI to finish it
+        if not last_response.is_finished:
+            logger.warning("Task not finished after reaching cost limit. Attempting to finish...")
+
+        finish_tries = 0
+        max_finish_tries = 3
+        while finish_tries < max_finish_tries and not last_response.is_finished:
+            logger.debug(f"Finish attempt {finish_tries + 1}/{max_finish_tries}")
+
+            response = self.session.query(
+                prompt=f"you are running out of time, please finish the task as quickly as possible. this is the {finish_tries}/{max_finish_tries} try (after {max_finish_tries}th warning, the task will be aborted)",
+                max_turns=turn_step,
+                continue_session=True
+            )
+
+
+            if not response.success:
+                logger.error(f"Command failed: {response.content}")
+                return response
+            # Return code is not 0, then parse valid output is not possible.
+            last_response = response
+            total_cost += response.cost
+            if step_info is not None:
+                step_info.cost += response.cost
+            logger.debug(f"Finish attempt {finish_tries + 1} complete: cost=${response.cost:.4f}, total=${total_cost:.4f}")
+            # Check if task is finished
+            if response.is_finished:
+                logger.debug(f"Task finished after {finish_tries + 1} finish attempts. Total cost: ${total_cost:.4f}")
+                return response
+
+            finish_tries += 1
+
+        if not last_response.is_finished:
+            logger.warning(f"Task still not finished after {max_finish_tries} attempts. Returning last response.")
+
+        logger.debug(f"Returning final response. Total cost: ${total_cost:.4f}")
+        return last_response
 
     def _custom_context_update(self, step_name: str, response: ClaudeCodeResponse):
         """Hook for subclasses to update context."""
@@ -769,7 +947,16 @@ class AIWorkflow(ABC):
                 if self.state.started_at and self.state.completed_at
                 else None
             ),
-            "total_cost": self.state.cumulative_cost
+            "total_cost": self.state.cumulative_cost,
+            "metadata": [
+                {
+                    "name": info.name,
+                    "cost": info.cost,
+                    "status": info.status,
+                    "duration": info.duration,
+                }
+                for info in self.state.step_info.values()
+            ]
         }
 
     @classmethod
@@ -868,7 +1055,15 @@ class AIWorkflow(ABC):
         """
         self._progress_hook = hook
 
-    @require_initialized
+    def _update_status_display(self, force_refresh: bool = True) -> None:
+        """Update the status display."""
+        if self._status_context:
+            try:
+                # Update the Live display with fresh content
+                self._status_context.update(self._get_status_display())
+            except Exception as e:
+                logger.debug(f"Failed to update live display: {e}")
+
     def update_progress_message(self, message: str) -> None:
         """Update only the progress message without changing percentage.
 
@@ -878,10 +1073,11 @@ class AIWorkflow(ABC):
         Args:
             message: Progress message to display
         """
-        # Update Rich progress bar message if active
-        if self._progress and self._task_id is not None:
-            # Keep the same completed value, only update description
-            self._progress.update(self._task_id, description=message)
+        # Update current step name
+        self._current_step_name = message
+
+        # Update status display
+        self._update_status_display()
 
         # Call external hook with current percentage if set
         if self._progress_hook:
@@ -917,12 +1113,12 @@ class AIWorkflow(ABC):
         # Update state
         self.state.progress_percentage = percentage
 
-        # Update Rich progress bar if active
-        if self._progress and self._task_id is not None:
-            # Rich Progress expects completed units, not percentage
-            total_units = 100
-            completed_units = int(percentage * total_units)
-            self._progress.update(self._task_id, completed=completed_units, description=message or "Processing...")
+        # Update current step name
+        if message:
+            self._current_step_name = message
+
+        # Update status display
+        self._update_status_display()
 
         # Call external hook if set
         if self._progress_hook:
@@ -931,47 +1127,131 @@ class AIWorkflow(ABC):
             except Exception as e:
                 logger.warning(f"Progress hook failed: {e}")
 
-    def _init_progress_bar(self) -> None:
-        """Initialize Rich progress bar with logging coordination.
+    def _format_duration(self, seconds: float) -> str:
+        """Format duration dynamically based on the time scale."""
+        days = int(seconds // 86400)
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        secs = seconds % 60
+        if days > 0:
+            return f"{days:d}d {hours:02d}h {minutes:02d}m {secs:05.2f}s"
+        elif hours > 0:
+            return f"{hours:d}h {minutes:02d}m {secs:05.2f}s"
+        elif minutes > 0:
+            return f"{minutes:d}m {secs:05.2f}s"
+        else:
+            return f"{secs:.2f}s"
 
-        Uses the same console instance as logging to ensure proper coordination.
-        The transient=True option ensures the progress bar clears when log
-        messages appear, preventing visual interference.
-        """
-        if not self._show_progress or self._progress is not None:
-            return
+    def _get_status_display(self) -> Panel:
+        """Build the status display with table and progress."""
+        table = Table(show_header=True, header_style="bold cyan", box=None, padding=(0, 1), width=80)
+        table.add_column("Step", no_wrap=True, width=40)
+        table.add_column("Time", justify="right", width=15)
+        table.add_column("Cost", justify="right", width=12)
 
-        self._progress = Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TextColumn("[progress.percentage]{task.percentage:>3.1f}%"),
-            TimeRemainingColumn(),
-            console=self._console,  # Use shared console for coordination
-            transient=True,  # Clear progress bar when logging occurs
-        )
-        self._progress.start()
+        # Add rows for each step
+        for i, step in enumerate(self.steps):
+            if i in self.state.step_info:
+                info = self.state.step_info[i]
 
-        # Create task with total of 100 units for percentage-based progress
-        self._task_id = self._progress.add_task(
-            description="Initializing workflow...",
-            total=100,
-            completed=0
-        )
+                # Determine row style based on status
+                if info.status == "completed":
+                    row_style = "green"
+                    step_name = f"✓ {step.name}"
+                elif info.status == "skipped":
+                    row_style = "yellow"
+                    step_name = f"○ {step.name}"
+                elif info.status == "running":
+                    row_style = "bright_cyan"
+                    step_name = f"⟳ {step.name}"
+                else:
+                    row_style = "red"
+                    step_name = f"✗ {step.name}"
 
-        logger.debug("Initialized progress bar")
+                # Format duration (show live time for running steps)
+                if info.status == "running" and info.start_time:
+                    # Calculate current running time
+                    running_time = (datetime.now() - info.start_time).total_seconds()
+                    duration = self._format_duration(running_time)
+                elif info.duration > 0:
+                    duration = self._format_duration(info.duration)
+                else:
+                    duration = "-"
 
-    def _cleanup_progress_bar(self) -> None:
-        """Clean up Rich progress bar."""
-        if self._progress is not None:
-            try:
-                self._progress.stop()
-            except Exception as e:
-                logger.debug(f"Error stopping progress bar: {e}")
-            finally:
-                self._progress = None
-                self._task_id = None
-                logger.debug("Cleaned up progress bar")
+                # Format cost
+                cost = f"${info.cost:.4f}" if info.cost > 0 else "-"
+
+                table.add_row(step_name, duration, cost, style=row_style)
+            else:
+                # Step not yet executed
+                table.add_row(f"  {step.name}", "-", "-", style="dim")
+
+        # Add total row
+        if self.state.step_info:
+            total_cost = sum(info.cost for info in self.state.step_info.values())
+
+            # Calculate total duration including running steps
+            total_duration = 0.0
+            for info in self.state.step_info.values():
+                if info.status == "running" and info.start_time:
+                    # Add current running time for active steps
+                    total_duration += (datetime.now() - info.start_time).total_seconds()
+                else:
+                    total_duration += info.duration
+
+            table.add_section()
+            table.add_row(
+                "[bold]Total[/bold]",
+                f"[bold]{self._format_duration(total_duration)}[/bold]",
+                f"[bold]${total_cost:.4f}[/bold]"
+            )
+
+        # Add current progress info
+        progress_pct = int(self.state.progress_percentage * 100)
+        status_msg = f"Progress: {progress_pct}%"
+        if self._current_step_name:
+            status_msg = f"{status_msg} - {self._current_step_name}"
+
+        # Return panel with table and status
+        return Panel(table, title=status_msg, border_style="blue", width=84)
+
+    @contextmanager
+    def _status_display(self):
+        """Context manager for status display."""
+        # Start the status display
+        if self._show_progress and self._console:
+            # Use Live display with auto-refresh for real-time updates
+            # Use get_renderable parameter for dynamic updates
+            self._status_context = Live(
+                self._get_status_display(),  # Initial renderable
+                refresh_per_second=10,  # Update 10 times per second
+                auto_refresh=True,      # Enable automatic refresh
+                console=self._console,
+                transient=True,        # Keep display after completion
+                get_renderable=lambda: self._get_status_display()  # Function to get fresh renderable
+            )
+            self._status_context.start()
+            logger.debug("Started live status display")
+
+        try:
+            yield
+        finally:
+            # Stop the status display and show final summary
+            if self._status_context:
+                try:
+                    # Print the final state of the table before stopping
+                    if self._console:
+                        # Get the current status display and print it as static content
+                        final_display = self._get_status_display()
+                        self._console.print(final_display)
+
+                    # Stop the Live display
+                    self._status_context.stop()
+                except Exception as e:
+                    logger.debug(f"Error stopping live display: {e}")
+                finally:
+                    self._status_context = None
+                    logger.debug("Stopped live status display")
 
     @require_initialized
     def format_results(self, results: Dict[str, Any]) -> AIResult:

@@ -335,13 +335,21 @@ def factory_callback(workflow: Optional[AIWorkflow], model: str, resume: bool, w
         # Display results
         console.print("\n[green]Workflow complete![/green]")
 
+
         if export:
             # Export to JSON
             if hasattr(formatted_results, 'export_json'):
-                formatted_results.export_json(Path(export))
+                import json
+                results = {
+                    "results": formatted_results.to_dict(),
+                    "metadata": results["metadata"],
+                }
+                Path(export).parent.mkdir(parents=True, exist_ok=True)
+                Path(export).write_text(json.dumps(results, indent=2))
                 console.print(f"[green]Results exported to:[/green] {export}")
         else:
             # Pretty print to console
+            # results["metadata"] content is already shown as table in the command output.
             if hasattr(formatted_results, 'pretty_print'):
                 formatted_results.pretty_print(console)
             else:
