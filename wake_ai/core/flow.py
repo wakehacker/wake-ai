@@ -781,6 +781,7 @@ class AIWorkflow(ABC):
         )
 
         if not response.success:
+            logger.error(f"Command failed: {response.content}")
             return response
 
         last_response = response
@@ -846,6 +847,10 @@ class AIWorkflow(ABC):
                 continue_session=True
             )
 
+
+            if not response.success:
+                logger.error(f"Command failed: {response.content}")
+                return response
             # Return code is not 0, then parse valid output is not possible.
             last_response = response
             total_cost += response.cost
