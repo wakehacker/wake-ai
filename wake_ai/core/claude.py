@@ -314,11 +314,23 @@ class ClaudeCodeSession:
             )
         except ProcessError as e:
             logger.error(f"Claude Code process failed with exit code: {e.exit_code}")
-            return ClaudeCodeResponse(
-                content=f"Process failed with exit code: {e.exit_code} \n {e}",
-                tool_calls=[],
-                success=False,
-            )
+            if result is not None:
+                return ClaudeCodeResponse(
+                    content=result.result if result.result else "",
+                    tool_calls=[result.usage] if result.usage else [],
+                    success=not result.is_error,
+                    cost=result.total_cost_usd or 0.0,
+                    duration=result.duration_ms,
+                    num_turns=result.num_turns,
+                    session_id=result.session_id,
+                    is_finished=result.subtype == "success"
+                )
+            else:
+                return ClaudeCodeResponse(
+                    content=f"Process failed with exit code: {e.exit_code} \n {e}",
+                    tool_calls=[],
+                    success=False,
+                )
         except CLIJSONDecodeError as e:
             logger.error(f"Failed to parse Claude Code response: {e}")
             return ClaudeCodeResponse(
