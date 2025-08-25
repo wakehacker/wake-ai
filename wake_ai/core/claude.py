@@ -342,7 +342,7 @@ class ClaudeCodeSession:
         return ClaudeCodeResponse(
                 content=result.result if result.result else "",
                 tool_calls=[result.usage] if result.usage else [],
-                success=result.subtype == "success",
+                success=not result.is_error,
                 cost=result.total_cost_usd or 0.0,
                 duration=result.duration_ms,
                 num_turns=result.num_turns,
@@ -377,12 +377,29 @@ class ClaudeCodeSession:
         if continue_session:
             logger.debug(f"Continuing session: {continue_session}")
 
-        # Use asyncio.run to call the async version
-        return asyncio.run(self.query_async(
+        response = asyncio.run(self.query_async(
             prompt=prompt,
             max_turns=max_turns,
             continue_session=continue_session
         ))
+
+        if not response.success and response.content == "Prompt is too long":
+            logger.info(f"Prompt is too long: Auto compacting...")
+            response = asyncio.run(self.query_async(
+                prompt="/compact",
+                max_turns=max_turns,
+                resume_session=response.session_id # only happen continue session is true, compacting this continueing session.
+            ))
+
+            # runnning again as compacted.
+            response = asyncio.run(self.query_async(
+                prompt=prompt,
+                max_turns=max_turns,
+                resume_session=response.session_id  # Running session with compacted.
+            ))
+
+        # Use asyncio.run to call the async version
+        return response
 
 
     def query_with_cost(self, prompt: str, cost_limit: float, turn_step: int = 50, continue_session: bool = False) -> ClaudeCodeResponse:
@@ -419,6 +436,20 @@ class ClaudeCodeSession:
             continue_session=continue_session # this will continue true for always.
         ))
 
+        if not response.success and response.content == "Prompt is too long":
+            logger.info(f"Prompt is too long: Auto compacting...")
+            response = asyncio.run(self.query_async(
+                prompt="/compact",
+                max_turns=turn_step,
+                resume_session=response.session_id # only happen continue session is true, compacting this continueing session.
+            ))
+
+            response = asyncio.run(self.query_async(
+                prompt=prompt,
+                max_turns=turn_step,
+                resume_session=response.session_id # Running session with compacted.
+            ))
+
         session_id = response.session_id
 
         if not response.success:
@@ -446,11 +477,26 @@ class ClaudeCodeSession:
             try:
                 ## TODO: the result of response.is_finished is not progress but it might also showing help. it might good to rerun same prompt with different session.
                 # Use asyncio.run to call the async version
+
                 response = asyncio.run(self.query_async(
                     prompt="continue",
                     max_turns=turn_step,
-                    resume_session=session_id # this will continue true for always.
+                    resume_session=session_id
                 ))
+
+                if not response.success and response.content == "Prompt is too long":
+                    logger.info(f"Prompt is too long: Auto compacting...")
+                    response = asyncio.run(self.query_async(
+                        prompt="/compact",
+                        max_turns=turn_step,
+                        resume_session=response.session_id # only happen continue session is true, compacting this continueing session.
+                    ))
+
+                    response = asyncio.run(self.query_async(
+                        prompt=prompt,
+                        max_turns=turn_step,
+                        resume_session=response.session_id# Running session with compacted.
+                    ))
 
                 last_response = response
 
@@ -492,6 +538,20 @@ class ClaudeCodeSession:
                     max_turns=turn_step,
                     resume_session=session_id # this will continue true for always.
                 ))
+
+                if not response.success and response.content == "Prompt is too long":
+                    logger.info(f"Prompt is too long: Auto compacting...")
+                    response = asyncio.run(self.query_async(
+                        prompt="/compact",
+                        max_turns=turn_step,
+                        resume_session=response.session_id # only happen continue session is true, compacting this continueing session.
+                    ))
+
+                    response = asyncio.run(self.query_async(
+                        prompt=prompt,
+                        max_turns=turn_step,
+                        resume_session=response.session_id# Running session with compacted.
+                    ))
 
                 last_response = response
 
