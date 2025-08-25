@@ -353,7 +353,6 @@ class ClaudeCodeSession:
             is_finished=result.subtype == "success"
         )
 
-
     def query(
         self,
         prompt: str,
@@ -380,12 +379,29 @@ class ClaudeCodeSession:
         if continue_session:
             logger.debug(f"Continuing session: {continue_session}")
 
-        # Use asyncio.run to call the async version
-        return asyncio.run(self.query_async(
+        response = asyncio.run(self.query_async(
             prompt=prompt,
             max_turns=max_turns,
             continue_session=continue_session
         ))
+
+        if not response.success and response.content == "Prompt is too long":
+            logger.info(f"Prompt is too long: Auto compacting...")
+            response = asyncio.run(self.query_async(
+                prompt="/compact",
+                max_turns=max_turns,
+                resume_session=response.session_id # only happen continue session is true, compacting this continueing session.
+            ))
+
+            # runnning again as compacted.
+            response = asyncio.run(self.query_async(
+                prompt=prompt,
+                max_turns=max_turns,
+                resume_session=response.session_id  # Running session with compacted.
+            ))
+
+        # Use asyncio.run to call the async version
+        return response
 
 
     def save_session_state(self, session_id: str, state_file: Union[str, Path]):
