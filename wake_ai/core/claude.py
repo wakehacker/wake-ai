@@ -38,7 +38,7 @@ COLORS = {
     "unknown": "dim red",
     "truncation": "dim italic yellow"
 }
-COMPACT_PROMPT = "Excellent work so far. We will have more work to do on this next - but first we need to do some context management. As per the instructions, write any and all relevant distilled thoughts, context, reasoning, plans, and anything else critical for a seamless continuation after compaction. Please also provide a prompt that I can copy and paste into claude, detailed and thorough enough to continue seamlessly even if I were to paste into a fresh instance of claude code, that contains all relevant distilled thoughts, reasoning, and and all relevant context, plans, and anything else necessary to continue our work seamlessly."
+COMPACT_PROMPT = "Preserve original task that triggered this session, summarize current state (completed steps, pending work, active files), capture key findings (decisions, discoveries, issues), and include essential context (relevant code/configs/variables) with distilled reasoning and plans for seamless continuation."
 
 @dataclass
 class ClaudeCodeResponse:
@@ -343,9 +343,10 @@ class ClaudeCodeSession:
                 if auto_compact and not response.success and response.content == "Prompt is too long":
                     logger.info(f"Prompt is too long: Auto compacting...")
 
-                    # Compact the session
+                    # Compact the session with guidance
+                    compact_prompt = f"/compact {COMPACT_PROMPT}"
                     compact_response = await self.query_async(
-                        prompt="/compact",
+                        prompt=compact_prompt,
                         max_turns=max_turns,
                         resume_session=response.session_id,
                         auto_compact=False  # Prevent infinite recursion
