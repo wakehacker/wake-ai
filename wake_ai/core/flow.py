@@ -749,22 +749,23 @@ class AIWorkflow(ABC):
 
 
     def query_with_cost(self, prompt: str, cost_limit: float, turn_step: int = 50, continue_session: bool = False, step_info: Optional[StepExecutionInfo] = None) -> ClaudeCodeResponse:
-        """Query with cost tracking.
+        """Execute queries with cost monitoring and automatic completion.
 
         Args:
-            prompt: The prompt to send
-            cost_limit: The cost limit in USD
-            turn_step: Maximum turns per query iteration
-            continue_session: Continue the stored session if available
+            prompt: The initial prompt to send to Claude
+            cost_limit: Maximum cost in USD before attempting to finish
+            turn_step: Maximum turns per iteration to control cost increments
+            continue_session: Whether to continue the last stored session
 
         Note:
-            The cost limit is not strictly enforced.
-            Instead, the querying runs in a loop, each time querying with `turn_step` turns.
-            After each query, the cost is checked and the loop continues until the cost limit is reached.
-            After that, if the task has still not been finished, the AI is prompted to promptly finish the task.
+            Cost enforcement is iterative rather than strict. The system:
+            1. Executes queries in chunks of `turn_step` turns
+            2. Monitors cumulative cost after each iteration
+            3. Continues until cost limit is approached
+            4. Attempts graceful completion if task is unfinished
 
         Returns:
-            ClaudeCodeResponse with the result
+            ClaudeCodeResponse with the final result and total cost
         """
         logger.debug(f"Starting cost-limited query (limit=${cost_limit:.2f}, turn_step={turn_step}, continue_session={continue_session})")
 
@@ -774,6 +775,7 @@ class AIWorkflow(ABC):
 
         # First query with the initial prompt
         logger.debug(f"Iteration {iteration}: Initial query")
+
         response = self.session.query(
             prompt=prompt,
             max_turns=turn_step,
@@ -832,7 +834,7 @@ class AIWorkflow(ABC):
             logger.debug(f"Iteration {iteration} complete: iteration_cost=${response.cost:.4f}, total_cost=${total_cost:.4f}")
 
 
-        # If the task is not finished, we need to prompt the AI to finish it
+        # Attempt to complete unfinished task within remaining budget
         if not last_response.is_finished:
             logger.warning("Task not finished after reaching cost limit. Attempting to finish...")
 
@@ -841,9 +843,16 @@ class AIWorkflow(ABC):
         while finish_tries < max_finish_tries and not last_response.is_finished:
             logger.debug(f"Finish attempt {finish_tries + 1}/{max_finish_tries}")
 
+            prompt = (
+                f"You are approaching the cost limit. Please finish the task as quickly "
+                f"as possible. This is attempt {finish_tries + 1}/{max_finish_tries}. "
+                f"After {max_finish_tries} attempts, the task will be terminated."
+            )
+
             response = self.session.query(
-                prompt=f"you are running out of time, please finish the task as quickly as possible. this is the {finish_tries}/{max_finish_tries} try (after {max_finish_tries}th warning, the task will be aborted)",
+                prompt=prompt,
                 max_turns=turn_step,
+                # Resume the same session for completion attempt
                 continue_session=True
             )
 
@@ -857,7 +866,7 @@ class AIWorkflow(ABC):
             if step_info is not None:
                 step_info.cost += response.cost
             logger.debug(f"Finish attempt {finish_tries + 1} complete: cost=${response.cost:.4f}, total=${total_cost:.4f}")
-            # Check if task is finished
+            # Verify if completion attempt succeeded
             if response.is_finished:
                 logger.debug(f"Task finished after {finish_tries + 1} finish attempts. Total cost: ${total_cost:.4f}")
                 return response
