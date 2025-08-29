@@ -56,7 +56,7 @@ Wake AI is a framework for building AI-powered workflows to analyze smart contra
 
 ### Requirements
 
--   Python 3.8+
+-   Python 3.10+
 -   Claude Code CLI installed and authenticated
 
 ### Install from PyPI
