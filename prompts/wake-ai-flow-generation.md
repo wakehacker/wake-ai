@@ -979,13 +979,14 @@ When asked to create a workflow, provide:
 
 4. **File Structure**:
    ```
-   flows/
-   └── my_workflow/
-       ├── __init__.py
-       ├── workflow.py
-       └── prompts/
-           ├── 0-initialize.md
-           └── 1-analyze.md
+   wake_ai/
+   └──flows/
+       └── my_workflow/
+           ├── __init__.py
+           ├── workflow.py
+           └── prompts/
+               ├── 0-initialize.md
+               └── 1-analyze.md
    ```
 </output_format>
 
