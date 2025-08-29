@@ -277,7 +277,7 @@ Example usage:
 
 ```bash
 # Use the prompt with your favorite AI to generate a new workflow
-# Then save the generated code to flows/my_detector/workflow.py
+# Then save the generated code to wake_ai/flows/my_detector/workflow.py
 ```
 
 The prompt handles:
@@ -731,12 +731,12 @@ See **[examples/README.md](examples/README.md)** for educational examples demons
 
 ### Production Workflows
 
-See the `../flows/` directory for complete workflow implementations:
+See the `../wake_ai/flows/` directory for complete workflow implementations:
 
--   **[audit](../flows/audit/workflow.py)** - Comprehensive security audit workflow
--   **[reentrancy](../flows/reentrancy/workflow.py)** - Reentrancy vulnerability detector
--   **[donation_attack](../flows/donation_attack/workflow.py)** - Donation attack vulnerability detector
--   **[uniswap_integration](../flows/uniswap_integration/workflow.py)** - Uniswap-specific vulnerability detector
+-   **[audit](../wake_ai/flows/audit/workflow.py)** - Comprehensive security audit workflow
+-   **[reentrancy](../wake_ai/flows/reentrancy/workflow.py)** - Reentrancy vulnerability detector
+-   **[donation_attack](../wake_ai/flows/donation_attack/workflow.py)** - Donation attack vulnerability detector
+-   **[uniswap_integration](../wake_ai/flows/uniswap_integration/workflow.py)** - Uniswap-specific vulnerability detector
 
 ## Best Practices
 
