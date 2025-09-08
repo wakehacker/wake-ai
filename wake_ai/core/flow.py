@@ -489,7 +489,9 @@ class AIWorkflow(ABC):
                 self._load_state()
             else:
                 self.state = WorkflowState()
-                self.state.context = context or {}
+                # Extend existing context with new values instead of overriding
+                if context:
+                    self.state.context.update(context)
                 # Add working directory to context
                 self.state.context["working_dir"] = str(self.working_dir)
                 self.state.started_at = datetime.now()
