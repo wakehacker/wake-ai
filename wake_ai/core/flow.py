@@ -161,13 +161,17 @@ class StepExecutionInfo:
             "duration": self.duration,
             "retries": self.retries,
             "status": self.status,
-            "start_time": self.start_time,
+            "start_time": self.start_time.isoformat() if self.start_time else None,
             "session_id": self.session_id
         }
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "StepExecutionInfo":
         """Create StepExecutionInfo from dictionary."""
+        start_time = None
+        if data["start_time"]:
+            start_time = datetime.fromisoformat(data["start_time"])
+
         return cls(
             name=data["name"],
             turns=data["turns"],
@@ -175,7 +179,7 @@ class StepExecutionInfo:
             duration=data["duration"],
             retries=data["retries"],
             status=data["status"],
-            start_time=data["start_time"],
+            start_time=start_time,
             session_id=data["session_id"]
         )
 
