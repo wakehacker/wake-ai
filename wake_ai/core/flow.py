@@ -27,25 +27,31 @@ import json
 import re
 import shutil
 from abc import ABC, abstractmethod
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
+from functools import wraps
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
-from functools import wraps
-from contextlib import contextmanager
 
 import rich_click as click
 from jinja2 import Environment, StrictUndefined, Template, meta
 from pydantic import BaseModel
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeRemainingColumn
 from rich.console import Console
-from rich.table import Table
-from rich.panel import Panel
 from rich.live import Live
+from rich.panel import Panel
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeRemainingColumn,
+)
+from rich.table import Table
 
 from ..results import AIResult, MessageResult
-from .claude import ClaudeCodeResponse, ClaudeCodeSession
 from ..utils.logging import get_logger
+from .claude import ClaudeCodeResponse, ClaudeCodeSession
 
 # Set up logging
 logger = get_logger(__name__)
@@ -53,14 +59,16 @@ logger = get_logger(__name__)
 
 def require_initialized(func):
     """Decorator to ensure __init__ was called on AIWorkflow instances."""
+
     @wraps(func)
     def wrapper(self, *args, **kwargs):
-        if isinstance(self, AIWorkflow) and not getattr(self, '_init_called', False):
+        if isinstance(self, AIWorkflow) and not getattr(self, "_init_called", False):
             raise RuntimeError(
                 f"AIWorkflow.__init__() was not called. "
                 f"Make sure to call super().__init__(...) in {self.__class__.__name__}.__init__()"
             )
         return func(self, *args, **kwargs)
+
     return wrapper
 
 
@@ -95,11 +103,15 @@ class WorkflowStep:
     continue_session: bool = False
     condition: Optional[Callable[[Dict[str, Any]], bool]] = None
     model: Optional[str] = None
-    _post_hook: Optional[Callable[['AIWorkflow', ClaudeCodeResponse], None]] = field(default=None, repr=False)
+    _post_hook: Optional[Callable[["AIWorkflow", ClaudeCodeResponse], None]] = field(
+        default=None, repr=False
+    )
 
     def format_prompt(self, context: Dict[str, Any]) -> str:
         """Format the prompt template with context using Jinja2."""
-        logger.debug(f"Formatting prompt for step '{self.name}' with context keys: {list(context.keys())}")
+        logger.debug(
+            f"Formatting prompt for step '{self.name}' with context keys: {list(context.keys())}"
+        )
 
         # Create Jinja2 environment with strict undefined to catch missing variables
         env = Environment(undefined=StrictUndefined)
@@ -111,7 +123,9 @@ class WorkflowStep:
         # Warn if there are context keys that are not in the context
         for key in prompt_context_keys:
             if key not in context:
-                logger.warning(f"Context key '{key}' used in step '{self.name}' not provided")
+                logger.warning(
+                    f"Context key '{key}' used in step '{self.name}' not provided"
+                )
 
         # Render the template
         template = env.from_string(self.prompt_template)
@@ -142,6 +156,7 @@ class WorkflowStep:
 @dataclass
 class StepExecutionInfo:
     """Information about a single step execution."""
+
     name: str
     turns: int
     cost: float
@@ -165,12 +180,13 @@ class WorkflowState:
     completed_at: Optional[datetime] = None
     cumulative_cost: float = 0.0
     progress_percentage: float = 0.0
-    step_info: Dict[int, StepExecutionInfo] = field(default_factory=dict)  # Key is step index
+    step_info: Dict[int, StepExecutionInfo] = field(
+        default_factory=dict
+    )  # Key is step index
 
 
 class AIWorkflow(ABC):
     """Base class for fixed AI workflows."""
-
 
     name: str
     result_class: Type[AIResult]
@@ -180,7 +196,9 @@ class AIWorkflow(ABC):
     session: ClaudeCodeSession
     steps: List[WorkflowStep]
     state: WorkflowState
-    _dynamic_generators: Dict[str, Callable[[ClaudeCodeResponse, Dict[str, Any]], List[WorkflowStep]]]
+    _dynamic_generators: Dict[
+        str, Callable[[ClaudeCodeResponse, Dict[str, Any]], List[WorkflowStep]]
+    ]
     _init_called: bool
     _console: Console
 
@@ -196,7 +214,7 @@ class AIWorkflow(ABC):
         disallowed_tools: Optional[List[str]] = None,
         cleanup_working_dir: Optional[bool] = None,
         show_progress: Optional[bool] = None,
-        console: Optional[Console] = None
+        console: Optional[Console] = None,
     ):
         """Initialize workflow.
 
@@ -235,10 +253,18 @@ class AIWorkflow(ABC):
             execution_dir = cli.get("execution_dir", None)
 
         # Set cleanup behavior (use instance value if provided, else class default)
-        self.cleanup_working_dir = cleanup_working_dir if cleanup_working_dir is not None else cli.get("cleanup_working_dir", True)
+        self.cleanup_working_dir = (
+            cleanup_working_dir
+            if cleanup_working_dir is not None
+            else cli.get("cleanup_working_dir", True)
+        )
 
         # Set progress behavior (use instance value if provided, else CLI or default)
-        self._show_progress = show_progress if show_progress is not None else cli.get("show_progress", True)
+        self._show_progress = (
+            show_progress
+            if show_progress is not None
+            else cli.get("show_progress", True)
+        )
 
         # Set console for coordinated output
         if console is not None:
@@ -249,6 +275,7 @@ class AIWorkflow(ABC):
                 self._console = cli_console
             else:
                 from rich.console import Console
+
                 self._console = Console()
 
         # Set up working directory
@@ -259,8 +286,11 @@ class AIWorkflow(ABC):
             import random
             import string
             from datetime import datetime
+
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
+            suffix = "".join(
+                random.choices(string.ascii_lowercase + string.digits, k=6)
+            )
             session_id = f"{timestamp}_{suffix}"
             self.working_dir = Path.cwd() / ".wake" / "ai" / session_id
 
@@ -275,33 +305,43 @@ class AIWorkflow(ABC):
         # - The AI is restricted to the launch directory by default
         default_allowed_tools = [
             # Read-only tools (always safe)
-            "Read", "Grep", "Glob", "LS", "Task", "TodoWrite",
-
+            "Read",
+            "Grep",
+            "Glob",
+            "LS",
+            "Task",
+            "TodoWrite",
             # Wake MCP
             "mcp__wake",
-
             # Write tools (needed for results - cannot be path-restricted)
-            f"Write(/{self.working_dir}/**)", f"Edit(/{self.working_dir}/**)", f"MultiEdit(/{self.working_dir}/**)",
-
+            f"Write(/{self.working_dir}/**)",
+            f"Edit(/{self.working_dir}/**)",
+            f"MultiEdit(/{self.working_dir}/**)",
             # Essential bash commands for codebase analysis
-            "Bash(wake:*)",      # Wake framework commands
-            "Bash(cd:*)",        # Directory navigation
-            "Bash(pwd)",         # Print working directory
-            "Bash(ls:*)",        # List files (though LS tool is preferred)
-            "Bash(find:*)",      # Find files by pattern
-            "Bash(tree:*)",      # Directory structure visualization
-            "Bash(diff:*)",      # Compare files
-            "Bash(mkdir:*)",     # Create directories
-            "Bash(mv:*)",        # Move/rename files
-            "Bash(cp:*)",        # Copy files
+            "Bash(wake:*)",  # Wake framework commands
+            "Bash(cd:*)",  # Directory navigation
+            "Bash(pwd)",  # Print working directory
+            "Bash(ls:*)",  # List files (though LS tool is preferred)
+            "Bash(find:*)",  # Find files by pattern
+            "Bash(tree:*)",  # Directory structure visualization
+            "Bash(diff:*)",  # Compare files
+            "Bash(mkdir:*)",  # Create directories
+            "Bash(mv:*)",  # Move/rename files
+            "Bash(cp:*)",  # Copy files
         ]
 
         # Default disallowed tools (subclasses can override)
         default_disallowed_tools = []
 
         # Use provided tools or defaults
-        tools_allowed = allowed_tools if allowed_tools is not None else default_allowed_tools
-        tools_disallowed = disallowed_tools if disallowed_tools is not None else default_disallowed_tools
+        tools_allowed = (
+            allowed_tools if allowed_tools is not None else default_allowed_tools
+        )
+        tools_disallowed = (
+            disallowed_tools
+            if disallowed_tools is not None
+            else default_disallowed_tools
+        )
 
         # Set execution directory
         self.execution_dir = Path(execution_dir) if execution_dir else Path.cwd()
@@ -316,7 +356,7 @@ class AIWorkflow(ABC):
                 execution_dir=self.execution_dir,
                 allowed_tools=tools_allowed,
                 disallowed_tools=tools_disallowed,
-                console=self._console
+                console=self._console,
             )
         else:
             # Default to creating a session with default model
@@ -325,12 +365,14 @@ class AIWorkflow(ABC):
                 execution_dir=self.execution_dir,
                 allowed_tools=tools_allowed,
                 disallowed_tools=tools_disallowed,
-                console=self._console
+                console=self._console,
             )
 
         self.steps: List[WorkflowStep] = []
         self.state = WorkflowState()
-        self._dynamic_generators: Dict[str, Callable[[ClaudeCodeResponse, Dict[str, Any]], List[WorkflowStep]]] = {}
+        self._dynamic_generators: Dict[
+            str, Callable[[ClaudeCodeResponse, Dict[str, Any]], List[WorkflowStep]]
+        ] = {}
 
         # Progress tracking
         self._status_context = None  # console.status context manager
@@ -356,23 +398,29 @@ class AIWorkflow(ABC):
         """Check if step model is allowed (only downgrades permitted)."""
         return cls._get_model_rank(step_model) <= cls._get_model_rank(workflow_model)
 
-
     @abstractmethod
     def _setup_steps(self):
         """Setup workflow steps. Must be implemented by subclasses."""
         pass
 
     @require_initialized
-    def add_step(self, name: str, prompt_template: str, allowed_tools: Optional[List[str]] = None,
-                 disallowed_tools: Optional[List[str]] = None,
-                 max_cost: Optional[float] = None,
-                 validator: Optional[Callable[[ClaudeCodeResponse], Tuple[bool, List[str]]]] = None,
-                 max_retries: int = 3,
-                 max_retry_cost: Optional[float] = None,
-                 continue_session: bool = False,
-                 condition: Optional[Callable[[Dict[str, Any]], bool]] = None,
-                 model: Optional[str] = None,
-                 after_step: Optional[str] = None):
+    def add_step(
+        self,
+        name: str,
+        prompt_template: str,
+        allowed_tools: Optional[List[str]] = None,
+        disallowed_tools: Optional[List[str]] = None,
+        max_cost: Optional[float] = None,
+        validator: Optional[
+            Callable[[ClaudeCodeResponse], Tuple[bool, List[str]]]
+        ] = None,
+        max_retries: int = 3,
+        max_retry_cost: Optional[float] = None,
+        continue_session: bool = False,
+        condition: Optional[Callable[[Dict[str, Any]], bool]] = None,
+        model: Optional[str] = None,
+        after_step: Optional[str] = None,
+    ):
         """Add a step to the workflow.
 
         Args:
@@ -391,9 +439,11 @@ class AIWorkflow(ABC):
             after_step: Optional step name after which to insert this step. If None, appends to end.
         """
         # Validate model if specified
-        if model and hasattr(self.session, 'model') and self.session.model:
+        if model and hasattr(self.session, "model") and self.session.model:
             if not self._validate_model_downgrade(self.session.model, model):
-                logger.warning(f"Cannot upgrade from '{self.session.model}' to '{model}' - using workflow model instead")
+                logger.warning(
+                    f"Cannot upgrade from '{self.session.model}' to '{model}' - using workflow model instead"
+                )
                 model = None
 
         step = WorkflowStep(
@@ -407,7 +457,7 @@ class AIWorkflow(ABC):
             max_retry_cost=max_retry_cost,
             continue_session=continue_session,
             condition=condition,
-            model=model
+            model=model,
         )
 
         if after_step is None:
@@ -426,11 +476,17 @@ class AIWorkflow(ABC):
 
             self.steps.insert(insert_pos, step)
 
-        logger.debug(f"Added step '{name}' to workflow (allowed_tools: {allowed_tools}, max_cost: {max_cost}, after: {after_step})")
+        logger.debug(
+            f"Added step '{name}' to workflow (allowed_tools: {allowed_tools}, max_cost: {max_cost}, after: {after_step})"
+        )
 
     @require_initialized
-    def add_dynamic_steps(self, name: str, generator: Callable[[ClaudeCodeResponse, Dict[str, Any]], List[WorkflowStep]],
-                         after_step: Optional[str] = None):
+    def add_dynamic_steps(
+        self,
+        name: str,
+        generator: Callable[[ClaudeCodeResponse, Dict[str, Any]], List[WorkflowStep]],
+        after_step: Optional[str] = None,
+    ):
         """Add a dynamic step generator that creates new steps at runtime.
 
         The generator function will be called after the specified step executes,
@@ -445,7 +501,9 @@ class AIWorkflow(ABC):
         if after_step is None and self.steps:
             after_step = self.steps[-1].name
         elif after_step is None and not self.steps:
-            raise ValueError("Cannot add dynamic steps to empty workflow. Add at least one regular step first.")
+            raise ValueError(
+                "Cannot add dynamic steps to empty workflow. Add at least one regular step first."
+            )
 
         # Verify the after_step exists
         if after_step not in [s.name for s in self.steps]:
@@ -462,7 +520,9 @@ class AIWorkflow(ABC):
         logger.debug(f"Added dynamic step generator '{name}' after step '{after_step}'")
 
     @require_initialized
-    def execute(self, context: Optional[Dict[str, Any]] = None, resume: bool = False) -> Tuple[Dict[str, Any], AIResult]:
+    def execute(
+        self, context: Optional[Dict[str, Any]] = None, resume: bool = False
+    ) -> Tuple[Dict[str, Any], AIResult]:
         """Execute the workflow.
 
         Returns:
@@ -485,16 +545,21 @@ class AIWorkflow(ABC):
                 logger.debug(f"Failed to update progress: {e}")
 
             if resume and (self.working_dir / f"{self.name}_state.json").exists():
-                logger.info(f"Resuming workflow from saved state in: {self.working_dir / f'{self.name}_state.json'}")
+                logger.info(
+                    f"Resuming workflow from saved state in: {self.working_dir / f'{self.name}_state.json'}"
+                )
                 self._load_state()
             else:
-                self.state = WorkflowState()
-                self.state.context = context or {}
+                # Extend existing context with new values instead of overriding
+                if context:
+                    self.state.context.update(context)
                 # Add working directory to context
                 self.state.context["working_dir"] = str(self.working_dir)
                 self.state.started_at = datetime.now()
                 if resume:
-                    logger.info(f"No saved state found, starting fresh workflow execution")
+                    logger.info(
+                        f"No saved state found, starting fresh workflow execution"
+                    )
                 else:
                     logger.debug(f"Starting fresh workflow execution")
 
@@ -506,16 +571,20 @@ class AIWorkflow(ABC):
                 if step.condition is not None:
                     should_execute = step.condition(self.state.context)
                     if not should_execute:
-                        logger.info(f"Skipping step {self.state.current_step + 1}/{len(self.steps)}: '{step.name}' (condition not met)")
+                        logger.info(
+                            f"Skipping step {self.state.current_step + 1}/{len(self.steps)}: '{step.name}' (condition not met)"
+                        )
                         self.state.skipped_steps.append(step.name)
                         # Record skipped step info
-                        self.state.step_info[self.state.current_step] = StepExecutionInfo(
-                            name=step.name,
-                            cost=0.0,
-                            turns=0,
-                            duration=0.0,
-                            retries=0,
-                            status="skipped"
+                        self.state.step_info[self.state.current_step] = (
+                            StepExecutionInfo(
+                                name=step.name,
+                                cost=0.0,
+                                turns=0,
+                                duration=0.0,
+                                retries=0,
+                                status="skipped",
+                            )
                         )
                         # Update status display with skipped step
                         self._update_status_display()
@@ -523,7 +592,9 @@ class AIWorkflow(ABC):
                         self._save_state()
                         continue
 
-                logger.info(f"Executing step {self.state.current_step + 1}/{len(self.steps)}: '{step.name}'")
+                logger.info(
+                    f"Executing step {self.state.current_step + 1}/{len(self.steps)}: '{step.name}'"
+                )
 
                 # Update progress message at step start (percentage based on completed steps)
                 try:
@@ -544,7 +615,7 @@ class AIWorkflow(ABC):
                         duration=0.0,
                         retries=0,
                         status="running",
-                        start_time=step_start_time
+                        start_time=step_start_time,
                     )
                     self._update_status_display()
 
@@ -558,22 +629,28 @@ class AIWorkflow(ABC):
                     # Save original tools and model
                     original_allowed = self.session.allowed_tools
                     original_disallowed = self.session.disallowed_tools
-                    original_model = getattr(self.session, 'model', None)
+                    original_model = getattr(self.session, "model", None)
 
                     # Change model for this step if specified
                     if step.model is not None and step.model != original_model:
-                        logger.debug(f"Switching from model '{original_model}' to '{step.model}' for step '{step.name}'")
+                        logger.debug(
+                            f"Switching from model '{original_model}' to '{step.model}' for step '{step.name}'"
+                        )
                         self.session.model = step.model
 
                     while retry_count <= step.max_retries:
                         # Set tools if specified (step overrides workflow defaults)
                         if step.allowed_tools is not None:
                             self.session.allowed_tools = step.allowed_tools
-                            logger.debug(f"Set allowed tools for step '{step.name}': {step.allowed_tools}")
+                            logger.debug(
+                                f"Set allowed tools for step '{step.name}': {step.allowed_tools}"
+                            )
 
                         if step.disallowed_tools is not None:
                             self.session.disallowed_tools = step.disallowed_tools
-                            logger.debug(f"Set disallowed tools for step '{step.name}': {step.disallowed_tools}")
+                            logger.debug(
+                                f"Set disallowed tools for step '{step.name}': {step.disallowed_tools}"
+                            )
 
                         # Execute query
                         if retry_count == 0:
@@ -587,18 +664,35 @@ class AIWorkflow(ABC):
                             should_continue = step.continue_session
 
                             if step.max_cost:
-                                logger.debug(f"Querying with cost limit ${step.max_cost} for step '{step.name}' (continue_session={should_continue}, model={getattr(self.session, 'model', 'default')})")
-                                response = self.query_with_cost(prompt, step.max_cost, continue_session=should_continue, step_info=self.state.step_info[self.state.current_step])
+                                logger.debug(
+                                    f"Querying with cost limit ${step.max_cost} for step '{step.name}' (continue_session={should_continue}, model={getattr(self.session, 'model', 'default')})"
+                                )
+                                response = self.query_with_cost(
+                                    prompt,
+                                    step.max_cost,
+                                    continue_session=should_continue,
+                                    step_info=self.state.step_info[
+                                        self.state.current_step
+                                    ],
+                                )
                             else:
-                                logger.debug(f"Querying step '{step.name}' (continue_session={should_continue}, model={getattr(self.session, 'model', 'default')})")
-                                response = self.session.query(prompt, continue_session=should_continue)
+                                logger.debug(
+                                    f"Querying step '{step.name}' (continue_session={should_continue}, model={getattr(self.session, 'model', 'default')})"
+                                )
+                                response = self.session.query(
+                                    prompt, continue_session=should_continue
+                                )
                         else:
                             # Retry attempt - add error correction prompt
-                            error_prompt = "The following errors occurred, please fix them:\n"
+                            error_prompt = (
+                                "The following errors occurred, please fix them:\n"
+                            )
                             for error in validation_errors:
                                 error_prompt += f"- {error}\n"
                             prompt = error_prompt
-                            logger.info(f"Retrying step '{step.name}' (attempt {retry_count}/{step.max_retries}) - previous attempt failed validation")
+                            logger.info(
+                                f"Retrying step '{step.name}' (attempt {retry_count}/{step.max_retries}) - previous attempt failed validation"
+                            )
 
                             # Update progress message for retry (don't change percentage)
                             try:
@@ -609,14 +703,31 @@ class AIWorkflow(ABC):
 
                             # Always continue session for retries
                             if step.max_retry_cost:
-                                logger.debug(f"Querying retry with cost limit ${step.max_retry_cost} for step '{step.name}' (model={getattr(self.session, 'model', 'default')})")
-                                response = self.query_with_cost(prompt, step.max_retry_cost, continue_session=True, step_info=self.state.step_info[self.state.current_step])
+                                logger.debug(
+                                    f"Querying retry with cost limit ${step.max_retry_cost} for step '{step.name}' (model={getattr(self.session, 'model', 'default')})"
+                                )
+                                response = self.query_with_cost(
+                                    prompt,
+                                    step.max_retry_cost,
+                                    continue_session=True,
+                                    step_info=self.state.step_info[
+                                        self.state.current_step
+                                    ],
+                                )
                             else:
-                                logger.debug(f"Querying retry for step '{step.name}' (model={getattr(self.session, 'model', 'default')})")
-                                response = self.session.query(prompt, continue_session=True)
+                                logger.debug(
+                                    f"Querying retry for step '{step.name}' (model={getattr(self.session, 'model', 'default')})"
+                                )
+                                response = self.session.query(
+                                    prompt, continue_session=True
+                                )
 
                         # Log session ID after first step's first query
-                        if self.state.current_step == 0 and retry_count == 0 and response.session_id:
+                        if (
+                            self.state.current_step == 0
+                            and retry_count == 0
+                            and response.session_id
+                        ):
                             logger.debug(f"Claude session ID: {response.session_id}")
 
                         # Update progress message for validation (don't change percentage)
@@ -639,21 +750,31 @@ class AIWorkflow(ABC):
 
                         if success:
                             # Validation passed - log successful completion with total cost/turns
-                            retry_msg = f" after {retry_count} retries" if retry_count > 0 else ""
-                            logger.info(f"Step '{step.name}' completed{retry_msg} - cost: ${step_total_cost:.4f}, turns: {step_total_turns}")
+                            retry_msg = (
+                                f" after {retry_count} retries"
+                                if retry_count > 0
+                                else ""
+                            )
+                            logger.info(
+                                f"Step '{step.name}' completed{retry_msg} - cost: ${step_total_cost:.4f}, turns: {step_total_turns}"
+                            )
                             logger.debug(f"Response: {response.content}")
 
                             # Calculate step duration
-                            step_duration = (datetime.now() - step_start_time).total_seconds()
+                            step_duration = (
+                                datetime.now() - step_start_time
+                            ).total_seconds()
 
                             # Record step execution info
-                            self.state.step_info[self.state.current_step] = StepExecutionInfo(
-                                name=step.name,
-                                cost=step_total_cost,
-                                turns=step_total_turns,
-                                duration=step_duration,
-                                retries=retry_count,
-                                status="completed"
+                            self.state.step_info[self.state.current_step] = (
+                                StepExecutionInfo(
+                                    name=step.name,
+                                    cost=step_total_cost,
+                                    turns=step_total_turns,
+                                    duration=step_duration,
+                                    retries=retry_count,
+                                    status="completed",
+                                )
                             )
 
                             # Update live display with completed step
@@ -685,13 +806,23 @@ class AIWorkflow(ABC):
                             break
                         else:
                             # Validation failed - log query completion but note validation failure
-                            attempt_msg = f"attempt {retry_count + 1}" if retry_count > 0 else "initial attempt"
-                            logger.debug(f"Step '{step.name}' {attempt_msg} completed but validation failed - cost: ${response.cost:.4f}, turns: {response.num_turns}")
-                            logger.warning(f"Step '{step.name}' validation failed: {validation_errors}")
+                            attempt_msg = (
+                                f"attempt {retry_count + 1}"
+                                if retry_count > 0
+                                else "initial attempt"
+                            )
+                            logger.debug(
+                                f"Step '{step.name}' {attempt_msg} completed but validation failed - cost: ${response.cost:.4f}, turns: {response.num_turns}"
+                            )
+                            logger.warning(
+                                f"Step '{step.name}' validation failed: {validation_errors}"
+                            )
 
                             if retry_count >= step.max_retries:
                                 # Max retries reached
-                                logger.error(f"Step '{step.name}' failed after {step.max_retries} retries - final errors: {validation_errors}")
+                                logger.error(
+                                    f"Step '{step.name}' failed after {step.max_retries} retries - final errors: {validation_errors}"
+                                )
                                 error_msg = f"Step '{step.name}' validation failed after {step.max_retries} retries. Errors: {'; '.join(validation_errors)}"
                                 raise RuntimeError(error_msg)
 
@@ -711,19 +842,25 @@ class AIWorkflow(ABC):
                         self.session.model = original_model
 
                     logger.error(f"Error in step '{step.name}': {str(e)}")
-                    self.state.errors.append({
-                        "step": step.name,
-                        "error": str(e),
-                        "timestamp": datetime.now().isoformat()
-                    })
+                    self.state.errors.append(
+                        {
+                            "step": step.name,
+                            "error": str(e),
+                            "timestamp": datetime.now().isoformat(),
+                        }
+                    )
                     raise
 
             self.state.completed_at = datetime.now()
             results = self._prepare_results()
-            if results.get('duration') is not None:
-                logger.info(f"Workflow '{self.name}' completed successfully in {results.get('duration')} seconds (total cost: ${self.state.cumulative_cost:.4f})")
+            if results.get("duration") is not None:
+                logger.info(
+                    f"Workflow '{self.name}' completed successfully in {results.get('duration')} seconds (total cost: ${self.state.cumulative_cost:.4f})"
+                )
             else:
-                logger.info(f"Workflow '{self.name}' completed successfully (total cost: ${self.state.cumulative_cost:.4f})")
+                logger.info(
+                    f"Workflow '{self.name}' completed successfully (total cost: ${self.state.cumulative_cost:.4f})"
+                )
 
             # Complete progress tracking
             try:
@@ -740,15 +877,22 @@ class AIWorkflow(ABC):
                     shutil.rmtree(self.working_dir)
                     logger.info(f"Cleaned up working directory: {self.working_dir}")
                 except Exception as e:
-                    logger.warning(f"Failed to clean up working directory {self.working_dir}: {e}")
+                    logger.warning(
+                        f"Failed to clean up working directory {self.working_dir}: {e}"
+                    )
             elif not self.cleanup_working_dir:
                 logger.debug(f"Preserving working directory: {self.working_dir}")
 
-
         return results, formatted_results
 
-
-    def query_with_cost(self, prompt: str, cost_limit: float, turn_step: int = 50, continue_session: bool = False, step_info: Optional[StepExecutionInfo] = None) -> ClaudeCodeResponse:
+    def query_with_cost(
+        self,
+        prompt: str,
+        cost_limit: float,
+        turn_step: int = 50,
+        continue_session: bool = False,
+        step_info: Optional[StepExecutionInfo] = None,
+    ) -> ClaudeCodeResponse:
         """Execute queries with cost monitoring and automatic completion.
 
         Args:
@@ -767,7 +911,9 @@ class AIWorkflow(ABC):
         Returns:
             ClaudeCodeResponse with the final result and total cost
         """
-        logger.debug(f"Starting cost-limited query (limit=${cost_limit:.2f}, turn_step={turn_step}, continue_session={continue_session})")
+        logger.debug(
+            f"Starting cost-limited query (limit=${cost_limit:.2f}, turn_step={turn_step}, continue_session={continue_session})"
+        )
 
         total_cost = 0.0
         last_response = None
@@ -777,9 +923,7 @@ class AIWorkflow(ABC):
         logger.debug(f"Iteration {iteration}: Initial query")
 
         response = self.session.query(
-            prompt=prompt,
-            max_turns=turn_step,
-            continue_session=continue_session
+            prompt=prompt, max_turns=turn_step, continue_session=continue_session
         )
 
         if not response.success:
@@ -791,22 +935,26 @@ class AIWorkflow(ABC):
         total_cost = response.cost
         if step_info is not None:
             step_info.cost += response.cost
-        logger.debug(f"Iteration {iteration} complete: total_cost=${total_cost:.4f}, session_id={response.session_id}")
+        logger.debug(
+            f"Iteration {iteration} complete: total_cost=${total_cost:.4f}, session_id={response.session_id}"
+        )
 
         # Check if task is already finished
         if response.is_finished:
-            logger.debug(f"Task finished in initial query. Total cost: ${total_cost:.4f}")
+            logger.debug(
+                f"Task finished in initial query. Total cost: ${total_cost:.4f}"
+            )
             return response
 
         # Continue querying while under cost limit
         while total_cost < cost_limit:
             iteration += 1
-            logger.debug(f"Iteration {iteration}: Continuing session (current_cost=${total_cost:.4f}, limit=${cost_limit:.2f})")
+            logger.debug(
+                f"Iteration {iteration}: Continuing session (current_cost=${total_cost:.4f}, limit=${cost_limit:.2f})"
+            )
 
             response = self.session.query(
-                prompt=f"continue",
-                max_turns=turn_step,
-                continue_session=True
+                prompt=f"continue", max_turns=turn_step, continue_session=True
             )
 
             # ORIGINAL HANDLING,
@@ -824,19 +972,26 @@ class AIWorkflow(ABC):
                 step_info.cost += response.cost
 
             if response.is_finished:
-                logger.debug(f"Task finished after {iteration} iterations. Total cost: ${total_cost:.4f}")
+                logger.debug(
+                    f"Task finished after {iteration} iterations. Total cost: ${total_cost:.4f}"
+                )
                 return response
 
             if total_cost >= cost_limit:
-                logger.warning(f"Cost limit reached: ${total_cost:.4f} >= ${cost_limit:.2f}")
+                logger.warning(
+                    f"Cost limit reached: ${total_cost:.4f} >= ${cost_limit:.2f}"
+                )
                 break
 
-            logger.debug(f"Iteration {iteration} complete: iteration_cost=${response.cost:.4f}, total_cost=${total_cost:.4f}")
-
+            logger.debug(
+                f"Iteration {iteration} complete: iteration_cost=${response.cost:.4f}, total_cost=${total_cost:.4f}"
+            )
 
         # Attempt to complete unfinished task within remaining budget
         if not last_response.is_finished:
-            logger.warning("Task not finished after reaching cost limit. Attempting to finish...")
+            logger.warning(
+                "Task not finished after reaching cost limit. Attempting to finish..."
+            )
 
         finish_tries = 0
         max_finish_tries = 3
@@ -853,9 +1008,8 @@ class AIWorkflow(ABC):
                 prompt=prompt,
                 max_turns=turn_step,
                 # Resume the same session for completion attempt
-                continue_session=True
+                continue_session=True,
             )
-
 
             if not response.success:
                 logger.error(f"Command failed: {response.content}")
@@ -865,16 +1019,22 @@ class AIWorkflow(ABC):
             total_cost += response.cost
             if step_info is not None:
                 step_info.cost += response.cost
-            logger.debug(f"Finish attempt {finish_tries + 1} complete: cost=${response.cost:.4f}, total=${total_cost:.4f}")
+            logger.debug(
+                f"Finish attempt {finish_tries + 1} complete: cost=${response.cost:.4f}, total=${total_cost:.4f}"
+            )
             # Verify if completion attempt succeeded
             if response.is_finished:
-                logger.debug(f"Task finished after {finish_tries + 1} finish attempts. Total cost: ${total_cost:.4f}")
+                logger.debug(
+                    f"Task finished after {finish_tries + 1} finish attempts. Total cost: ${total_cost:.4f}"
+                )
                 return response
 
             finish_tries += 1
 
         if not last_response.is_finished:
-            logger.warning(f"Task still not finished after {max_finish_tries} attempts. Returning last response.")
+            logger.warning(
+                f"Task still not finished after {max_finish_tries} attempts. Returning last response."
+            )
 
         logger.debug(f"Returning final response. Total cost: ${total_cost:.4f}")
         return last_response
@@ -904,7 +1064,10 @@ class AIWorkflow(ABC):
             response: Response from Claude
         """
         # Check if this step has a dynamic generator
-        if hasattr(self, '_dynamic_generators') and step.name in self._dynamic_generators:
+        if (
+            hasattr(self, "_dynamic_generators")
+            and step.name in self._dynamic_generators
+        ):
             logger.info(f"Generating dynamic steps after '{step.name}'")
             try:
                 # Call the generator function
@@ -918,26 +1081,38 @@ class AIWorkflow(ABC):
                     # Insert steps in order
                     for i, new_step in enumerate(new_steps):
                         self.steps.insert(insert_pos + i, new_step)
-                        logger.debug(f"Inserted dynamic step '{new_step.name}' at position {insert_pos + i}")
+                        logger.debug(
+                            f"Inserted dynamic step '{new_step.name}' at position {insert_pos + i}"
+                        )
 
-                    logger.info(f"Added {len(new_steps)} dynamic steps. Total steps now: {len(self.steps)}")
+                    logger.info(
+                        f"Added {len(new_steps)} dynamic steps. Total steps now: {len(self.steps)}"
+                    )
 
                     # Update progress after dynamic steps are added
                     try:
                         dynamic_msg = f"Added {len(new_steps)} dynamic steps"
                         self.update_progress(dynamic_msg)
                     except Exception as e:
-                        logger.debug(f"Failed to update progress after dynamic steps: {e}")
+                        logger.debug(
+                            f"Failed to update progress after dynamic steps: {e}"
+                        )
                 else:
-                    logger.debug(f"Dynamic generator for '{step.name}' returned no new steps")
+                    logger.debug(
+                        f"Dynamic generator for '{step.name}' returned no new steps"
+                    )
 
             except Exception as e:
-                logger.error(f"Error generating dynamic steps after '{step.name}': {str(e)}")
-                self.state.errors.append({
-                    "timestamp": datetime.now().isoformat(),
-                    "step": step.name,
-                    "error": f"Dynamic step generation failed: {str(e)}"
-                })
+                logger.error(
+                    f"Error generating dynamic steps after '{step.name}': {str(e)}"
+                )
+                self.state.errors.append(
+                    {
+                        "timestamp": datetime.now().isoformat(),
+                        "step": step.name,
+                        "error": f"Dynamic step generation failed: {str(e)}",
+                    }
+                )
                 # Continue execution despite error in dynamic generation
 
         # Call any subclass implementation
@@ -947,7 +1122,10 @@ class AIWorkflow(ABC):
         """Prepare final workflow results."""
         return {
             "workflow": self.name,
-            "responses": {step_name: response.content for step_name, response in self.state.responses.items()},
+            "responses": {
+                step_name: response.content
+                for step_name, response in self.state.responses.items()
+            },
             "completed_steps": self.state.completed_steps,
             "skipped_steps": self.state.skipped_steps,
             "errors": self.state.errors,
@@ -965,7 +1143,7 @@ class AIWorkflow(ABC):
                     "duration": info.duration,
                 }
                 for info in self.state.step_info.values()
-            ]
+            ],
         }
 
     @classmethod
@@ -1009,7 +1187,7 @@ class AIWorkflow(ABC):
             "context": self.state.context,
             "errors": self.state.errors,
             "cumulative_cost": self.state.cumulative_cost,
-            "progress_percentage": self.state.progress_percentage
+            "progress_percentage": self.state.progress_percentage,
         }
         state_file = self.working_dir / f"{self.name}_state.json"
         state_file.write_text(json.dumps(state_data, indent=2))
@@ -1027,11 +1205,15 @@ class AIWorkflow(ABC):
         self.state.errors = data["errors"]
         self.state.cumulative_cost = data["cumulative_cost"]
         self.state.progress_percentage = data["progress_percentage"]
-        logger.debug(f"Loaded state: step {self.state.current_step}/{len(self.steps)}, completed: {len(self.state.completed_steps)}")
+        logger.debug(
+            f"Loaded state: step {self.state.current_step}/{len(self.steps)}, completed: {len(self.state.completed_steps)}"
+        )
 
         # Update progress bar if resuming
         try:
-            self.update_progress(f"Resumed at step {self.state.current_step + 1}/{len(self.steps)}")
+            self.update_progress(
+                f"Resumed at step {self.state.current_step + 1}/{len(self.steps)}"
+            )
         except Exception as e:
             logger.debug(f"Failed to update progress on resume: {e}")
 
@@ -1098,7 +1280,9 @@ class AIWorkflow(ABC):
                 logger.warning(f"Progress hook failed: {e}")
 
     @require_initialized
-    def update_progress(self, message: str = "", force_percentage: Optional[float] = None) -> None:
+    def update_progress(
+        self, message: str = "", force_percentage: Optional[float] = None
+    ) -> None:
         """Update workflow progress.
 
         Args:
@@ -1153,7 +1337,13 @@ class AIWorkflow(ABC):
 
     def _get_status_display(self) -> Panel:
         """Build the status display with table and progress."""
-        table = Table(show_header=True, header_style="bold cyan", box=None, padding=(0, 1), width=80)
+        table = Table(
+            show_header=True,
+            header_style="bold cyan",
+            box=None,
+            padding=(0, 1),
+            width=80,
+        )
         table.add_column("Step", no_wrap=True, width=40)
         table.add_column("Time", justify="right", width=15)
         table.add_column("Cost", justify="right", width=12)
@@ -1212,7 +1402,7 @@ class AIWorkflow(ABC):
             table.add_row(
                 "[bold]Total[/bold]",
                 f"[bold]{self._format_duration(total_duration)}[/bold]",
-                f"[bold]${total_cost:.4f}[/bold]"
+                f"[bold]${total_cost:.4f}[/bold]",
             )
 
         # Add current progress info
@@ -1234,10 +1424,10 @@ class AIWorkflow(ABC):
             self._status_context = Live(
                 self._get_status_display(),  # Initial renderable
                 refresh_per_second=10,  # Update 10 times per second
-                auto_refresh=True,      # Enable automatic refresh
+                auto_refresh=True,  # Enable automatic refresh
                 console=self._console,
-                transient=True,        # Keep display after completion
-                get_renderable=lambda: self._get_status_display()  # Function to get fresh renderable
+                transient=True,  # Keep display after completion
+                get_renderable=lambda: self._get_status_display(),  # Function to get fresh renderable
             )
             self._status_context.start()
             logger.debug("Started live status display")
@@ -1278,6 +1468,7 @@ class AIWorkflow(ABC):
         if self.result_class is None:
             # Default to MessageResult if no result class specified
             from ..results import MessageResult
+
             self.result_class = MessageResult
 
         return self.result_class.from_working_dir(self.working_dir, results)
@@ -1297,19 +1488,21 @@ class AIWorkflow(ABC):
             The extracted JSON string
         """
         # Try JSON in code blocks first
-        code_block_match = re.search(r'```(?:json)?\s*\n([\s\S]*?)\n```', content)
+        code_block_match = re.search(r"```(?:json)?\s*\n([\s\S]*?)\n```", content)
         if code_block_match:
             return code_block_match.group(1).strip()
 
         # Try raw JSON pattern
-        json_match = re.search(r'(\{[\s\S]*\}|\[[\s\S]*\])', content)
+        json_match = re.search(r"(\{[\s\S]*\}|\[[\s\S]*\])", content)
         if json_match:
             return json_match.group(1).strip()
 
         # Fallback: assume entire content is JSON
         return content.strip()
 
-    def _create_schema_validator(self, schema: Type[BaseModel]) -> Callable[[ClaudeCodeResponse], Tuple[bool, List[str]]]:
+    def _create_schema_validator(
+        self, schema: Type[BaseModel]
+    ) -> Callable[[ClaudeCodeResponse], Tuple[bool, List[str]]]:
         """Create a validator function for the given Pydantic schema.
 
         Args:
@@ -1318,6 +1511,7 @@ class AIWorkflow(ABC):
         Returns:
             A validator function that returns (success, errors)
         """
+
         def validator(response: ClaudeCodeResponse) -> Tuple[bool, List[str]]:
             try:
                 # Extract JSON from response
@@ -1327,6 +1521,7 @@ class AIWorkflow(ABC):
                 return (True, [])
             except Exception as e:
                 return (False, [f"Schema validation failed: {str(e)}"])
+
         return validator
 
     @require_initialized
@@ -1337,7 +1532,7 @@ class AIWorkflow(ABC):
         name: Optional[str] = None,
         extract_prompt: Optional[str] = None,
         max_cost: float = 0.5,
-        context_key: Optional[str] = None
+        context_key: Optional[str] = None,
     ):
         """Add an automatic extraction step after a given step.
 
@@ -1373,7 +1568,7 @@ Required JSON Schema:
 Output ONLY valid JSON matching the schema above. Do not include any additional text, markdown formatting, or code blocks."""
 
         # Create post-process function for extraction parsing
-        def extraction_post_hook(workflow: 'AIWorkflow', response: ClaudeCodeResponse):
+        def extraction_post_hook(workflow: "AIWorkflow", response: ClaudeCodeResponse):
             try:
                 json_str = workflow._extract_json(response.content)
                 parsed_data = output_schema.model_validate_json(json_str)
@@ -1383,7 +1578,9 @@ Output ONLY valid JSON matching the schema above. Do not include any additional 
                 logger.debug(f"Stored parsed data in context as '{context_key}'")
             except Exception as e:
                 # This shouldn't happen as validation should have caught it
-                logger.error(f"Failed to parse extraction step '{name}' after validation: {e}")
+                logger.error(
+                    f"Failed to parse extraction step '{name}' after validation: {e}"
+                )
 
         # Create extraction step with validator and post-process hook
         extraction_step = WorkflowStep(
@@ -1393,7 +1590,7 @@ Output ONLY valid JSON matching the schema above. Do not include any additional 
             validator=self._create_schema_validator(output_schema),
             max_cost=max_cost,
             max_retries=3,
-            _post_hook=extraction_post_hook
+            _post_hook=extraction_post_hook,
         )
 
         # Find position to insert (right after the target step)
