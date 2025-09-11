@@ -92,6 +92,8 @@ class ClaudeCodeSession:
     are reached.
     """
 
+    executed_session_id: list[str] = [] # session id that executed only from wake-ai.
+
     def __init__(
         self,
         console: Console,
@@ -520,6 +522,7 @@ class ClaudeCodeSession:
         prompt: str,
         max_turns: Optional[int] = None,
         continue_session: bool = False,
+        resume_session: Optional[str] = None,
     ) -> ClaudeCodeResponse:
         """Execute a query with Claude Code (synchronous wrapper).
 
@@ -534,15 +537,23 @@ class ClaudeCodeSession:
 
         # Note: Session resumption logic is handled in the async version
 
+        if resume_session and continue_session:
+            raise ValueError(
+                "resume_session and continue_session cannot be used together"
+            )
+
         if continue_session:
             logger.debug(f"Continuing session: {continue_session}")
 
         # Execute async version using asyncio event loop
         response = asyncio.run(
             self.query_async(
-                prompt=prompt, max_turns=max_turns, continue_session=continue_session
+                prompt=prompt, max_turns=max_turns, continue_session=continue_session, resume_session=resume_session
             )
         )
+        # update only it could reach here.
+        # it can update last session, however other handiling needs to be done.
+        self.last_session_id = response.session_id
 
         return response
 
