@@ -92,8 +92,6 @@ class ClaudeCodeSession:
     are reached.
     """
 
-    executed_session_id: list[str] = [] # session id that executed only from wake-ai.
-
     def __init__(
         self,
         console: Console,
