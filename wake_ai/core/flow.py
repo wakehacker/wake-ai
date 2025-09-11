@@ -148,7 +148,40 @@ class StepExecutionInfo:
     duration: float  # in seconds
     retries: int
     status: str  # "completed", "skipped", "failed", "running"
+    session_id: str
     start_time: Optional[datetime] = None  # Track when step started
+
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "name": self.name,
+            "turns": self.turns,
+            "cost": self.cost,
+            "duration": self.duration,
+            "retries": self.retries,
+            "status": self.status,
+            "start_time": self.start_time.isoformat() if self.start_time else None,
+            "session_id": self.session_id
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "StepExecutionInfo":
+        """Create StepExecutionInfo from dictionary."""
+        start_time = None
+        if data["start_time"]:
+            start_time = datetime.fromisoformat(data["start_time"])
+
+        return cls(
+            name=data["name"],
+            turns=data["turns"],
+            cost=data["cost"],
+            duration=data["duration"],
+            retries=data["retries"],
+            status=data["status"],
+            start_time=start_time,
+            session_id=data["session_id"]
+        )
 
 
 @dataclass
@@ -184,6 +217,47 @@ class AIWorkflow(ABC):
     _init_called: bool
     _console: Console
 
+    @staticmethod
+    def _find_latest_session_dir(workflow_name: Optional[str] = None) -> Optional[Path]:
+        """Find the latest session directory for resuming.
+
+        Args:
+            workflow_name: Optional workflow name to filter by state files
+
+        Returns:
+            Path to the latest session directory, or None if not found
+        """
+        wake_ai_dir = Path.cwd() / ".wake" / "ai"
+        if not wake_ai_dir.exists():
+            return None
+
+        # Find all session directories matching the timestamp pattern
+        session_dirs = []
+        for path in wake_ai_dir.iterdir():
+            if path.is_dir() and re.match(r'^\d{8}_\d{6}_[a-z0-9]{6}$', path.name):
+                session_dirs.append(path)
+
+        if not session_dirs:
+            return None
+
+        # Sort by directory name (which includes timestamp) to get latest
+        session_dirs.sort(key=lambda p: p.name, reverse=True)
+
+        # If workflow name specified, find the latest session with a matching state file
+        if workflow_name:
+            for session_dir in session_dirs:
+                state_file = session_dir / f"{workflow_name}_state.json"
+                if state_file.exists():
+                    logger.debug(f"Found latest session for '{workflow_name}': {session_dir}")
+                    return session_dir
+            logger.warning(f"No previous session found for workflow '{workflow_name}'")
+            return None
+        else:
+            # Return the latest session directory regardless of workflow
+            latest_dir = session_dirs[0]
+            logger.debug(f"Found latest session directory: {latest_dir}")
+            return latest_dir
+
     def __init__(
         self,
         name: Optional[str] = None,
@@ -196,7 +270,8 @@ class AIWorkflow(ABC):
         disallowed_tools: Optional[List[str]] = None,
         cleanup_working_dir: Optional[bool] = None,
         show_progress: Optional[bool] = None,
-        console: Optional[Console] = None
+        console: Optional[Console] = None,
+        resume: Optional[bool] = None
     ):
         """Initialize workflow.
 
@@ -213,6 +288,7 @@ class AIWorkflow(ABC):
             cleanup_working_dir: Whether to remove working_dir after completion (default: True)
             show_progress: Whether to show progress bar during execution (default: True)
             console: Rich Console instance for coordinated output (optional)
+            resume: Whether to resume from latest session (default: False)
         """
         ctx = click.get_current_context(silent=True)
         if ctx is None:
@@ -233,6 +309,8 @@ class AIWorkflow(ABC):
             working_dir = cli.get("working_dir", None)
         if execution_dir is None:
             execution_dir = cli.get("execution_dir", None)
+        if resume is None:
+            resume = cli.get("resume", False)
 
         # Set cleanup behavior (use instance value if provided, else class default)
         self.cleanup_working_dir = cleanup_working_dir if cleanup_working_dir is not None else cli.get("cleanup_working_dir", True)
@@ -254,6 +332,22 @@ class AIWorkflow(ABC):
         # Set up working directory
         if working_dir is not None:
             self.working_dir = Path(working_dir).resolve()
+        elif resume:
+            # Try to find latest session directory for resuming
+            latest_session = self._find_latest_session_dir(self.name)
+            if latest_session is not None:
+                self.working_dir = latest_session
+                logger.info(f"Resuming from session: {self.working_dir}")
+            else:
+                # No previous session found, create new one but warn user
+                logger.warning("No previous session found to resume from, creating new session")
+                import random
+                import string
+                from datetime import datetime
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
+                session_id = f"{timestamp}_{suffix}"
+                self.working_dir = Path.cwd() / ".wake" / "ai" / session_id
         else:
             # Generate session ID for working directory
             import random
@@ -515,7 +609,8 @@ class AIWorkflow(ABC):
                             turns=0,
                             duration=0.0,
                             retries=0,
-                            status="skipped"
+                            status="skipped",
+                            session_id="" # TODO
                         )
                         # Update status display with skipped step
                         self._update_status_display()
@@ -544,7 +639,8 @@ class AIWorkflow(ABC):
                         duration=0.0,
                         retries=0,
                         status="running",
-                        start_time=step_start_time
+                        start_time=step_start_time,
+                        session_id="" # TODO
                     )
                     self._update_status_display()
 
@@ -584,14 +680,21 @@ class AIWorkflow(ABC):
                             prompt = step.format_prompt(self.state.context)
 
                             # Continue session only if step explicitly requests it
+                            previous_session_id = None
+
                             should_continue = step.continue_session
+                            if should_continue and self.state.current_step == 0:
+                               raise ValueError("Cannot continue session for step 0")
+                            if should_continue and self.state.current_step > 0:
+                               previous_session_id = self.state.step_info[self.state.current_step-1].session_id
+
 
                             if step.max_cost:
                                 logger.debug(f"Querying with cost limit ${step.max_cost} for step '{step.name}' (continue_session={should_continue}, model={getattr(self.session, 'model', 'default')})")
-                                response = self.query_with_cost(prompt, step.max_cost, continue_session=should_continue, step_info=self.state.step_info[self.state.current_step])
+                                response = self.query_with_cost(prompt, step.max_cost, resume_session=previous_session_id, step_info=self.state.step_info[self.state.current_step])
                             else:
                                 logger.debug(f"Querying step '{step.name}' (continue_session={should_continue}, model={getattr(self.session, 'model', 'default')})")
-                                response = self.session.query(prompt, continue_session=should_continue)
+                                response = self.session.query(prompt, resume_session=previous_session_id)
                         else:
                             # Retry attempt - add error correction prompt
                             error_prompt = "The following errors occurred, please fix them:\n"
@@ -653,7 +756,8 @@ class AIWorkflow(ABC):
                                 turns=step_total_turns,
                                 duration=step_duration,
                                 retries=retry_count,
-                                status="completed"
+                                status="completed",
+                                session_id=response.session_id
                             )
 
                             # Update live display with completed step
@@ -748,7 +852,7 @@ class AIWorkflow(ABC):
         return results, formatted_results
 
 
-    def query_with_cost(self, prompt: str, cost_limit: float, turn_step: int = 50, continue_session: bool = False, step_info: Optional[StepExecutionInfo] = None) -> ClaudeCodeResponse:
+    def query_with_cost(self, prompt: str, cost_limit: float, turn_step: int = 50, continue_session: bool = False, resume_session: Optional[str] = None, step_info: Optional[StepExecutionInfo] = None) -> ClaudeCodeResponse:
         """Execute queries with cost monitoring and automatic completion.
 
         Args:
@@ -773,13 +877,17 @@ class AIWorkflow(ABC):
         last_response = None
         iteration = 0
 
+        if resume_session and continue_session:
+            raise ValueError("resume_session and continue_session cannot be used together")
+
         # First query with the initial prompt
         logger.debug(f"Iteration {iteration}: Initial query")
 
         response = self.session.query(
             prompt=prompt,
             max_turns=turn_step,
-            continue_session=continue_session
+            continue_session=continue_session,
+            resume_session=resume_session
         )
 
         if not response.success:
@@ -1009,7 +1117,8 @@ class AIWorkflow(ABC):
             "context": self.state.context,
             "errors": self.state.errors,
             "cumulative_cost": self.state.cumulative_cost,
-            "progress_percentage": self.state.progress_percentage
+            "progress_percentage": self.state.progress_percentage,
+            "step_info": {k: v.to_dict() for k, v in self.state.step_info.items()}
         }
         state_file = self.working_dir / f"{self.name}_state.json"
         state_file.write_text(json.dumps(state_data, indent=2))
@@ -1020,6 +1129,7 @@ class AIWorkflow(ABC):
         state_file = self.working_dir / f"{self.name}_state.json"
         logger.debug(f"Loading workflow state from {state_file}")
         data = json.loads(state_file.read_text())
+        self.state.step_info = {int(k): StepExecutionInfo.from_dict(v) for k, v in data["step_info"].items()}
         self.state.current_step = data["current_step"]
         self.state.completed_steps = data["completed_steps"]
         self.state.skipped_steps = data["skipped_steps"]
