@@ -260,6 +260,11 @@ def get_class_that_defined_method(meth):
     help="Enable verbose logging (debug level)"
 )
 @click.option(
+    "--verbose-filter",
+    type=str,
+    help="Filter verbose output by tool names (comma-separated, e.g., 'Bash,Edit,mcp__wake,TodoWrite,Read,Grep')"
+)
+@click.option(
     "--no-progress",
     is_flag=True,
     help="Disable progress bar during workflow execution"
@@ -271,7 +276,7 @@ def get_class_that_defined_method(meth):
     help="List all available workflows"
 )
 @click.pass_context
-def main(ctx: click.Context, working_dir: str | None, model: str, resume: bool, execution_dir: str | None, export: str | None, no_cleanup: bool, verbose: bool, no_progress: bool, list: bool):
+def main(ctx: click.Context, working_dir: str | None, model: str, resume: bool, execution_dir: str | None, export: str | None, no_cleanup: bool, verbose: bool, verbose_filter: str | None, no_progress: bool, list: bool):
     """AI-powered smart contract security analysis.
 
     This command runs various AI workflows for smart contract analysis
@@ -282,7 +287,12 @@ def main(ctx: click.Context, working_dir: str | None, model: str, resume: bool, 
     # Set logging level based on verbose flag
     if verbose:
         set_debug(True)
-        console.print("[dim]Debug logging enabled[/dim]")
+        if verbose_filter:
+            from wake_ai.utils.logging import set_verbose_filters
+            set_verbose_filters(verbose_filter)
+            console.print(f"[dim]Debug logging enabled with filter: {verbose_filter}[/dim]")
+        else:
+            console.print("[dim]Debug logging enabled[/dim]")
 
     # Handle list flag
     if list:

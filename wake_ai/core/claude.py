@@ -124,6 +124,8 @@ class ClaudeCodeSession:
         self.session_history: List[str] = []  # Track all session IDs
         self.console = console
 
+        # distingish from tool Id to tool name
+        self.tool_use_id_to_name: dict[str, str] = {}
         if session_id:
             self.session_history.append(session_id)
 
@@ -212,6 +214,13 @@ class ClaudeCodeSession:
         Provides special formatting for TodoWrite tools to show structured
         todo lists, while using standard formatting for other tool types.
         """
+        self.tool_use_id_to_name[block.id] = block.name
+
+        # Check if this tool should be shown based on filters
+        from wake_ai.utils.logging import should_show_tool
+        if not should_show_tool(block.name):
+            print(f"filtering {block.name} tool use")
+            return  # Skip this tool
 
         # TodoWrite gets custom formatting to display structured todo lists
         if block.name == "TodoWrite" and "todos" in block.input:
@@ -237,6 +246,16 @@ class ClaudeCodeSession:
         string and list result types, and applies appropriate styling based
         on success/error status.
         """
+
+        tool_name = self.tool_use_id_to_name.get(block.tool_use_id)
+
+        if tool_name is None:
+            raise ValueError(f"Tool name not found for tool use id: {block.tool_use_id}")
+
+        from wake_ai.utils.logging import should_show_tool
+        if not should_show_tool(tool_name):
+            print(f"filtering {tool_name} tool result")
+            return
 
         # Apply error styling for failed operations, normal styling otherwise
         if block.is_error:
@@ -264,31 +283,52 @@ class ClaudeCodeSession:
                 self.print_top_and_bottom(block.content, style=content_style)
         elif isinstance(block.content, list):
             # Process list-type results (multiple items)
-            for item in block.content:
-                text_content = item.get("text") if hasattr(
-                    item, "get") else None
 
-                try:
-                    if text_content:
-                        parsed = json.loads(text_content)
-                        self.console.print(
-                            f"[{header_style}]Tool Result (JSON):[/{header_style}]"
-                        )
-                        self.console.print_json(json.dumps(parsed), indent=2)
-                    else:
-                        self.console.print(
-                            f"[{header_style}]Tool Result:[/{header_style}]"
-                        )
-                        self.print_top_and_bottom(item, style=content_style)
-                except json.JSONDecodeError:
-                    self.console.print(
-                        f"[{header_style}]Tool Result:[/{header_style}]")
-                    self.print_top_and_bottom(
-                        text_content, style=content_style)
-                except Exception:
-                    self.console.print(
-                        f"[{header_style}]Tool Result:[/{header_style}]")
-                    self.print_top_and_bottom(item, style=content_style)
+            # print only the first and last item if the list is more than 2 items.
+            content_list = block.content
+            if len(content_list) > 2:
+                # Show first item
+                self._print_list_item(content_list[0], header_style, content_style)
+
+                # Show truncation indicator
+                omitted_count = len(content_list) - 2
+                self.console.print(
+                    f"[{COLORS['truncation']}]... ({omitted_count} items omitted by wake-ai) ...[/{COLORS['truncation']}]",
+                    highlight=False,
+                )
+
+                # Show last item
+                self._print_list_item(content_list[-1], header_style, content_style)
+            else:
+                # Show all items for short lists
+                for item in content_list:
+                    self._print_list_item(item, header_style, content_style)
+
+    def _print_list_item(self, item: Any, header_style: str, content_style: str) -> None:
+        """Helper method to print a single list item with proper formatting."""
+        text_content = item.get("text") if hasattr(item, "get") else None
+
+        try:
+            if text_content:
+                parsed = json.loads(text_content)
+                self.console.print(
+                    f"[{header_style}]Tool Result (JSON):[/{header_style}]"
+                )
+                self.console.print_json(json.dumps(parsed), indent=2)
+            else:
+                self.console.print(
+                    f"[{header_style}]Tool Result:[/{header_style}]"
+                )
+                self.print_top_and_bottom(item, style=content_style)
+        except json.JSONDecodeError:
+            self.console.print(
+                f"[{header_style}]Tool Result:[/{header_style}]")
+            self.print_top_and_bottom(
+                text_content, style=content_style)
+        except Exception:
+            self.console.print(
+                f"[{header_style}]Tool Result:[/{header_style}]")
+            self.print_top_and_bottom(item, style=content_style)
         else:
             # Handle empty or unsupported result types
             self.console.print(
