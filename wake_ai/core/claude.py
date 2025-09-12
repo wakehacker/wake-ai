@@ -189,7 +189,7 @@ class ClaudeCodeSession:
 
         # Print header without text wrapping to maintain formatting
         self.console.print(
-            f"  📋 [{COLORS['todo_header']}]Todo List:[/{COLORS['todo_header']}]",
+            f"📋 [{COLORS['todo_header']}]Todo List:[/{COLORS['todo_header']}]",
             highlight=False,
         )
         for todo in todo_write.todos:
@@ -208,7 +208,7 @@ class ClaudeCodeSession:
                 style = COLORS["todo_pending"]
 
             self.console.print(
-                f"    {icon} [[{style}] {content} [/{style}]] ", highlight=False
+                f"{icon} [{style}] {content} [/{style}] ", highlight=False
             )
 
     def print_top_and_bottom(self, content: Any, style: str) -> None:
@@ -229,9 +229,11 @@ class ClaudeCodeSession:
         if self.verbose == 1:
             max_tool_result_lines = 1
         elif self.verbose == 2:
+            max_tool_result_lines = 4
+        elif self.verbose == 3:
             max_tool_result_lines = 10
 
-        if self.verbose >= 3 or len(lines) <= max_tool_result_lines * 2:
+        if self.verbose >= 4 or len(lines) <= max_tool_result_lines * 2:
             # Content is short enough to display in full
             for line in lines:
                 self.console.print(line, style=style, highlight=False)
@@ -284,7 +286,7 @@ class ClaudeCodeSession:
                         in_progress_count += 1
                     elif todo.status == "completed":
                         completed_count += 1
-                    elif todo.status == "pending":
+                    else: # if todo.status == "pending"
                         pending_count += 1
 
                 total_count = completed_count + in_progress_count + pending_count
@@ -435,7 +437,7 @@ class ClaudeCodeSession:
             self.console.print(f"[{COLORS['tool_use']}]{print_str}[/{COLORS['tool_use']}]")
             return
 
-        print(block)
+        # print(block)
 
         self.console.print(
             f"[{COLORS['tool_use']}]Using tool: {block.name}[/{COLORS['tool_use']}]"
@@ -476,7 +478,7 @@ class ClaudeCodeSession:
             header_style = COLORS["tool_result"]
             content_style = COLORS["tool_result_json"]
 
-        if tool_name == "TodoWrite" and (block.is_error == False) and self.verbose <= 2: # TodoWrite Result is not interesting usually
+        if tool_name == "TodoWrite" and (block.is_error == False) and self.verbose <= 1: # TodoWrite Result is not interesting usually
             return
 
         elif tool_name == "Bash" and (block.is_error == False): # Bash Result is not interesting usually
@@ -578,7 +580,7 @@ class ClaudeCodeSession:
             self.console.print(f"[{header_style}]{print_str}[/{header_style}]")
             return
 
-        print(block)
+        # print(block)
         if isinstance(block.content, str):
             # Attempt JSON parsing for structured display
             try:
@@ -694,7 +696,7 @@ class ClaudeCodeSession:
         elif isinstance(message, SystemMessage):
 
             if message.subtype == "init":
-                if self.verbose == 1:
+                if self.verbose <= 2:
                     self.console.print(
                         f"[{COLORS['system_msg']}]System init: cwd: {message.data.get('cwd', 'N/A')} session: {message.data.get('session_id', 'N/A')}[/{COLORS['system_msg']}]"
                     )
@@ -857,7 +859,10 @@ class ClaudeCodeSession:
                     result = message
                 else:
                     if self.verbose:
-                        self.handle_verbose_message(message)
+                        try:
+                            self.handle_verbose_message(message)
+                        except Exception as e:
+                            logger.error(f"Error during handling verbose message: {e}")
         # Handle official SDK exceptions as documented in:
         # https://github.com/anthropics/claude-code-sdk-python
 
