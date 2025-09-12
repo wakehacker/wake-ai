@@ -75,10 +75,6 @@ class Edit:
     old_string: str
     new_string: str
 
-@dataclass
-class Grob:
-    pattern: str
-
 
 COLORS = {
     "todo_header": "bold blue",

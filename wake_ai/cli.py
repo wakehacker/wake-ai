@@ -262,7 +262,7 @@ def get_class_that_defined_method(meth):
 @click.option(
     "--verbose-filter",
     type=str,
-    help="Filter verbose output by tool names (comma-separated, e.g., 'Bash,Edit,mcp__wake,TodoWrite,Read,Grep')"
+    help="Filter verbose output by tool names (comma-separated, e.g., 'Bash,Edit,Glob,Grep,MultiEdit,NotebookEdit,NotebookRead,Read,Task,TodoWrite,WebFetch,WebSearch,Write,mcp__wake,mcp__wake__function_name')"
 )
 @click.option(
     "--no-progress",
