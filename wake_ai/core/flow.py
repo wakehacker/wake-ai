@@ -646,12 +646,6 @@ class AIWorkflow(ABC):
                 retry_count = 0
                 validation_errors = []
                 response = None
-                # step_total_turns = 0
-
-                # Save original tools and model
-                original_allowed = self.session.allowed_tools
-                original_disallowed = self.session.disallowed_tools
-                original_model = getattr(self.session, 'model', None)
 
                 # Change model for this step if specified
                 if step.model is not None and step.model != original_model:
@@ -707,7 +701,6 @@ class AIWorkflow(ABC):
                             # Update progress message for retry (don't change percentage)
                             retry_msg = f"Retrying '{step.name}' (attempt {retry_count}/{step.max_retries})"
                             self.update_progress_message(retry_msg)
-
 
                             # Always continue session for retries
                             if step.max_retry_cost:
@@ -818,10 +811,7 @@ class AIWorkflow(ABC):
                 logger.info(f"Workflow '{self.name}' completed successfully (total cost: ${self.state.cumulative_cost:.4f})")
 
             # Complete progress tracking
-            try:
-                self.update_progress("Workflow completed!", force_percentage=1.0)
-            except Exception as e:
-                logger.debug(f"Failed to update final progress: {e}")
+            self.update_progress("Workflow completed!", force_percentage=1.0)
 
             # Format results before cleanup
             formatted_results = self.format_results(results)
