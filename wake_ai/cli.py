@@ -10,7 +10,7 @@ from typing import Optional, Union, Dict, Any, Sequence, List, Type, TYPE_CHECKI
 import rich.traceback
 from rich.console import Console
 from rich.logging import RichHandler
-from wake_ai.utils.logging import get_logger, set_debug
+from wake_ai.utils.logging import get_logger, set_verbose_level
 
 if TYPE_CHECKING:
     from wake_ai import AIWorkflow
@@ -256,8 +256,8 @@ def get_class_that_defined_method(meth):
 @click.option(
     "--verbose",
     "-v",
-    is_flag=True,
-    help="Enable verbose logging (debug level)"
+    count=True,
+    help="Enable verbose logging (-v: info, -vv: debug, -vvv: trace)"
 )
 @click.option(
     "--verbose-filter",
@@ -276,7 +276,7 @@ def get_class_that_defined_method(meth):
     help="List all available workflows"
 )
 @click.pass_context
-def main(ctx: click.Context, working_dir: str | None, model: str, resume: bool, execution_dir: str | None, export: str | None, no_cleanup: bool, verbose: bool, verbose_filter: str | None, no_progress: bool, list: bool):
+def main(ctx: click.Context, working_dir: str | None, model: str, resume: bool, execution_dir: str | None, export: str | None, no_cleanup: bool, verbose: int, verbose_filter: str | None, no_progress: bool, list: bool):
     """AI-powered smart contract security analysis.
 
     This command runs various AI workflows for smart contract analysis
@@ -284,15 +284,21 @@ def main(ctx: click.Context, working_dir: str | None, model: str, resume: bool, 
     """
     rich.traceback.install(console=console)
 
-    # Set logging level based on verbose flag
-    if verbose:
-        set_debug(True)
+    # Set logging level based on verbose count
+    if verbose >= 1:
+        set_verbose_level(verbose)
+        if verbose == 1:
+            console.print("[dim]Verbose logging enabled (info level)[/dim]")
+        elif verbose == 2:
+            console.print("[dim]Debug logging enabled[/dim]")
+        elif verbose >= 3:
+            console.print("[dim]Trace logging enabled (maximum verbosity)[/dim]")
+            # TODO: Implement trace level logging if needed
+
         if verbose_filter:
             from wake_ai.utils.logging import set_verbose_filters
             set_verbose_filters(verbose_filter)
-            console.print(f"[dim]Debug logging enabled with filter: {verbose_filter}[/dim]")
-        else:
-            console.print("[dim]Debug logging enabled[/dim]")
+            console.print(f"[dim]Verbose output filtered to: {verbose_filter}[/dim]")
 
     # Handle list flag
     if list:

@@ -14,7 +14,7 @@ import atexit
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Union, AsyncIterator
 from dataclasses import dataclass
-from wake_ai.utils.logging import get_debug
+from wake_ai.utils.logging import get_verbose_level
 
 from rich.console import Console
 
@@ -37,10 +37,49 @@ from claude_code_sdk import (
 # Set up logging
 logger = logging.getLogger(__name__)
 
+@dataclass
+class Write:
+    file_path: str
+    content: str
 
-### VERBOSE MODE CONFIGURATIONS ###
-MAX_TOOL_RESULT_LINES: int = 10
-SHOW_FULL_TOOL_RESULT: bool = False
+@dataclass
+class Read:
+    file_path: str
+    limit: int | None = None
+    offset: int | None = None
+
+@dataclass
+class Bash:
+    command: str
+    description: str
+
+@dataclass
+class TodoItem:
+    content: str
+    status: str
+    activeForm: str
+
+@dataclass
+class TodoWrite:
+    todos: list[TodoItem]
+
+    @classmethod
+    def from_dict(cls, data: dict) -> 'TodoWrite':
+        """Factory method to create TodoWrite from raw dictionary data."""
+        todo_items = [TodoItem(**todo_dict) for todo_dict in data.get('todos', [])]
+        return cls(todos=todo_items)
+
+@dataclass
+class Edit:
+    file_path: str
+    old_string: str
+    new_string: str
+
+@dataclass
+class Grob:
+    pattern: str
+
+
 COLORS = {
     "todo_header": "bold blue",
     "todo_complete": "bold green",
@@ -119,7 +158,7 @@ class ClaudeCodeSession:
         self.working_dir = Path(working_dir) if working_dir else Path.cwd()
         self.execution_dir = Path(
             execution_dir) if execution_dir else Path.cwd()
-        self.verbose = get_debug()
+        self.verbose = get_verbose_level()
         self.last_session_id = session_id
         self.session_history: List[str] = []  # Track all session IDs
         self.console = console
@@ -141,7 +180,7 @@ class ClaudeCodeSession:
         from .utils import validate_claude_cli
         validate_claude_cli()
 
-    def format_todo_list(self, todos: List[Dict[str, Any]]) -> None:
+    def format_todo_list(self, todo_write: TodoWrite) -> None:
         """Display a formatted todo list with color-coded status indicators.
 
         Uses Rich styling to show todo items with appropriate icons and colors
@@ -153,10 +192,9 @@ class ClaudeCodeSession:
             f"  📋 [{COLORS['todo_header']}]Todo List:[/{COLORS['todo_header']}]",
             highlight=False,
         )
-        for todo in todos:
-            status = todo.get("status", "pending")
-            content = todo.get("content", "")
-            todo_id = todo.get("id", "")
+        for todo in todo_write.todos:
+            status = todo.status
+            content = todo.content
 
             # Select appropriate visual indicators for each status type
             if status == "completed":
@@ -170,7 +208,7 @@ class ClaudeCodeSession:
                 style = COLORS["todo_pending"]
 
             self.console.print(
-                f"    {icon} [[{style}]{todo_id}[/{style}]] {content}", highlight=False
+                f"    {icon} [[{style}] {content} [/{style}]] ", highlight=False
             )
 
     def print_top_and_bottom(self, content: Any, style: str) -> None:
@@ -187,25 +225,31 @@ class ClaudeCodeSession:
         string_content = str(content)
         lines = string_content.split("\n")
 
-        if SHOW_FULL_TOOL_RESULT or len(lines) <= MAX_TOOL_RESULT_LINES * 2:
+        max_tool_result_lines = 0
+        if self.verbose == 1:
+            max_tool_result_lines = 1
+        elif self.verbose == 2:
+            max_tool_result_lines = 10
+
+        if self.verbose >= 3 or len(lines) <= max_tool_result_lines * 2:
             # Content is short enough to display in full
             for line in lines:
                 self.console.print(line, style=style, highlight=False)
         else:
             # Content is too long, show truncated version
             # Display first portion
-            for line in lines[:MAX_TOOL_RESULT_LINES]:
+            for line in lines[:max_tool_result_lines]:
                 self.console.print(line, style=style, highlight=False)
 
             # Show truncation indicator with count of omitted lines
-            omitted = len(lines) - MAX_TOOL_RESULT_LINES * 2
+            omitted = len(lines) - max_tool_result_lines * 2
             self.console.print(
                 f"[{COLORS['truncation']}]... ({omitted} lines omitted by wake-ai) ...[/{COLORS['truncation']}]",
                 highlight=False,
             )
 
             # Display final portion
-            for line in lines[-MAX_TOOL_RESULT_LINES:]:
+            for line in lines[-max_tool_result_lines:]:
                 self.console.print(line, style=style, highlight=False)
 
     def format_tool_use(self, block: ToolUseBlock) -> None:
@@ -214,24 +258,190 @@ class ClaudeCodeSession:
         Provides special formatting for TodoWrite tools to show structured
         todo lists, while using standard formatting for other tool types.
         """
+
         self.tool_use_id_to_name[block.id] = block.name
 
         # Check if this tool should be shown based on filters
         from wake_ai.utils.logging import should_show_tool
         if not should_show_tool(block.name):
-            print(f"filtering {block.name} tool use")
+            # print(f"filtering {block.name} tool use")
             return  # Skip this tool
 
         # TodoWrite gets custom formatting to display structured todo lists
-        if block.name == "TodoWrite" and "todos" in block.input:
+        if block.name == "TodoWrite":
+            todo_write_input = TodoWrite.from_dict(block.input)
+            print_str = f"Using {block.name}: "
+
+            completed_count = 0
+            in_progress_count = 0
+            pending_count = 0
+
+            if self.verbose == 1:
+                next_tasks_str = ""
+                for todo in todo_write_input.todos:
+                    if todo.status == "in_progress":
+                        next_tasks_str += f"{todo.content}, "
+                        in_progress_count += 1
+                    elif todo.status == "completed":
+                        completed_count += 1
+                    elif todo.status == "pending":
+                        pending_count += 1
+
+                total_count = completed_count + in_progress_count + pending_count
+                print_str += f"{completed_count}/{total_count} done."
+
+                if next_tasks_str:
+                    print_str += f" Next -> {next_tasks_str}"
+
+                self.console.print(
+                    f"[{COLORS['tool_use']}]{print_str}[/{COLORS['tool_use']}]"
+                )
+                return
+            elif self.verbose >= 2:
+                self.format_todo_list(todo_write_input)
+            return
+
+        elif block.name == "Bash":
+            bash_input = Bash(**block.input)
+
+            print_str = f"Using {block.name}: {bash_input.command}"
+
+            if bash_input.description and self.verbose >= 2:
+                print_str += f" # {bash_input.description}"
+
             self.console.print(
-                f"[{COLORS['tool_use']}]Using tool: {block.name}[/{COLORS['tool_use']}]"
+                f"[{COLORS['tool_use']}]{print_str}[/{COLORS['tool_use']}]"
             )
-            self.format_todo_list(block.input.get("todos", []))
-        else:
+            return
+
+        elif block.name == "Read":
+
+            read_input = Read(**block.input)
+
+            try:
+                path = Path(read_input.file_path).relative_to(self.execution_dir)
+            except:
+                path = Path(read_input.file_path)
+
+            print_str = f"Using {block.name}: {path}"
+
+            if read_input.limit:
+                print_str += f" limit: {read_input.limit}"
+
+            if read_input.offset:
+                print_str += f" offset: {read_input.offset}"
+
             self.console.print(
-                f"[{COLORS['tool_use']}]Using tool: {block.name}[/{COLORS['tool_use']}]"
+                f"[{COLORS['tool_use']}]{print_str}[/{COLORS['tool_use']}]"
             )
+            return
+
+        elif block.name == "Write":
+            write_input = Write(**block.input)
+
+            if self.verbose == 1:
+                try:
+                    path = Path(write_input.file_path).relative_to(self.execution_dir)
+                except:
+                    path = Path(write_input.file_path)
+                print_str = f"Using Write: {path}: {len(write_input.content.split('\n'))} lines"
+                self.console.print(
+                    f"[{COLORS['tool_use']}]{print_str}[/{COLORS['tool_use']}]"
+                )
+            return
+
+        elif block.name == "Edit":
+            edit_input = Edit(**block.input)
+            if self.verbose == 1:
+
+                try:
+                    path = Path(edit_input.file_path).relative_to(self.execution_dir)
+                except:
+                    path = Path(edit_input.file_path)
+
+                print_str = f"Using Edit: {path}"
+
+                if edit_input.old_string:
+                    print_str += f" old_string_lines_length: {len(edit_input.old_string.split('\n'))}"
+
+                if edit_input.new_string:
+                    print_str += f" new_string_lines_length: {len(edit_input.new_string.split('\n'))}"
+
+                self.console.print(
+                    f"[{COLORS['tool_use']}]{print_str}[/{COLORS['tool_use']}]"
+                )
+            return
+
+        elif "mcp__" in block.name:
+            # Format MCP tool calls nicely
+            print_str = f"Using {block.name}("
+
+            # Format parameters
+            params = []
+            for key, value in block.input.items():
+                # I do not think this is good idea. but .... TODO
+                if key == 'file_path' and isinstance(value, str):
+                    # Try to make file path relative
+                    try:
+                        relative_path = Path(value).relative_to(self.execution_dir)
+                        params.append(f"{key}={relative_path}")
+                    except (ValueError, TypeError):
+                        params.append(f"{key}={value}")
+                else:
+                    params.append(f"{key}={value}")
+
+            print_str += ", ".join(params) + ")"
+
+            self.console.print(
+                f"[{COLORS['tool_use']}]{print_str}[/{COLORS['tool_use']}]"
+            )
+            return
+        elif block.name == "Grep":
+            print_str = f"Using Grep("
+            params = []
+            for key, value in block.input.items():
+                # I do not think this is good idea. but .... TODO
+                if key == 'file_path' and isinstance(value, str):
+                    # Try to make file path relative
+                    try:
+                        relative_path = Path(value).relative_to(self.execution_dir)
+                        params.append(f"{key}={relative_path}")
+                    except (ValueError, TypeError):
+                        params.append(f"{key}={value}")
+                else:
+                    params.append(f"{key}={value}")
+
+            print_str += ", ".join(params) + ")"
+
+            self.console.print(
+                f"[{COLORS['tool_use']}]{print_str}[/{COLORS['tool_use']}]"
+            )
+            return
+
+        elif block.name == "Glob":
+            print_str = f"Using Glob("
+            params = []
+            for key, value in block.input.items():
+                params.append(f"{key}={value}")
+            print_str += ", ".join(params) + ")"
+            self.console.print(f"[{COLORS['tool_use']}]{print_str}[/{COLORS['tool_use']}]")
+            return
+        elif block.name == "LS":
+            print_str = f"Using LS("
+            params = []
+            for key, value in block.input.items():
+                params.append(f"{key}={value}")
+            print_str += ", ".join(params) + ")"
+            self.console.print(f"[{COLORS['tool_use']}]{print_str}[/{COLORS['tool_use']}]")
+            return
+
+        print(block)
+
+        self.console.print(
+            f"[{COLORS['tool_use']}]Using tool: {block.name}[/{COLORS['tool_use']}]"
+        )
+
+        if self.verbose >= 2:
             # Standard tool display format for all other tool types
             for key, value in block.input.items():
                 self.console.print(
@@ -254,7 +464,7 @@ class ClaudeCodeSession:
 
         from wake_ai.utils.logging import should_show_tool
         if not should_show_tool(tool_name):
-            print(f"filtering {tool_name} tool result")
+            # print(f"filtering {tool_name} tool result")
             return
 
         # Apply error styling for failed operations, normal styling otherwise
@@ -262,9 +472,113 @@ class ClaudeCodeSession:
             header_style = COLORS["tool_error"]
             content_style = "red"
         else:
+            block.is_error = False
             header_style = COLORS["tool_result"]
             content_style = COLORS["tool_result_json"]
 
+        if tool_name == "TodoWrite" and (block.is_error == False) and self.verbose <= 2: # TodoWrite Result is not interesting usually
+            return
+
+        elif tool_name == "Bash" and (block.is_error == False): # Bash Result is not interesting usually
+            # bash result should not be json.
+
+            if self.verbose == 1:
+                print_str = f"Bash Result:"
+                if isinstance(block.content, str): # shoud be
+                    print_str += f" {len(block.content.split('\n'))} lines"
+                else:
+                    # return list but shold not happen.
+                    print_str += f" {len(block.content or [])} items"
+                self.console.print(f"[{header_style}]{print_str}[/{header_style}]")
+                return
+
+            elif self.verbose == 2:
+                # 5 lines from top to bottom, handled below
+                pass
+            elif self.verbose == 3:
+                # full print, handled below
+                pass
+
+        elif tool_name == "Read" and (block.is_error == False):
+            # read result should not be json.
+            print_str = f"Read Result:"
+
+            if isinstance(block.content, str): # shoud be
+            # just print number of lines
+                print_str += f" {len(block.content.split('\n'))} lines"
+            else:
+                # return list but shold not happen.
+                print_str += f" {len(block.content or [])} items"
+
+            self.console.print(f"[{header_style}]{print_str}[/{header_style}]")
+            return
+
+        elif tool_name == "Edit" and (block.is_error == False):
+            if self.verbose == 1:
+                print_str = f"Edit Result: success"
+                self.console.print(f"[{header_style}]{print_str}[/{header_style}]")
+                return
+
+        elif "mcp__" in tool_name and (block.is_error == False):
+            if self.verbose == 1:
+                print_str = f"{tool_name} Result:"
+                if isinstance(block.content, str):
+                    print_str += f" {len(block.content.split('\n'))} lines"
+                else:
+                    # return list but shold not happen.
+                    print_str += f" {len(block.content or [])} items"
+                self.console.print(f"[{header_style}]{print_str}[/{header_style}]")
+                return
+
+        elif tool_name == "Write" and (block.is_error == False):
+            if self.verbose == 1:
+                print_str = f"Write Result: success"
+                self.console.print(f"[{header_style}]{print_str}[/{header_style}]")
+                return
+
+        elif tool_name == "Grep" and (block.is_error == False):
+            if self.verbose == 1:
+                print_str = f"Grep Result:"
+                if isinstance(block.content, str):
+                    print_str += f" {len(block.content.split('\n'))} lines"
+                else:
+                    # return list but shold not happen.
+                    print_str += f" {len(block.content or [])} items"
+
+                self.console.print(f"[{header_style}]{print_str}[/{header_style}]")
+                return
+        elif tool_name == "Glob" and (block.is_error == False):
+            if self.verbose == 1:
+                print_str = f"Glob Result:"
+                if isinstance(block.content, str):
+                    print_str += f" {len(block.content.split('\n'))} lines"
+                else:
+                    # return list but shold not happen.
+                    print_str += f" {len(block.content or [])} items"
+                self.console.print(f"[{header_style}]{print_str}[/{header_style}]")
+                return
+
+        elif tool_name == "LS" and (block.is_error == False):
+            if self.verbose == 1:
+                print_str = f"LS Result:"
+                if isinstance(block.content, str):
+                    print_str += f" {len(block.content.split('\n'))} lines"
+                else:
+                    # return list but shold not happen.
+                    print_str += f" {len(block.content or [])} items"
+                self.console.print(f"[{header_style}]{print_str}[/{header_style}]")
+                return
+
+        elif block.is_error == True and isinstance(block.content, str):
+            print_str = f"{tool_name} Error: {block.content}"
+            self.console.print(f"[{header_style}][/{header_style}]")
+            return
+        elif block.is_error == True and isinstance(block.content, list):
+            print_str = f"{tool_name} Error: {block.content}"
+            self.console.print(f"[{header_style}]{print_str}[/{header_style}]")
+            return
+
+        print(block)
         if isinstance(block.content, str):
             # Attempt JSON parsing for structured display
             try:
@@ -286,20 +600,38 @@ class ClaudeCodeSession:
 
             # print only the first and last item if the list is more than 2 items.
             content_list = block.content
-            if len(content_list) > 2:
-                # Show first item
-                self._print_list_item(content_list[0], header_style, content_style)
+            if self.verbose == 1:
+                if len(content_list) > 2:
+                    # Show first item
+                    self._print_list_item(content_list[0], header_style, content_style)
 
-                # Show truncation indicator
-                omitted_count = len(content_list) - 2
-                self.console.print(
-                    f"[{COLORS['truncation']}]... ({omitted_count} items omitted by wake-ai) ...[/{COLORS['truncation']}]",
-                    highlight=False,
-                )
+                    # Show truncation indicator
+                    omitted_count = len(content_list) - 1
+                    self.console.print(
+                        f"[{COLORS['truncation']}]... ({omitted_count} items omitted by wake-ai) ...[/{COLORS['truncation']}]",
+                        highlight=False,
+                    )
 
-                # Show last item
-                self._print_list_item(content_list[-1], header_style, content_style)
-            else:
+            elif self.verbose == 2:
+                if len(content_list) > 2:
+                    # Show first item
+                    self._print_list_item(content_list[0], header_style, content_style)
+
+                    # Show truncation indicator
+                    omitted_count = len(content_list) - 2
+                    self.console.print(
+                        f"[{COLORS['truncation']}]... ({omitted_count} items omitted by wake-ai) ...[/{COLORS['truncation']}]",
+                        highlight=False,
+                    )
+
+                    # Show last item
+                    self._print_list_item(content_list[-1], header_style, content_style)
+                else:
+                    # Show all items for short lists
+                    for item in content_list:
+                        self._print_list_item(item, header_style, content_style)
+
+            elif(self.verbose == 3):
                 # Show all items for short lists
                 for item in content_list:
                     self._print_list_item(item, header_style, content_style)
@@ -343,13 +675,16 @@ class ClaudeCodeSession:
         """
         if isinstance(message, AssistantMessage):
             for block in message.content:
+
                 if isinstance(block, ToolResultBlock):
                     # Standard tool execution result
+                    ## change according to verbose level
                     self.format_tool_result(block)
                 elif isinstance(block, TextBlock):
                     # AI reasoning and explanation text
                     self.console.print(block.text, style=COLORS["thinking"])
                 elif isinstance(block, ToolUseBlock):
+                    ## change according to verbose level
                     self.format_tool_use(block)
                 else:
                     self.console.print(
@@ -357,22 +692,30 @@ class ClaudeCodeSession:
                     )
 
         elif isinstance(message, SystemMessage):
+
             if message.subtype == "init":
-                self.console.print(
-                    f"[{COLORS['system_msg']}]System: {message.subtype}[/{COLORS['system_msg']}]"
-                )
-                self.console.print(
-                    f"    [{COLORS['system_msg']}]CWD: {message.data.get('cwd', 'N/A')}[/{COLORS['system_msg']}]"
-                )
-                self.console.print(
-                    f"    [{COLORS['system_msg']}]Session: {message.data.get('session_id', 'N/A')}[/{COLORS['system_msg']}]"
-                )
+                if self.verbose == 1:
+                    self.console.print(
+                        f"[{COLORS['system_msg']}]System init: cwd: {message.data.get('cwd', 'N/A')} session: {message.data.get('session_id', 'N/A')}[/{COLORS['system_msg']}]"
+                    )
+                else:
+                    self.console.print(
+                        f"[{COLORS['system_msg']}]System: {message.subtype}[/{COLORS['system_msg']}]"
+                    )
+                    try:
+                        print_str = json.dumps(message.data)
+                    except:
+                        print_str = str(message.data)
+
+                    self.console.print(
+                        f"[{COLORS['system_msg']}]{print_str}[/{COLORS['system_msg']}]"
+                    )
             else:
                 self.console.print(
                     f"[{COLORS['system_msg']}]System: {message.subtype}[/{COLORS['system_msg']}]"
                 )
                 self.console.print(
-                    f"    [{COLORS['system_msg']}]{message.data}[/{COLORS['system_msg']}]"
+                    f"[{COLORS['system_msg']}]{message.data}[/{COLORS['system_msg']}]"
                 )
 
         elif isinstance(message, UserMessage):
@@ -380,6 +723,17 @@ class ClaudeCodeSession:
                 if isinstance(content, ToolResultBlock):
                     # Specialized tool result (e.g., from MCP server)
                     self.format_tool_result(content)
+                elif isinstance(content, TextBlock):
+                    if self.verbose == 1:
+                        # just print 1 line by content.text.split('\n')[0]
+                        texts = content.text.split('\n')
+                        print_str = "User Text:"
+                        print_str += texts[0]
+                        if len(texts) > 1:
+                            print_str += f"... with ({len(texts) - 1} lines omitted)"
+                        self.console.print(print_str, style=COLORS["thinking"])
+                    else:
+                        self.console.print(content.text, style=COLORS["thinking"])
                 else:
                     self.console.print(
                         f"[{COLORS['unknown']}]Unknown user content: {content}[/{COLORS['unknown']}]"

@@ -1,9 +1,10 @@
 import logging
 from typing import Optional
 
-_debug: bool = False
+_verbose_level: int = 0
 _created_logger_names: set[str] = set()
 _verbose_filters: Optional[set[str]] = None
+
 
 
 def get_logger(name: str, override_level: Optional[int] = None) -> logging.Logger:
@@ -13,19 +14,19 @@ def get_logger(name: str, override_level: Optional[int] = None) -> logging.Logge
         logger.setLevel(override_level)
     else:
         _created_logger_names.add(name)
-        logger.setLevel(logging.DEBUG if _debug else logging.INFO)
+        logger.setLevel(logging.DEBUG if _verbose_level else logging.INFO)
     return logger
 
 
-def set_debug(debug: bool) -> None:
-    global _debug
-    _debug = debug
+def set_verbose_level(verbose_level: int) -> None:
+    global _verbose_level
+    _verbose_level = verbose_level
     for name in _created_logger_names:
-        get_logger(name).setLevel(logging.DEBUG if _debug else logging.INFO)
+        get_logger(name).setLevel(logging.DEBUG if _verbose_level else logging.INFO)
 
 
-def get_debug() -> bool:
-    return _debug
+def get_verbose_level() -> int:
+    return _verbose_level
 
 
 def set_verbose_filters(filters: Optional[str]) -> None:
