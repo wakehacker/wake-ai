@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 import platform
 import random
+import re
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import AsyncIterator, Awaitable, NamedTuple, Literal, Any, Callable, cast
+from typing import AsyncIterator, NamedTuple, Literal, Any, cast
 
 import httpx
 from mcp import ClientSession, StdioServerParameters
@@ -26,7 +28,10 @@ from openai.types.shared_params import ResponseFormatText
 from openai.types.shared_params.reasoning import Reasoning
 
 from .codex_pricing import GPT_PRICING
-from .landlock import run_under_landlock
+try:
+    from .landlock import run_under_landlock
+except ImportError:
+    run_under_landlock = None  # type: ignore[assignment]  # Linux-only
 from .seatbelt import run_under_seatbelt
 from .session_abc import SessionABC, FunctionTool
 from .verbose_formatter import VerboseFormatter
@@ -34,10 +39,36 @@ from ..utils.logging import get_logger
 
 logger = get_logger(__name__)
 
-
 class OpenAIResponse(NamedTuple):
     cost: float
     status: Literal["running", "terminating_on_max_cost", "succeeded", "terminated", "errored"]
+
+
+def _normalize_mcp_schema(schema: Any) -> dict[str, Any]:
+    """Coerce an MCP inputSchema into a minimal valid OpenAI function parameters object.
+
+    Handles the most common violations: missing or wrong ``type``, non-dict
+    ``properties``, and ``required`` entries that are not strings or reference
+    properties that don't exist.
+    """
+    if not isinstance(schema, dict) or schema.get("type") != "object":
+        return {"type": "object", "properties": {}}
+    out = dict(schema)
+    properties = out.get("properties")
+    if not isinstance(properties, dict):
+        properties = {}
+    out["properties"] = properties
+    required = out.get("required")
+    if isinstance(required, list):
+        allowed = set(properties.keys())
+        filtered = [r for r in required if isinstance(r, str) and r in allowed]
+        if filtered:
+            out["required"] = filtered
+        else:
+            out.pop("required", None)
+    elif "required" in out:
+        out.pop("required")
+    return out
 
 
 def _compute_backoff_time(retry: int) -> float:
@@ -71,6 +102,66 @@ LEGACY_SHELL_INPUT_SCHEMA = {
 }
 
 MAX_COMPACTIONS = 5
+
+# Models that support OpenAI's native shell tool (FunctionShellTool).
+# All others fall back to the legacy "shell" function workaround.
+_NATIVE_SHELL_MODEL_PREFIXES = ("gpt-5.1", "gpt-5.2", "gpt-5.4")
+
+# OpenAI limits function names to 64 characters ([A-Za-z0-9_-] only).
+_OPENAI_MAX_TOOL_NAME_LEN = 64
+_ALIAS_HASH_LEN = 8  # hex chars appended when the slug must be shortened
+
+
+def _slugify(s: str) -> str:
+    """Replace characters outside [A-Za-z0-9_-] with underscore."""
+    return re.sub(r"[^A-Za-z0-9_-]", "_", s)
+
+
+def _mcp_tool_alias(server_name: str, tool_name: str) -> str:
+    """Return a stable OpenAI-safe function name for an MCP tool.
+
+    Format: ``<server>__<tool>`` (both parts slugified). If the result exceeds
+    64 characters, the slug is truncated and an 8-hex-char SHA-256 suffix of
+    the original names is appended so the alias stays both within the limit
+    and stable across restarts.
+    """
+    slug = f"{_slugify(server_name)}__{_slugify(tool_name)}"
+    if len(slug) <= _OPENAI_MAX_TOOL_NAME_LEN:
+        return slug
+    h = hashlib.sha256(f"{server_name}\x00{tool_name}".encode()).hexdigest()[:_ALIAS_HASH_LEN]
+    return f"{slug[:_OPENAI_MAX_TOOL_NAME_LEN - _ALIAS_HASH_LEN - 1]}_{h}"
+
+
+def _resolve_mcp_alias(
+    server_name: str,
+    tool_name: str,
+    reserved: set[str],
+    registered: dict[str, Any],
+) -> str | None:
+    """Return a unique OpenAI-safe alias for an MCP tool, or ``None`` if impossible.
+
+    Tries the primary slug first; if it collides, a hash-disambiguated form is
+    used. Returns ``None`` (with error log) only if both forms are already taken.
+    """
+    alias = _mcp_tool_alias(server_name, tool_name)
+    if alias not in reserved and alias not in registered:
+        return alias
+
+    h = hashlib.sha256(f"{server_name}\x00{tool_name}".encode()).hexdigest()[:_ALIAS_HASH_LEN]
+    disambiguated = f"{alias[:_OPENAI_MAX_TOOL_NAME_LEN - _ALIAS_HASH_LEN - 1]}_{h}"
+    logger.warning(
+        "MCP tool '%s' from '%s' has conflicting alias '%s'; "
+        "registering as '%s' instead.",
+        tool_name, server_name, alias, disambiguated,
+    )
+    if disambiguated in reserved or disambiguated in registered:
+        logger.error(
+            "Cannot register MCP tool '%s' from '%s': "
+            "disambiguated alias '%s' also taken. Skipping.",
+            tool_name, server_name, disambiguated,
+        )
+        return None
+    return disambiguated
 
 
 class OpenAITokenUsage:
@@ -267,6 +358,11 @@ class OpenAISession(SessionABC):
                 if platform.system() == "Darwin":
                     stdout, stderr, returncode = await run_under_seatbelt(command, self.network_access, writable_roots, timeout, self.execution_dir)
                 else:
+                    if run_under_landlock is None:
+                        raise RuntimeError(
+                            "landlock sandbox is not available on this system. "
+                            "Shell tool requires Linux with landlock support."
+                        )
                     stdout, stderr, returncode = await run_under_landlock(command, self.network_access, writable_roots, timeout, self.execution_dir)
 
                 output.append(ResponseFunctionShellCallOutputContentParam(
@@ -298,7 +394,7 @@ class OpenAISession(SessionABC):
         return await self._call_shell(args["commands"], args["timeout_ms"], args.get("max_output_length", None))
 
     async def _call_mcp_tool(self, client: ClientSession, tool_name: str, arguments: str) -> Any:
-        args = json.loads(arguments)
+        args = json.loads(arguments) if arguments else {}
 
         # TODO: read timeout seconds
         result = await client.call_tool(tool_name, args)
@@ -319,21 +415,32 @@ class OpenAISession(SessionABC):
             ) for tool in self.tools.values()
         ]
 
-        mcp_tools: dict[str, tuple[str, ClientSession]] = {}
+        _use_native_shell = model.startswith(_NATIVE_SHELL_MODEL_PREFIXES)
+
+        # MCP tool aliases use the format "<server>__<tool>" (slugified).
+        # This guarantees OpenAI-safe names and avoids collisions between servers
+        # without requiring changes to MCP servers themselves.
+        # Aliases are also checked against self.tools to catch any edge-case overlap.
+        _reserved_aliases: set[str] = set(self.tools.keys())
+
+        # alias -> (client, original_tool_name)
+        mcp_tools: dict[str, tuple[ClientSession, str]] = {}
 
         for server_name, client in mcp_clients.items():
             cursor = None
             while True:
                 response = await client.list_tools(cursor=cursor)
                 for tool in response.tools:
-                    if f"{server_name}.{tool.name}" in self.tools:
-                        raise ValueError(f"Tool '{f"{server_name}.{tool.name}"}' already exists")
+                    alias = _resolve_mcp_alias(
+                        server_name, tool.name, _reserved_aliases, mcp_tools
+                    )
+                    if alias is None:
+                        continue
 
-                    mcp_tools[f"{server_name}.{tool.name}"] = (tool.name, client)
-
+                    mcp_tools[alias] = (client, tool.name)
                     tools.append(FunctionToolParam(
-                        name=f"{server_name}.{tool.name}",
-                        parameters=tool.inputSchema,
+                        name=alias,
+                        parameters=_normalize_mcp_schema(tool.inputSchema),
                         description=tool.description,
                         type="function",
                         strict=False,
@@ -343,8 +450,7 @@ class OpenAISession(SessionABC):
                 cursor = response.nextCursor
 
         if self.shell:
-            # TODO: workaround for bug on OpenAI's server side
-            if True:
+            if not _use_native_shell:
                 tools.append(FunctionToolParam(
                     name="shell",
                     parameters=LEGACY_SHELL_INPUT_SCHEMA,
@@ -364,6 +470,8 @@ class OpenAISession(SessionABC):
         self.conversation.append(EasyInputMessageParam(content=prompt, role="user", type="message"))
 
         while True:
+            tool_calls: dict[str, asyncio.Task[Any]] = {}
+            shell_calls: dict[str, tuple[asyncio.Task[list[ResponseFunctionShellCallOutputContentParam]], ResponseFunctionShellToolCall]] = {}
             try:
                 if compact_reason is not None:
                     compact_count += 1
@@ -416,8 +524,6 @@ class OpenAISession(SessionABC):
                 )
 
                 last_event = None
-                tool_calls: dict[str, asyncio.Task[Any]] = {}
-                shell_calls: dict[str, tuple[asyncio.Task[list[ResponseFunctionShellCallOutputContentParam]], ResponseFunctionShellToolCall]] = {}
 
                 async for event in stream:
                     last_event = event
@@ -441,11 +547,11 @@ class OpenAISession(SessionABC):
                         elif isinstance(event.item, ResponseFunctionToolCall):
                             formatter.print_tool_use(event.item.name, event.item.arguments)
 
-                            # TODO: workaround for bug on OpenAI's server side
-                            if event.item.name == "shell" and True:
+                            if event.item.name == "shell" and not _use_native_shell:
                                 tool_calls[event.item.call_id] = asyncio.create_task(self._call_legacy_shell(event.item.arguments))
                             elif event.item.name in mcp_tools:
-                                tool_calls[event.item.call_id] = asyncio.create_task(self._call_mcp_tool(mcp_tools[event.item.name][1], mcp_tools[event.item.name][0], event.item.arguments))
+                                _mcp_client, _mcp_original_name = mcp_tools[event.item.name]
+                                tool_calls[event.item.call_id] = asyncio.create_task(self._call_mcp_tool(_mcp_client, _mcp_original_name, event.item.arguments))
                             else:
                                 tool_calls[event.item.call_id] = asyncio.create_task(self._call_tool(event.item))
                         elif isinstance(event.item, ResponseReasoningItem):
@@ -497,10 +603,32 @@ class OpenAISession(SessionABC):
                     else:
                         pass
             except (APIError, httpx.RemoteProtocolError, httpx.TimeoutException, ResponseIncompleteError) as e:
+                for _t in list(tool_calls.values()) + [_tc for _tc, _ in shell_calls.values()]:
+                    if not _t.done():
+                        _t.cancel()
+
                 if isinstance(e, APIError) and e.code == "context_length_exceeded":
                     logger.warning(f"Context length exceeded, compacting conversation")
                     compact_reason = "context_length_exceeded"
                     continue
+
+                if isinstance(e, APIError):
+                    _body = getattr(e, "body", None)
+                    # _body is already the inner error dict (SDK unpacks body["error"]).
+                    # The nested check covers older/alternate response formats where
+                    # the outer body itself carries a "type" field.
+                    _nested_type = (
+                        _body.get("error", {}).get("type")
+                        if isinstance(_body, dict)
+                        else None
+                    )
+                    if (
+                        getattr(e, "status_code", None) in {400, 401, 403, 404, 422}
+                        or (isinstance(_body, dict) and _body.get("type") == "invalid_request_error")
+                        or _nested_type == "invalid_request_error"
+                    ):
+                        logger.error("Non-retryable API error (status=%s): %s", getattr(e, "status_code", "?"), e)
+                        raise
 
                 formatter.print_error(f"Request failed with tier {service_tier}: {e}")
 
@@ -513,8 +641,9 @@ class OpenAISession(SessionABC):
                     max_retries = self.max_retries
 
                 if retry < max_retries:
-                    logger.warning(f"Request failed with tier {service_tier}, retrying... ({retry+1}/{max_retries}) with backoff time {_compute_backoff_time(retry)}")
-                    await asyncio.sleep(_compute_backoff_time(retry))
+                    backoff = _compute_backoff_time(retry)
+                    logger.warning(f"Request failed with tier {service_tier}, retrying... ({retry+1}/{max_retries}) with backoff time {backoff}")
+                    await asyncio.sleep(backoff)
                     retry += 1
                     continue
                 else:
@@ -537,14 +666,28 @@ class OpenAISession(SessionABC):
 
             assert response is not None, f"Expected response, got last event: {last_event}"
 
-            # Persist assistant outputs (messages, tool calls, reasoning, ...)
-            # so future requests can include complete conversation history.
-            self.conversation.extend(
-                cast(
-                    list[ResponseInputItemParam],
-                    [item.model_dump(mode="json", exclude_none=True) for item in response.output],
-                )
-            )
+            # Persist sanitized assistant outputs. With store=False, server-side
+            # rs_* IDs are not valid for future requests and must be stripped.
+            for _out_item in response.output:
+                _raw = _out_item.model_dump(mode="json", exclude_none=True)
+                if _raw.get("type") == "reasoning":
+                    _summary = _raw.get("summary")
+                    if isinstance(_summary, list):
+                        _payload: dict[str, Any] = {"type": "reasoning", "summary": _summary}
+                        _enc = _raw.get("encrypted_content")
+                        if isinstance(_enc, str) and _enc:
+                            _payload["encrypted_content"] = _enc
+                        self.conversation.append(cast(ResponseInputItemParam, _payload))
+                else:
+                    _raw.pop("id", None)
+                    _raw.pop("status", None)
+                    _content = _raw.get("content")
+                    if isinstance(_content, list):
+                        _raw["content"] = [
+                            {k: v for k, v in _b.items() if k != "annotations"} if isinstance(_b, dict) else _b
+                            for _b in _content
+                        ]
+                    self.conversation.append(cast(ResponseInputItemParam, _raw))
 
             if not tool_calls and not shell_calls and compact_reason is None:
                 break
@@ -565,6 +708,21 @@ class OpenAISession(SessionABC):
                 ))
 
             for call_id, (task, shell_call) in shell_calls.items():
+                if task.exception() is not None:
+                    err_msg = str(task.exception())
+                    formatter.print_tool_result(err_msg, True)
+                    self.conversation.append(ShellCallOutput(
+                        call_id=call_id,
+                        output=[ResponseFunctionShellCallOutputContentParam(
+                            outcome=OutcomeExit(exit_code=1, type="exit"),
+                            stderr=err_msg,
+                            stdout="",
+                        )],
+                        type="shell_call_output",
+                        max_output_length=shell_call.action.max_output_length,
+                    ))
+                    continue
+
                 for output in task.result():
                     if output["outcome"]["type"] == "exit":
                         if output["outcome"]["exit_code"] != 0:
@@ -612,16 +770,27 @@ class OpenAISession(SessionABC):
 
                     # TODO: read timeout seconds
                     client = ClientSession(read, write)
-
-                    mcp_clients[server_name] = await client.__aenter__()
                     opened_clients.append(client)
+
+                    session = await client.__aenter__()
+                    await session.initialize()
+                    mcp_clients[server_name] = session
 
             formatter.print_user_message(prompt)
 
             initial_cost = self.total_token_usage.total_cost
 
+            if max_cost is not None and max_cost <= 0:
+                yield OpenAIResponse(cost=0.0, status="terminating_on_max_cost")
+                return
+
             async for total_cost in self._stream_messages(prompt, model, mcp_clients, formatter):
-                yield OpenAIResponse(cost=total_cost - initial_cost, status="running")
+                current_cost = total_cost - initial_cost
+                yield OpenAIResponse(cost=current_cost, status="running")
+                if max_cost is not None and current_cost >= max_cost:
+                    formatter.print_error(f"Max cost reached ({current_cost:.4f} >= {max_cost:.4f}). Stopping query.")
+                    yield OpenAIResponse(cost=current_cost, status="terminating_on_max_cost")
+                    return
 
             yield OpenAIResponse(cost=self.total_token_usage.total_cost - initial_cost, status="succeeded")
         finally:
