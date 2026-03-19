@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 import platform
 import random
+import re
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import AsyncIterator, Awaitable, NamedTuple, Literal, Any, Callable, cast
+from typing import AsyncIterator, NamedTuple, Literal, Any, cast
 
 import httpx
 from mcp import ClientSession, StdioServerParameters
@@ -80,6 +82,66 @@ LEGACY_SHELL_INPUT_SCHEMA = {
 }
 
 MAX_COMPACTIONS = 5
+
+# Models that support OpenAI's native shell tool (FunctionShellTool).
+# All others fall back to the legacy "shell" function workaround.
+_NATIVE_SHELL_MODEL_PREFIXES = ("gpt-5.1", "gpt-5.2", "gpt-5.4")
+
+# OpenAI limits function names to 64 characters ([A-Za-z0-9_-] only).
+_OPENAI_MAX_TOOL_NAME_LEN = 64
+_ALIAS_HASH_LEN = 8  # hex chars appended when the slug must be shortened
+
+
+def _slugify(s: str) -> str:
+    """Replace characters outside [A-Za-z0-9_-] with underscore."""
+    return re.sub(r"[^A-Za-z0-9_-]", "_", s)
+
+
+def _mcp_tool_alias(server_name: str, tool_name: str) -> str:
+    """Return a stable OpenAI-safe function name for an MCP tool.
+
+    Format: ``<server>__<tool>`` (both parts slugified). If the result exceeds
+    64 characters, the slug is truncated and an 8-hex-char SHA-256 suffix of
+    the original names is appended so the alias stays both within the limit
+    and stable across restarts.
+    """
+    slug = f"{_slugify(server_name)}__{_slugify(tool_name)}"
+    if len(slug) <= _OPENAI_MAX_TOOL_NAME_LEN:
+        return slug
+    h = hashlib.sha256(f"{server_name}\x00{tool_name}".encode()).hexdigest()[:_ALIAS_HASH_LEN]
+    return f"{slug[:_OPENAI_MAX_TOOL_NAME_LEN - _ALIAS_HASH_LEN - 1]}_{h}"
+
+
+def _resolve_mcp_alias(
+    server_name: str,
+    tool_name: str,
+    reserved: set[str],
+    registered: dict[str, Any],
+) -> str | None:
+    """Return a unique OpenAI-safe alias for an MCP tool, or ``None`` if impossible.
+
+    Tries the primary slug first; if it collides, a hash-disambiguated form is
+    used. Returns ``None`` (with error log) only if both forms are already taken.
+    """
+    alias = _mcp_tool_alias(server_name, tool_name)
+    if alias not in reserved and alias not in registered:
+        return alias
+
+    h = hashlib.sha256(f"{server_name}\x00{tool_name}".encode()).hexdigest()[:_ALIAS_HASH_LEN]
+    disambiguated = f"{alias[:_OPENAI_MAX_TOOL_NAME_LEN - _ALIAS_HASH_LEN - 1]}_{h}"
+    logger.warning(
+        "MCP tool '%s' from '%s' has conflicting alias '%s'; "
+        "registering as '%s' instead.",
+        tool_name, server_name, alias, disambiguated,
+    )
+    if disambiguated in reserved or disambiguated in registered:
+        logger.error(
+            "Cannot register MCP tool '%s' from '%s': "
+            "disambiguated alias '%s' also taken. Skipping.",
+            tool_name, server_name, disambiguated,
+        )
+        return None
+    return disambiguated
 
 
 class OpenAITokenUsage:
@@ -307,7 +369,7 @@ class OpenAISession(SessionABC):
         return await self._call_shell(args["commands"], args["timeout_ms"], args.get("max_output_length", None))
 
     async def _call_mcp_tool(self, client: ClientSession, tool_name: str, arguments: str) -> Any:
-        args = json.loads(arguments)
+        args = json.loads(arguments) if arguments else {}
 
         # TODO: read timeout seconds
         result = await client.call_tool(tool_name, args)
@@ -328,20 +390,25 @@ class OpenAISession(SessionABC):
             ) for tool in self.tools.values()
         ]
 
-        mcp_tools: dict[str, tuple[str, ClientSession]] = {}
+        _use_native_shell = model.startswith(_NATIVE_SHELL_MODEL_PREFIXES)
+
+        _reserved_aliases: set[str] = set(self.tools.keys())
+        mcp_tools: dict[str, tuple[ClientSession, str]] = {}  # alias -> (client, original_tool_name)
 
         for server_name, client in mcp_clients.items():
             cursor = None
             while True:
                 response = await client.list_tools(cursor=cursor)
                 for tool in response.tools:
-                    if f"{server_name}.{tool.name}" in self.tools:
-                        raise ValueError(f"Tool '{f"{server_name}.{tool.name}"}' already exists")
+                    alias = _resolve_mcp_alias(
+                        server_name, tool.name, _reserved_aliases, mcp_tools
+                    )
+                    if alias is None:
+                        continue
 
-                    mcp_tools[f"{server_name}.{tool.name}"] = (tool.name, client)
-
+                    mcp_tools[alias] = (client, tool.name)
                     tools.append(FunctionToolParam(
-                        name=f"{server_name}.{tool.name}",
+                        name=alias,
                         parameters=_normalize_mcp_schema(tool.inputSchema),
                         description=tool.description,
                         type="function",
@@ -354,6 +421,7 @@ class OpenAISession(SessionABC):
         if self.shell:
             # TODO: workaround for bug on OpenAI's server side
             if True:
+            # if not _use_native_shell:
                 tools.append(FunctionToolParam(
                     name="shell",
                     parameters=LEGACY_SHELL_INPUT_SCHEMA,
@@ -452,9 +520,11 @@ class OpenAISession(SessionABC):
 
                             # TODO: workaround for bug on OpenAI's server side
                             if event.item.name == "shell" and True:
+                            # if event.item.name == "shell" and not _use_native_shell:
                                 tool_calls[event.item.call_id] = asyncio.create_task(self._call_legacy_shell(event.item.arguments))
                             elif event.item.name in mcp_tools:
-                                tool_calls[event.item.call_id] = asyncio.create_task(self._call_mcp_tool(mcp_tools[event.item.name][1], mcp_tools[event.item.name][0], event.item.arguments))
+                                _mcp_client, _mcp_original_name = mcp_tools[event.item.name]
+                                tool_calls[event.item.call_id] = asyncio.create_task(self._call_mcp_tool(_mcp_client, _mcp_original_name, event.item.arguments))
                             else:
                                 tool_calls[event.item.call_id] = asyncio.create_task(self._call_tool(event.item))
                         elif isinstance(event.item, ResponseReasoningItem):
@@ -522,8 +592,9 @@ class OpenAISession(SessionABC):
                     max_retries = self.max_retries
 
                 if retry < max_retries:
-                    logger.warning(f"Request failed with tier {service_tier}, retrying... ({retry+1}/{max_retries}) with backoff time {_compute_backoff_time(retry)}")
-                    await asyncio.sleep(_compute_backoff_time(retry))
+                    backoff = _compute_backoff_time(retry)
+                    logger.warning(f"Request failed with tier {service_tier}, retrying... ({retry+1}/{max_retries}) with backoff time {backoff}")
+                    await asyncio.sleep(backoff)
                     retry += 1
                     continue
                 else:
@@ -621,16 +692,27 @@ class OpenAISession(SessionABC):
 
                     # TODO: read timeout seconds
                     client = ClientSession(read, write)
-
-                    mcp_clients[server_name] = await client.__aenter__()
                     opened_clients.append(client)
+
+                    session = await client.__aenter__()
+                    await session.initialize()
+                    mcp_clients[server_name] = session
 
             formatter.print_user_message(prompt)
 
             initial_cost = self.total_token_usage.total_cost
 
+            if max_cost is not None and max_cost <= 0:
+                yield OpenAIResponse(cost=0.0, status="terminating_on_max_cost")
+                return
+
             async for total_cost in self._stream_messages(prompt, model, mcp_clients, formatter):
-                yield OpenAIResponse(cost=total_cost - initial_cost, status="running")
+                current_cost = total_cost - initial_cost
+                yield OpenAIResponse(cost=current_cost, status="running")
+                if max_cost is not None and current_cost >= max_cost:
+                    formatter.print_error(f"Max cost reached ({current_cost:.4f} >= {max_cost:.4f}). Stopping query.")
+                    yield OpenAIResponse(cost=current_cost, status="terminating_on_max_cost")
+                    return
 
             yield OpenAIResponse(cost=self.total_token_usage.total_cost - initial_cost, status="succeeded")
         finally:
