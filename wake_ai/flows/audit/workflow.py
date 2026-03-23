@@ -7,7 +7,7 @@ import yaml
 import rich_click as click
 
 from wake_ai import workflow
-from wake_ai.core.flow import AIWorkflow, ClaudeCodeResponse, AIResult
+from wake_ai.core.flow import AIWorkflow, AIResult, WorkflowStep
 
 # Valid detection types for audit findings
 VALID_DETECTION_TYPES = [
@@ -127,7 +127,7 @@ class AuditWorkflow(AIWorkflow):
             max_retry_cost=5.0
         )
 
-    def _validate_initialize(self, response: ClaudeCodeResponse) -> Tuple[bool, List[str]]:
+    def _validate_initialize(self, _step: WorkflowStep) -> list[str]:
         """Validate initialization step - check if wake init was successful."""
         errors = []
 
@@ -139,9 +139,9 @@ class AuditWorkflow(AIWorkflow):
             if not parent_wake_config.exists():
                 errors.append("wake.toml not found - wake init may have failed")
 
-        return (len(errors) == 0, errors)
+        return errors
 
-    def _validate_analyze_and_plan(self, response: ClaudeCodeResponse) -> Tuple[bool, List[str]]:
+    def _validate_analyze_and_plan(self, _step: WorkflowStep) -> list[str]:
         """Validate analyze and plan step - check for required files and YAML structure."""
         errors = []
 
@@ -205,9 +205,9 @@ class AuditWorkflow(AIWorkflow):
             except Exception as e:
                 errors.append(f"Error validating {plan_file} structure: {str(e)}")
 
-        return (len(errors) == 0, errors)
+        return errors
 
-    def _validate_manual_review(self, response: ClaudeCodeResponse) -> Tuple[bool, List[str]]:
+    def _validate_manual_review(self, _step: WorkflowStep) -> list[str]:
         """Validate manual review step - check for updated plan and issue files."""
         errors = []
 
@@ -290,9 +290,9 @@ class AuditWorkflow(AIWorkflow):
             except Exception as e:
                 errors.append(f"Error validating updated {plan_file}: {str(e)}")
 
-        return (len(errors) == 0, errors)
+        return errors
 
-    def _validate_executive_summary(self, response: ClaudeCodeResponse) -> Tuple[bool, List[str]]:
+    def _validate_executive_summary(self, _step: WorkflowStep) -> list[str]:
         """Validate executive summary step."""
         errors = []
 
@@ -332,7 +332,7 @@ class AuditWorkflow(AIWorkflow):
             if len(content) < 500:
                 errors.append(f"Executive summary in {summary_file} is too short (minimum 500 characters)")
 
-        return (len(errors) == 0, errors)
+        return errors
 
     def _build_prompt(self, step_name: str) -> str:
         """Build prompt with context variables."""
