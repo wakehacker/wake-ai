@@ -7,7 +7,7 @@ from pathlib import Path
 import json
 import rich_click as click
 
-from wake_ai.core import AIWorkflow, WorkflowStep, ClaudeCodeResponse
+from wake_ai.core import AIWorkflow, WorkflowStep
 from wake_ai import workflow
 from wake_ai.results import SimpleResult
 from wake_ai.utils import get_logger
@@ -70,7 +70,7 @@ class HookExampleWorkflow(AIWorkflow):
         """Called before each step execution."""
         logger.info(f"[PRE-STEP] Starting step '{step.name}'")
         logger.info(f"  - Max cost limit: ${step.max_cost or 'unlimited'}")
-        logger.info(f"  - Allowed tools: {step.allowed_tools or 'default'}")
+        logger.info(f"  - Max cost limit: ${step.max_cost or 'unlimited'}")
 
         # Track step start time
         self.step_start_times[step.name] = datetime.now()
@@ -80,16 +80,17 @@ class HookExampleWorkflow(AIWorkflow):
             # Calculate total cost from previous steps
             total_cost = sum(self.step_costs.values())
 
-            # Add dynamic context directly to self.state.context
-            self.state.context["report_timestamp"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            self.state.context["total_cost"] = total_cost
+            # Add dynamic context directly to self.context
+            self.context["report_timestamp"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            self.context["total_cost"] = total_cost
             logger.info(f"  - Added report context: timestamp and total cost ${total_cost:.4f}")
 
         # Always add step counter
-        self.state.context["step_number"] = self.state.current_step + 1
-        self.state.context["total_steps"] = len(self.steps)
+        completed = sum(1 for s in self.steps if s.status == "completed")
+        self.context["step_number"] = completed + 1
+        self.context["total_steps"] = len(self.steps)
 
-    def _post_step_hook(self, step: WorkflowStep, response: ClaudeCodeResponse) -> None:
+    def _post_step_hook(self, step: WorkflowStep) -> None:
         """Called after each step execution."""
         # Calculate step duration
         if step.name in self.step_start_times:
@@ -98,18 +99,17 @@ class HookExampleWorkflow(AIWorkflow):
             duration = 0
 
         # Track step cost
-        self.step_costs[step.name] = response.cost
+        self.step_costs[step.name] = step.cost
 
         logger.info(f"[POST-STEP] Completed step '{step.name}'")
         logger.info(f"  - Duration: {duration:.2f} seconds")
-        logger.info(f"  - Cost: ${response.cost:.4f}")
-        logger.info(f"  - Success: {response.success}")
-        logger.info(f"  - Turns: {response.num_turns}")
+        logger.info(f"  - Cost: ${step.cost:.4f}")
+        logger.info(f"  - Status: {step.status}")
 
         # Save metrics to file
-        self._save_step_metrics(step, response, duration)
+        self._save_step_metrics(step, duration)
 
-    def _save_step_metrics(self, step: WorkflowStep, response: ClaudeCodeResponse, duration: float) -> None:
+    def _save_step_metrics(self, step: WorkflowStep, duration: float) -> None:
         """Save step metrics to a JSON file."""
         metrics_file = self.working_dir / "metrics.json"
 
@@ -118,10 +118,9 @@ class HookExampleWorkflow(AIWorkflow):
             "step": step.name,
             "timestamp": datetime.now().isoformat(),
             "duration_seconds": duration,
-            "cost": response.cost,
-            "success": response.success,
-            "turns": response.num_turns,
-            "session_id": response.session_id or "N/A"
+            "cost": step.cost,
+            "status": step.status,
+            "session_id": step.session.session_id or "N/A"
         }
 
         # Load existing metrics or create new list

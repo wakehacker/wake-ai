@@ -203,37 +203,41 @@ self.add_extraction_step(
 
 ### b. **Dynamic Step Generation**:
 ```python
-def _generate_remediation_steps(self, response: ClaudeCodeResponse, context: Dict[str, Any]) -> List[WorkflowStep]:
-    """Generate steps based on findings."""
-    steps = []
+# In _setup_steps():
+analyze_step = self.add_step(name="analyze", ...)
+self.add_dynamic_step(
+    name="remediation_generator",
+    handler=self._generate_remediation_steps,
+    requires=[analyze_step],
+)
 
-    vulnerabilities = context.get("vulnerabilities", [])
+async def _generate_remediation_steps(self, _step: DynamicWorkflowStep) -> None:
+    """Spawn remediation steps based on findings written by 'analyze'."""
+    import yaml
+    vuln_file = self.working_dir / "vulnerabilities.yaml"
+    if not vuln_file.exists():
+        return
+
+    with open(vuln_file) as f:
+        vulnerabilities = yaml.safe_load(f) or []
+
     for i, vuln in enumerate(vulnerabilities):
-        steps.append(WorkflowStep(
+        self.add_step(
             name=f"fix_vulnerability_{i}",
             prompt_template=f"Fix the {vuln['type']} vulnerability in {vuln['contract']}",
-            allowed_tools=["Read", "Edit", "Write"],
-            max_cost=3.0
-        ))
-
-    return steps
-
-# In _setup_steps():
-self.add_dynamic_steps(
-    name="remediation_generator",
-    generator=self._generate_remediation_steps,
-    after_step="analyze"
-)
+            model=...,
+            max_cost=3.0,
+        )
 ```
 
 ## 5. **Implement Validators with Prompt Alignment**
 
 ### Critical Rule: Validators Must Match Prompts Exactly
 
-Create validation functions that return `(success: bool, errors: List[str])` and **exactly match what you asked for in the prompt**:
+Create validation functions that return `list[str]` (empty = success) and **exactly match what you asked for in the prompt**:
 
 ```python
-def _validate_analysis(self, response: ClaudeCodeResponse) -> Tuple[bool, List[str]]:
+def _validate_analysis(self, _step: WorkflowStep) -> list[str]:
     """Validate analysis step output - MUST match prompt requirements exactly."""
     errors = []
 
@@ -244,7 +248,7 @@ def _validate_analysis(self, response: ClaudeCodeResponse) -> Tuple[bool, List[s
             f"Required file 'analysis_results.yaml' not created at {results_file}. "
             "The prompt asks you to create this file with vulnerability findings."
         )
-        return (False, errors)
+        return errors
 
     # Validate YAML structure (match exact structure from prompt)
     try:
@@ -282,7 +286,7 @@ def _validate_analysis(self, response: ClaudeCodeResponse) -> Tuple[bool, List[s
     except Exception as e:
         errors.append(f"Invalid YAML format: {str(e)}. Check the YAML example in the prompt.")
 
-    return (len(errors) == 0, errors)
+    return errors
 ```
 
 ### Validation Best Practices
@@ -461,7 +465,7 @@ Previous findings: {{initialize_output}}
 
 3. **Write Validator That Checks Each Requirement**:
    ```python
-   def _validate_results(self, response: ClaudeCodeResponse) -> Tuple[bool, List[str]]:
+   def _validate_results(self, _step: WorkflowStep) -> list[str]:
        errors = []
 
        # Check exact filename from prompt
@@ -471,7 +475,7 @@ Previous findings: {{initialize_output}}
                f"File 'results.yaml' not created at {results_file}. "
                "The prompt asks you to create this exact file."
            )
-           return (False, errors)
+           return errors
 
        try:
            with open(results_file) as f:
@@ -515,7 +519,7 @@ Previous findings: {{initialize_output}}
        except yaml.YAMLError as e:
            errors.append(f"Invalid YAML: {e}. Check prompt example for correct format.")
 
-       return (len(errors) == 0, errors)
+       return errors
    ```
 
 ### Validation Alignment Checklist
@@ -674,7 +678,7 @@ from pydantic import BaseModel
 
 from wake_ai import AIWorkflow, WorkflowStep
 from wake_ai.results import AIResult
-from wake_ai.core.claude import ClaudeCodeResponse
+
 
 
 class VulnerabilityInfo(BaseModel):
@@ -857,21 +861,22 @@ vulnerabilities:
 
 Include all vulnerabilities found, ordered by severity (high to low)."""
 
-    def _validate_scan(self, response: ClaudeCodeResponse) -> Tuple[bool, List[str]]:
+    def _validate_scan(self, _step: WorkflowStep) -> list[str]:
         """Validate initial scan completed successfully."""
-        # Basic validation - just check response has content
-        if not response.content:
-            return (False, ["Scan produced no output"])
-        return (True, [])
+        # Check that the scan produced an output file
+        scan_file = self.working_dir / "scan_results.yaml"
+        if not scan_file.exists():
+            return ["scan_results.yaml not created by scan step"]
+        return []
 
-    def _validate_report(self, response: ClaudeCodeResponse) -> Tuple[bool, List[str]]:
+    def _validate_report(self, _step: WorkflowStep) -> list[str]:
         """Validate final report generation."""
         errors = []
         report_file = self.working_dir / "reentrancy_report.yaml"
 
         if not report_file.exists():
             errors.append("reentrancy_report.yaml not created")
-            return (False, errors)
+            return errors
 
         try:
             import yaml
@@ -884,7 +889,7 @@ Include all vulnerabilities found, ordered by severity (high to low)."""
         except Exception as e:
             errors.append(f"Invalid YAML in report: {str(e)}")
 
-        return (len(errors) == 0, errors)
+        return errors
 
     @workflow.command("reentrancy")
     @click.option(
@@ -1043,7 +1048,7 @@ from typing import Dict, Any, List, Tuple
 import rich_click as click
 
 from wake_ai import AIWorkflow
-from wake_ai.core.claude import ClaudeCodeResponse
+
 
 
 class UpgradeabilityAudit(AIWorkflow):
@@ -1061,10 +1066,10 @@ class UpgradeabilityAudit(AIWorkflow):
 
     def _setup_steps(self):
         # Step 1: Analyze proxy pattern
-        self.add_step(
+        proxy_step = self.add_step(
             name="analyze_proxy",
             prompt_template=self.prompts["analyze_proxy"],
-            allowed_tools=["Read", "Grep", "Task"],
+            model=...,
             max_cost=5.0,
             validator=self._validate_proxy_analysis
         )
@@ -1073,37 +1078,37 @@ class UpgradeabilityAudit(AIWorkflow):
         self.add_step(
             name="storage_check",
             prompt_template=self.prompts["storage_check"],
-            allowed_tools=["Read", "Bash(wake print storage-layout:*)"],
-            continue_session=True,
-            max_cost=3.0
+            model=...,
+            max_cost=3.0,
+            requires=[proxy_step],
         )
 
         # Step 3: Security analysis
-        self.add_step(
+        audit_step = self.add_step(
             name="security_audit",
             prompt_template=self.prompts["security_audit"],
-            allowed_tools=["Read", "Write", "Task"],
+            model=...,
             max_cost=10.0,
             validator=self._validate_security_audit
         )
 
         # Dynamic steps based on findings
-        self.add_dynamic_steps(
+        self.add_dynamic_step(
             name="issue_remediation",
-            generator=self._generate_fix_steps,
-            after_step="security_audit"
+            handler=self._generate_fix_steps,
+            requires=[audit_step],
         )
 
-    def _validate_proxy_analysis(self, response: ClaudeCodeResponse) -> Tuple[bool, List[str]]:
+    def _validate_proxy_analysis(self, _step: WorkflowStep) -> list[str]:
         errors = []
         analysis_file = self.working_dir / "proxy_analysis.yaml"
 
         if not analysis_file.exists():
             errors.append("proxy_analysis.yaml not created")
 
-        return (len(errors) == 0, errors)
+        return errors
 
-    def _validate_security_audit(self, response: ClaudeCodeResponse) -> Tuple[bool, List[str]]:
+    def _validate_security_audit(self, _step: WorkflowStep) -> list[str]:
         errors = []
 
         required_files = ["security_findings.yaml", "audit_report.md"]
@@ -1111,24 +1116,23 @@ class UpgradeabilityAudit(AIWorkflow):
             if not (self.working_dir / file).exists():
                 errors.append(f"Required file {file} not created")
 
-        return (len(errors) == 0, errors)
+        return errors
 
-    def _generate_fix_steps(self, response: ClaudeCodeResponse, context: Dict[str, Any]) -> List[WorkflowStep]:
+    async def _generate_fix_steps(self, _step: DynamicWorkflowStep) -> None:
         # Parse findings and generate remediation steps
         import yaml
 
         findings_file = self.working_dir / "security_findings.yaml"
         if not findings_file.exists():
-            return []
+            return
 
         with open(findings_file) as f:
             findings = yaml.safe_load(f)
 
-        steps = []
         critical_issues = [f for f in findings.get("issues", []) if f["severity"] == "critical"]
 
         for i, issue in enumerate(critical_issues[:3]):  # Limit to 3 critical fixes
-            steps.append(WorkflowStep(
+            self.add_step(
                 name=f"fix_critical_{i}",
                 prompt_template=f"""Fix the critical issue: {issue['title']}
 
@@ -1136,11 +1140,9 @@ Issue description: {issue['description']}
 Location: {issue['location']}
 
 Generate a patch file that addresses this issue.""",
-                allowed_tools=["Read", "Write", "Edit"],
-                max_cost=3.0
-            ))
-
-        return steps
+                model=...,
+                max_cost=3.0,
+            )
 
     @workflow.command("upgradeability-audit")
     @click.option(

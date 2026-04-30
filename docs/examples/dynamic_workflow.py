@@ -7,86 +7,74 @@ This workflow:
 """
 
 import re
-from typing import Dict, Any, List
 import rich_click as click
-from wake_ai import AIWorkflow, WorkflowStep, workflow
-from wake_ai.core.claude import ClaudeCodeResponse
+from wake_ai import AIWorkflow, DynamicWorkflowStep, workflow
 
 
 class DynamicAnalysisWorkflow(AIWorkflow):
     """Workflow that dynamically creates steps based on initial analysis."""
-    
+
     def __init__(self, **kwargs):
         """Initialize the workflow."""
-        pass
-    
+        super().__init__(**kwargs)
+
     @workflow.command("dynamic-analysis")
     @click.option("--target-dir", "-d", type=str, default=".", help="Directory to analyze")
     def cli(self, target_dir):
         """Run dynamic analysis workflow."""
         self.target_dir = target_dir
-    
+
     def _setup_steps(self):
         """Setup initial workflow steps."""
         # Step 1: Find all Python classes
-        self.add_step(
+        find_step = self.add_step(
             name="find_classes",
             prompt_template="""Find all Python classes in {{target_dir}}.
-            
-For each class found, output:
-- File path
-- Class name  
-- Line number where class is defined
 
-Format your response as a numbered list like:
-1. `path/to/file.py` - ClassName (line 42)
-2. `another/file.py` - AnotherClass (line 15)
+For each class found, write one line per class to {{working_dir}}/classes.txt:
+path/to/file.py:ClassName:42
 """,
-            allowed_tools=None,  # Use default tools
+            model="claude-opus-4-5",
             max_cost=3.0
         )
-        
-        # Register dynamic step generator
-        self.add_dynamic_steps(
+
+        # Dynamic step: generate one investigation step per discovered class
+        self.add_dynamic_step(
             name="investigate_classes",
-            generator=self._generate_class_investigation_steps,
-            after_step="find_classes"
+            handler=self._investigate_classes_handler,
+            requires=[find_step],
         )
-        
+
         # Final step: Summarize findings
         self.add_step(
             name="summarize",
-            prompt_template="""Create a summary of all the classes you've analyzed.
+            prompt_template="""Create a summary report in {{working_dir}}/summary.md of all class analyses found in {{working_dir}}.
 
 Include:
 - Total number of classes analyzed
 - Key patterns or observations
 - Any potential issues or improvements
-
-{% for step_name in _completed_steps %}
-{% if step_name.startswith('investigate_class_') %}
-## {{ step_name }}
-{{ _get_output(step_name) }}
-
-{% endif %}
-{% endfor %}
 """,
+            model="claude-opus-4-5",
             max_cost=2.0
         )
-    
-    def _generate_class_investigation_steps(self, response: ClaudeCodeResponse, 
-                                          context: Dict[str, Any]) -> List[WorkflowStep]:
-        """Generate investigation steps for each class found."""
-        # Parse classes from the response
-        content = response.content
-        
-        # Pattern to match our expected format: 1. `path/file.py` - ClassName (line N)
-        pattern = r'\d+\.\s*`([^`]+)`\s*-\s*(\w+)\s*\(line\s*(\d+)\)'
-        matches = re.findall(pattern, content)
-        
-        steps = []
-        for i, (file_path, class_name, line_num) in enumerate(matches[:5]):  # Limit to 5 classes
-            steps.append(WorkflowStep(
+
+    async def _investigate_classes_handler(self, _step: DynamicWorkflowStep) -> None:
+        """Spawn one WorkflowStep per class found by find_classes."""
+        classes_file = self.working_dir / "classes.txt"
+        if not classes_file.exists():
+            return
+
+        # Pattern: path/to/file.py:ClassName:42
+        pattern = re.compile(r'^(.+):(\w+):(\d+)$')
+        matches = []
+        for line in classes_file.read_text().splitlines():
+            m = pattern.match(line.strip())
+            if m:
+                matches.append(m.groups())
+
+        for i, (file_path, class_name, line_num) in enumerate(matches[:5]):  # Limit to 5
+            self.add_step(
                 name=f"investigate_class_{i}_{class_name.lower()}",
                 prompt_template=f"""Analyze the class {class_name} in {file_path} (around line {line_num}).
 
@@ -96,56 +84,16 @@ Provide:
 3. Any design patterns used
 4. Potential improvements or issues
 
-Keep your analysis concise (3-5 sentences per section).""",
-                allowed_tools=None,  # Use default tools
+Write your analysis to {{{{working_dir}}}}/{class_name.lower()}_analysis.md""",
+                model="claude-opus-4-5",
                 max_cost=1.5,
-                continue_session=False  # Each investigation gets fresh context
-            ))
-        
-        if not steps:
-            # No classes found, add a placeholder step
-            steps.append(WorkflowStep(
-                name="no_classes_found",
-                prompt_template="No Python classes were found in the target directory. Please verify the directory contains Python files.",
-                max_cost=0.1
-            ))
-        
-        return steps
-    
-    def _custom_context_update(self, step_name: str, response: ClaudeCodeResponse):
-        """Store outputs for the summary step."""
-        # Make completed steps and outputs available to templates
-        if not hasattr(self.state.context, '_completed_steps'):
-            self.state.context['_completed_steps'] = []
-            self.state.context['_outputs'] = {}
-        
-        self.state.context['_completed_steps'].append(step_name)
-        self.state.context['_outputs'][step_name] = response.content
-        
-        # Helper function for templates
-        self.state.context['_get_output'] = lambda name: self.state.context['_outputs'].get(name, '')
+            )
 
 
 if __name__ == "__main__":
     # Example usage
-    workflow = DynamicAnalysisWorkflow()
-    
-    # Configure via CLI method
-    workflow.cli(target_dir="wake_ai/core")
-    
-    # Add initial context
-    workflow.add_context("target_dir", "wake_ai/core")
-    
-    # Execute workflow
-    results, ai_result = workflow.execute()
-    
-    print("\n=== Workflow Results ===")
-    print(f"Total steps executed: {len(workflow.state.completed_steps)}")
-    print(f"Dynamic steps added: {len([s for s in workflow.state.completed_steps if 'investigate_class_' in s])}")
-    
-    if ai_result.success:
-        print("\nWorkflow completed successfully!")
-        print(f"\nSummary:\n{results.get('summarize_output', 'No summary available')}")
-    else:
-        print("\nWorkflow failed!")
-        print(f"Errors: {ai_result.error}")
+    wf = DynamicAnalysisWorkflow()
+    wf.add_context("target_dir", "wake_ai/core")
+
+    result = wf.run()
+    print(f"\nWorkflow status: {result.status}")
